@@ -1,0 +1,114 @@
+package test
+
+import (
+	"io"
+	"mime/multipart"
+	"net/http"
+
+	"github.com/lessgo/lessgo/engine"
+)
+
+type (
+	Request struct {
+		request *http.Request
+		url     engine.URL
+		header  engine.Header
+	}
+)
+
+func NewRequest(method, url string, body io.Reader) engine.Request {
+	r, _ := http.NewRequest(method, url, body)
+	return &Request{
+		request: r,
+		url:     &URL{url: r.URL},
+		header:  &Header{r.Header},
+	}
+}
+
+func (r *Request) IsTLS() bool {
+	return r.request.TLS != nil
+}
+
+func (r *Request) Scheme() string {
+	if r.IsTLS() {
+		return "https"
+	}
+	return "http"
+}
+
+func (r *Request) Host() string {
+	return r.request.Host
+}
+
+func (r *Request) URL() engine.URL {
+	return r.url
+}
+
+func (r *Request) Header() engine.Header {
+	return r.header
+}
+
+// func Proto() string {
+// 	return r.request.Proto()
+// }
+//
+// func ProtoMajor() int {
+// 	return r.request.ProtoMajor()
+// }
+//
+// func ProtoMinor() int {
+// 	return r.request.ProtoMinor()
+// }
+
+func (r *Request) ContentLength() int {
+	return int(r.request.ContentLength)
+}
+
+func (r *Request) UserAgent() string {
+	return r.request.UserAgent()
+}
+
+func (r *Request) RemoteAddress() string {
+	return r.request.RemoteAddr
+}
+
+func (r *Request) Method() string {
+	return r.request.Method
+}
+
+func (r *Request) SetMethod(method string) {
+	r.request.Method = method
+}
+
+func (r *Request) URI() string {
+	return r.request.RequestURI
+}
+
+func (r *Request) Body() io.Reader {
+	return r.request.Body
+}
+
+func (r *Request) FormValue(name string) string {
+	return r.request.FormValue(name)
+}
+
+func (r *Request) FormParams() map[string][]string {
+	r.request.ParseForm()
+	return map[string][]string(r.request.PostForm)
+}
+
+func (r *Request) FormFile(name string) (*multipart.FileHeader, error) {
+	_, fh, err := r.request.FormFile(name)
+	return fh, err
+}
+
+func (r *Request) MultipartForm() (*multipart.Form, error) {
+	err := r.request.ParseMultipartForm(32 << 20) // 32 MB
+	return r.request.MultipartForm, err
+}
+
+func (r *Request) reset(rq *http.Request, h engine.Header, u engine.URL) {
+	r.request = rq
+	r.header = h
+	r.url = u
+}
