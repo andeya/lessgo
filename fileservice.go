@@ -5,11 +5,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/lessgo/lessgo"
 	"github.com/lessgo/lessgo/utils"
 )
 
-func SaveFile(ctx lessgo.Context, pname string, cover bool, newname ...string) (err error) {
+func SaveFile(ctx Context, pname string, cover bool, newname ...string) (err error) {
 	fh, err := ctx.FormFile(pname)
 	if err != nil {
 		return
