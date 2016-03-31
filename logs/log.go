@@ -42,20 +42,20 @@ const (
 
 func NewLogger() Logger {
 	tl := &TgLogger{logs.NewLogger()}
-	tl.SetLogFuncCallDepth(3)
+	tl.BeeLogger.SetLogFuncCallDepth(3)
 	return tl
 }
 
 func (t *TgLogger) SetLevel(l int) {
-	t.SetLevel(level(l))
+	t.BeeLogger.SetLevel(level(l))
 }
 
 func (t *TgLogger) GoAsync(channelLen int64) {
-	t.Async(channelLen)
+	t.BeeLogger.Async(channelLen)
 }
 
 func (t *TgLogger) AddAdapter(adaptername string, config string) error {
-	return t.SetLogger(adaptername, config)
+	return t.BeeLogger.SetLogger(adaptername, config)
 }
 
 func level(l int) int {
