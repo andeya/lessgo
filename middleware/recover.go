@@ -56,7 +56,7 @@ func RecoverFromConfig(config RecoverConfig) lessgo.MiddlewareFunc {
 					stack := make([]byte, config.StackSize)
 					length := runtime.Stack(stack, config.StackAll)
 					if config.PrintStack {
-						c.Logger().Printf("[%s] %s %s", color.Red("PANIC RECOVER"), err, stack[:length])
+						c.Logger().Error("[%s] %s %s", color.Red("PANIC RECOVER"), err, stack[:length])
 					}
 					c.Error(err)
 				}
