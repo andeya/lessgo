@@ -10,16 +10,19 @@ import (
 )
 
 type (
-	// RecoverConfig defines config for recover middleware.
+	// RecoverConfig defines the config for recover middleware.
 	RecoverConfig struct {
 		// StackSize is the stack size to be printed.
+		// Optional with default value as `DefaultRecoverConfig.StackSize`.
 		StackSize int
 
 		// StackAll is a flag to format stack traces of all other goroutines into
 		// buffer after the trace for the current goroutine, or not.
+		// Required.
 		StackAll bool
 
 		// PrintStack is a flag to print stack or not.
+		// Required.
 		PrintStack bool
 	}
 )
@@ -42,6 +45,11 @@ func Recover() lessgo.MiddlewareFunc {
 // RecoverFromConfig returns a recover middleware from config.
 // See `Recover()`.
 func RecoverFromConfig(config RecoverConfig) lessgo.MiddlewareFunc {
+	// Defaults
+	if config.StackSize == 0 {
+		config.StackSize = DefaultRecoverConfig.StackSize
+	}
+
 	return func(next lessgo.Handler) lessgo.Handler {
 		return lessgo.HandlerFunc(func(c lessgo.Context) error {
 			defer func() {

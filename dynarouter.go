@@ -1,8 +1,10 @@
 package lessgo
 
 import (
-	"encoding/json"
 	"path"
+	"reflect"
+	"runtime"
+	"sort"
 	"strings"
 
 	"github.com/lessgo/lessgo/utils"
@@ -10,35 +12,40 @@ import (
 
 type (
 	DynaRouter struct {
-		Prefix          string
-		Name            string
-		Description     string
-		Methods         []string
-		Param           string
-		HandlerFuncName string
-		Middlewares     []Middleware
-		Parent          *DynaRouter
-		Children        []*DynaRouter
+		Id          string
+		Url         string
+		Type        int
+		Prefix      string // 允许动态修改
+		Name        string // 允许动态修改
+		Description string // 允许动态修改
+		Methods     []string
+		Param       string
+		Handler     string
+		Middlewares []string // 允许动态修改
+		ParentUrl   string   // 允许动态指定父节点
+		Parent      *DynaRouter
+		Children    []*DynaRouter
 	}
 	RouterFunc func(name, description string, handler HandlerFunc, param ...string)
 )
 
-var (
-	DefDynaRouter = &DynaRouter{
-		Prefix:      "/",
-		Middlewares: []Middleware{},
-		Children:    []*DynaRouter{},
-	}
-	HandlerFuncMap = map[string]HandlerFunc{}
+const (
+	ROOT int = iota - 1
+	GROUP
+	HANDLER
 )
 
-func (d *DynaRouter) Url() string {
-	var u = path.Join(d.Prefix, d.Param)
-	if d.Parent != nil {
-		u = path.Join(d.Parent.Url(), u)
+var (
+	HandlerFuncMap = map[string]HandlerFunc{}
+	MiddlewareMap  = map[string]Middleware{}
+	dynaRouterMap  = map[string]*DynaRouter{}
+	DefDynaRouter  = &DynaRouter{
+		Prefix:      "/",
+		Type:        ROOT,
+		Middlewares: []string{},
+		Children:    []*DynaRouter{},
 	}
-	return u
-}
+)
 
 func (d *DynaRouter) Tree() []*DynaRouter {
 	rs := []*DynaRouter{d}
@@ -48,23 +55,119 @@ func (d *DynaRouter) Tree() []*DynaRouter {
 	return rs
 }
 
+func (d *DynaRouter) SetMiddlewares(middlewares []string) {
+	d.Middlewares = middlewares
+}
+
+func (d *DynaRouter) init() {
+	d.setUrl()
+	d.setId()
+	for _, node := range d.Children {
+		node.init()
+	}
+	dynaRouterMap[d.Id] = d
+}
+
+func (d *DynaRouter) setUrl() {
+	var u = path.Join(d.Prefix, d.Param)
+	d.ParentUrl = ""
+	if d.Parent != nil {
+		d.Parent.setUrl()
+		d.ParentUrl = d.Parent.Url
+		u = path.Join(d.Parent.Url, u)
+	}
+	d.Url = u
+}
+
+func (d *DynaRouter) setId() {
+	d.Id = utils.MakeMd5(d.Url + strings.Join(d.Methods, ""))
+}
+
+// 返回路由列表
 func DynaRouterTree() []*DynaRouter {
 	return DefDynaRouter.Tree()
 }
 
-func RootRouter(node ...*DynaRouter) {
-	DefDynaRouter.Children = node
-	for _, r := range node {
-		r.Parent = DefDynaRouter
+// 设置或添加路由
+func SetRouter(parentId string, node *DynaRouter) {
+	node.Parent = dynaRouterMap[parentId]
+	node.init()
+	dynaRouterMap[node.Id] = node
+	for i, child := range node.Parent.Children {
+		if child.Id == node.Id {
+			node.Parent.Children[i] = node
+			return
+		}
+	}
+	node.Parent.Children = append(node.Parent.Children, node)
+}
+
+// 移除路由
+func DelRouter(nodeId string) {
+	parent := dynaRouterMap[nodeId].Parent
+	for i, child := range parent.Children {
+		if child.Id == nodeId {
+			parent.Children = append(parent.Children[:i], parent.Children[i+1:]...)
+			break
+		}
+	}
+	delete(dynaRouterMap, nodeId)
+}
+
+// 重建真实路由
+func ResetRealRoute() {
+	DefLessgo.Echo.lock.Lock()
+	defer DefLessgo.Echo.lock.Unlock()
+	DefLessgo.Echo.router = NewRouter(DefLessgo.Echo)
+	DefLessgo.Echo.middleware = []Middleware{DefLessgo.Echo.router}
+	DefLessgo.Echo.head = HandlerFunc(func(c Context) error {
+		return c.Handle(c)
+	})
+	DefLessgo.Echo.pristineHead = DefLessgo.Echo.head
+	DefLessgo.Echo.chainMiddleware()
+	var parent *Group
+	for _, d := range DynaRouterTree() {
+		var mws = make([]Middleware, len(d.Middlewares))
+		for i, mw := range d.Middlewares {
+			mws[i] = MiddlewareMap[mw]
+		}
+
+		switch d.Type {
+		case ROOT:
+			DefLessgo.Echo.Use(mws...)
+		case GROUP:
+			if parent == nil {
+				parent = DefLessgo.Echo.Group(d.Prefix, mws...)
+				break
+			}
+			parent = parent.Group(d.Prefix, mws...)
+		case HANDLER:
+			if parent == nil {
+				DefLessgo.Echo.Match(d.Methods, path.Join(d.Prefix, d.Param), HandlerFuncMap[d.Handler], mws...)
+				break
+			}
+			parent.Match(d.Methods, path.Join(d.Prefix, d.Param), HandlerFuncMap[d.Handler], mws...)
+		}
 	}
 }
 
+// 从根路由开始配置路由
+func RootRouter(node ...*DynaRouter) {
+	DefDynaRouter.Children = append(DefDynaRouter.Children, node...)
+	for _, r := range node {
+		r.Parent = DefDynaRouter
+	}
+	DefDynaRouter.init()
+}
+
+// 配置路由分组
 func SubRouter(prefix, name, description string, node ...*DynaRouter) *DynaRouter {
 	p := &DynaRouter{
 		Prefix:      prefix,
+		Type:        GROUP,
 		Name:        name,
 		Description: description,
-		Middlewares: []Middleware{},
+		Middlewares: []string{},
 		Children:    node,
 	}
 	for _, r := range node {
@@ -105,26 +208,31 @@ func Match(methods []string, name, description string, handler HandlerFunc, para
 }
 
 func route(methods []string, name, description string, handler HandlerFunc, param ...string) *DynaRouter {
-	hname := handlerName(handler)
-	HandlerFuncMap[hname] = handler
+	sort.Strings(methods)
+	hUri := handleWareUri(handler)
+	HandlerFuncMap[hUri] = handler
 	if len(param) == 0 {
 		param = append(param, "")
 	}
-	ns := strings.Split(hname, ".")
+	ns := strings.Split(hUri, ".")
 	n := strings.TrimSuffix(ns[len(ns)-1], "Handle")
 	prefix := "/" + utils.SnakeString(n)
 	return &DynaRouter{
-		Prefix:          prefix,
-		Name:            name,
-		Description:     description,
-		Methods:         methods,
-		Param:           param[0],
-		HandlerFuncName: handlerName(handler),
-		Middlewares:     []Middleware{},
+		Prefix:      prefix,
+		Type:        HANDLER,
+		Name:        name,
+		Description: description,
+		Methods:     methods,
+		Param:       param[0],
+		Handler:     hUri,
+		Middlewares: []string{},
 	}
 }
 
-func DynaRouterToJson() string {
-	b, _ := json.Marshal(DefDynaRouter)
-	return string(b)
+func handleWareUri(hw interface{}) string {
+	t := reflect.ValueOf(hw).Type()
+	if t.Kind() == reflect.Func {
+		return runtime.FuncForPC(reflect.ValueOf(hw).Pointer()).Name()
+	}
+	return t.String()
 }

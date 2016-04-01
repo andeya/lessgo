@@ -39,6 +39,7 @@ type (
 		debug            bool
 		router           *Router
 		logger           logs.Logger
+		lock             sync.RWMutex
 	}
 
 	// Route contains a handler and information for matching against requests.
@@ -481,6 +482,9 @@ func (e *Echo) PutContext(c Context) {
 }
 
 func (e *Echo) ServeHTTP(rq engine.Request, rs engine.Response) {
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+
 	c := e.pool.Get().(*context)
 	c.Reset(rq, rs)
 

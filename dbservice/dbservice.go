@@ -1,4 +1,4 @@
-package lessgo
+package dbservice
 
 import (
 	_ "github.com/go-xorm/core"
