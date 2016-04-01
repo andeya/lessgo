@@ -26,7 +26,6 @@ type (
 		Parent      *DynaRouter
 		Children    []*DynaRouter
 	}
-	RouterFunc func(name, description string, handler HandlerFunc, param ...string)
 )
 
 const (
@@ -125,7 +124,7 @@ func ResetRealRoute() {
 	})
 	DefLessgo.Echo.pristineHead = DefLessgo.Echo.head
 	DefLessgo.Echo.chainMiddleware()
-	var parent *Group
+	var group *Group
 	for _, d := range DynaRouterTree() {
 		var mws = make([]Middleware, len(d.Middlewares))
 		for i, mw := range d.Middlewares {
@@ -136,17 +135,17 @@ func ResetRealRoute() {
 		case ROOT:
 			DefLessgo.Echo.Use(mws...)
 		case GROUP:
-			if parent == nil {
-				parent = DefLessgo.Echo.Group(d.Prefix, mws...)
+			if group == nil {
+				group = DefLessgo.Echo.Group(d.Prefix, mws...)
 				break
 			}
-			parent = parent.Group(d.Prefix, mws...)
+			group = group.Group(d.Prefix, mws...)
 		case HANDLER:
-			if parent == nil {
+			if group == nil {
 				DefLessgo.Echo.Match(d.Methods, path.Join(d.Prefix, d.Param), HandlerFuncMap[d.Handler], mws...)
 				break
 			}
-			parent.Match(d.Methods, path.Join(d.Prefix, d.Param), HandlerFuncMap[d.Handler], mws...)
+			group.Match(d.Methods, path.Join(d.Prefix, d.Param), HandlerFuncMap[d.Handler], mws...)
 		}
 	}
 }
