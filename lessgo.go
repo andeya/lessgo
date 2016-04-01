@@ -4,43 +4,59 @@ import (
 	"net"
 	"time"
 
+	_ "github.com/lessgo/lessgo/_fixture"
 	"github.com/lessgo/lessgo/engine"
-	// "github.com/lessgo/lessgo/session"
 )
 
 type (
 	Lessgo struct {
 		*Echo
-		Config *Config
 	}
 	NewServer func(engine.Config) engine.Server
 )
 
 var (
-	DefLessgo = &Lessgo{Echo: New()}
+	DefLessgo = func() *Lessgo {
+		registerConfig()
+		registerMime()
+		l := &Lessgo{
+			Echo: New(),
+		}
+		// 设置运行模式
+		l.Echo.SetDebug(AppConfig.Debug)
+		// 设置上传文件允许的最大尺寸
+		engine.MaxMemory = AppConfig.MaxMemory
+		// 初始化日志
+		l.Echo.SetLogLevel(AppConfig.Log.Level)
+		l.Echo.LogFuncCallDepth(AppConfig.Log.FileLineNum)
+		l.Echo.LogAsync(AppConfig.Log.AsyncChan)
+		return l
+	}()
 )
 
-func Run(ns NewServer, listener ...net.Listener) {
-	checkHooks(registerMime())
+func Run(server NewServer, listener ...net.Listener) {
 	checkHooks(registerRouter())
-	engine.MaxMemory = DefLessgo.Config.MaxMemory
+	checkHooks(registerSession())
+
+	// 配置服务器引擎
 	c := engine.Config{
-		Address:      DefLessgo.Config.Listen.Address,
-		ReadTimeout:  time.Duration(DefLessgo.Config.Listen.ReadTimeout),
-		WriteTimeout: time.Duration(DefLessgo.Config.Listen.WriteTimeout),
+		Address:      AppConfig.Listen.Address,
+		ReadTimeout:  time.Duration(AppConfig.Listen.ReadTimeout),
+		WriteTimeout: time.Duration(AppConfig.Listen.WriteTimeout),
 	}
-	if DefLessgo.Config.Listen.EnableHTTPS {
-		c.TLSKeyfile = DefLessgo.Config.Listen.HTTPSKeyFile
-		c.TLSCertfile = DefLessgo.Config.Listen.HTTPSCertFile
+	if AppConfig.Listen.EnableHTTPS {
+		c.TLSKeyfile = AppConfig.Listen.HTTPSKeyFile
+		c.TLSCertfile = AppConfig.Listen.HTTPSCertFile
 	}
 	if len(listener) > 0 && listener[0] != nil {
 		c.Listener = listener[0]
 	}
-	DefLessgo.Run(ns(c))
+	// 启动服务
+	DefLessgo.Run(server(c))
 }
 
 func rootGroup() {
-	DefLessgo.Echo.Pre()
+	// DefLessgo.Echo.Pre(Logger())
 	DefLessgo.Echo.Suf()
 }
 

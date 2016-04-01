@@ -29,7 +29,7 @@ type (
 )
 
 const (
-	ROOT int = iota - 1
+	ROOT int = iota
 	GROUP
 	HANDLER
 )
@@ -124,28 +124,30 @@ func ResetRealRoute() {
 	})
 	DefLessgo.Echo.pristineHead = DefLessgo.Echo.head
 	DefLessgo.Echo.chainMiddleware()
-	var group *Group
-	for _, d := range DynaRouterTree() {
-		var mws = make([]Middleware, len(d.Middlewares))
-		for i, mw := range d.Middlewares {
-			mws[i] = MiddlewareMap[mw]
-		}
+	for _, child := range DefDynaRouter.Children {
+		var group *Group
+		for _, d := range child.Tree() {
+			var mws = make([]Middleware, len(d.Middlewares))
+			for i, mw := range d.Middlewares {
+				mws[i] = MiddlewareMap[mw]
+			}
 
-		switch d.Type {
-		case ROOT:
-			DefLessgo.Echo.Use(mws...)
-		case GROUP:
-			if group == nil {
-				group = DefLessgo.Echo.Group(d.Prefix, mws...)
-				break
+			switch d.Type {
+			case ROOT:
+				DefLessgo.Echo.Use(mws...)
+			case GROUP:
+				if group == nil {
+					group = DefLessgo.Echo.Group(d.Prefix, mws...)
+					break
+				}
+				group = group.Group(d.Prefix, mws...)
+			case HANDLER:
+				if group == nil {
+					DefLessgo.Echo.Match(d.Methods, path.Join(d.Prefix, d.Param), HandlerFuncMap[d.Handler], mws...)
+					break
+				}
+				group.Match(d.Methods, path.Join(d.Prefix, d.Param), HandlerFuncMap[d.Handler], mws...)
 			}
-			group = group.Group(d.Prefix, mws...)
-		case HANDLER:
-			if group == nil {
-				DefLessgo.Echo.Match(d.Methods, path.Join(d.Prefix, d.Param), HandlerFuncMap[d.Handler], mws...)
-				break
-			}
-			group.Match(d.Methods, path.Join(d.Prefix, d.Param), HandlerFuncMap[d.Handler], mws...)
 		}
 	}
 }

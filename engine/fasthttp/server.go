@@ -5,11 +5,10 @@ package fasthttp
 import (
 	"sync"
 
-	"github.com/valyala/fasthttp"
-
 	"github.com/lessgo/lessgo"
 	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
+	"github.com/valyala/fasthttp"
 )
 
 type (
@@ -32,13 +31,13 @@ type (
 )
 
 // New returns an instance of `fasthttp.Server` with provided listen address.
-func New(addr string) *Server {
+func New(addr string) engine.Server {
 	c := engine.Config{Address: addr}
 	return NewFromConfig(c)
 }
 
 // NewFromTLS returns an instance of `fasthttp.Server` from TLS config.
-func NewFromTLS(addr, certfile, keyfile string) *Server {
+func NewFromTLS(addr, certfile, keyfile string) engine.Server {
 	c := engine.Config{
 		Address:     addr,
 		TLSCertfile: certfile,
@@ -48,7 +47,8 @@ func NewFromTLS(addr, certfile, keyfile string) *Server {
 }
 
 // NewFromConfig returns an instance of `standard.Server` from config.
-func NewFromConfig(c engine.Config) (s *Server) {
+func NewFromConfig(c engine.Config) engine.Server {
+	var s *Server
 	s = &Server{
 		Server: new(fasthttp.Server),
 		config: c,
@@ -80,12 +80,12 @@ func NewFromConfig(c engine.Config) (s *Server) {
 			},
 		},
 		handler: engine.HandlerFunc(func(rq engine.Request, rs engine.Response) {
-			s.logger.Error("%v", "handler not set, use `SetHandler()` to set it.")
+			s.logger.Error("handler not set, use `SetHandler()` to set it.")
 		}),
 		logger: logs.NewLogger(),
 	}
 	s.Handler = s.ServeHTTP
-	return
+	return s
 }
 
 // SetHandler implements `engine.Server#SetHandler` function.
@@ -126,25 +126,26 @@ func (s *Server) startCustomListener() error {
 func (s *Server) ServeHTTP(c *fasthttp.RequestCtx) {
 	// Request
 	rq := s.pool.request.Get().(*Request)
-	reqHdr := s.pool.requestHeader.Get().(*RequestHeader)
-	reqURL := s.pool.url.Get().(*URL)
-	reqHdr.reset(&c.Request.Header)
-	reqURL.reset(c.URI())
-	rq.reset(c, reqHdr, reqURL)
+	rqHdr := s.pool.requestHeader.Get().(*RequestHeader)
+	rqURL := s.pool.url.Get().(*URL)
+	rqHdr.reset(&c.Request.Header)
+	rqURL.reset(c.URI())
+	rq.reset(c, rqHdr, rqURL)
 
 	// Response
 	rs := s.pool.response.Get().(*Response)
-	resHdr := s.pool.responseHeader.Get().(*ResponseHeader)
-	resHdr.reset(&c.Response.Header)
-	rs.reset(c, resHdr)
+	rsHdr := s.pool.responseHeader.Get().(*ResponseHeader)
+	rsHdr.reset(&c.Response.Header)
+	rs.reset(c, rsHdr)
 
 	s.handler.ServeHTTP(rq, rs)
 
+	// Return to pool
 	s.pool.request.Put(rq)
-	s.pool.requestHeader.Put(reqHdr)
-	s.pool.url.Put(reqURL)
+	s.pool.requestHeader.Put(rqHdr)
+	s.pool.url.Put(rqURL)
 	s.pool.response.Put(rs)
-	s.pool.responseHeader.Put(resHdr)
+	s.pool.responseHeader.Put(rsHdr)
 }
 
 // WrapHandler wraps `fasthttp.RequestHandler` into `lessgo.HandlerFunc`.

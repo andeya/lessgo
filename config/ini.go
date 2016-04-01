@@ -296,6 +296,10 @@ func (c *IniConfigContainer) GetSection(section string) (map[string]string, erro
 	return nil, errors.New("not exist setction")
 }
 
+func (c *IniConfigContainer) GetAllSections() map[string]map[string]string {
+	return c.data
+}
+
 // SaveConfigFile save the config into file
 func (c *IniConfigContainer) SaveConfigFile(filename string) (err error) {
 	// Write configuration file by filename.
