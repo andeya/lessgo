@@ -19,6 +19,8 @@ type Config struct {
 	Listen              Listen
 	WebConfig           WebConfig
 	Log                 LogConfig
+	DefaultDBConfig     DBConfig
+	ExtendDBConfig      map[string]DBConfig
 }
 
 // Listen holds for http and https related config
@@ -76,6 +78,13 @@ type LogConfig struct {
 	AccessLogs  bool
 	FileLineNum bool
 	Outputs     map[string]string // Store Adaptor : config
+}
+
+// DataBase connection Config
+type DBConfig struct {
+	DBName     string
+	DriverName string // DriverName：mssql | odbc(mssql) | mysql | mymysql | postgres | sqlite3 | oci8 | goracle
+	ConnString string
 }
 
 const (

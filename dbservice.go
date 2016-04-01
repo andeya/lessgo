@@ -1,7 +1,7 @@
 /**
  * 使用xorm数据库访问单元
  */
-package dbservice
+package lessgo
 
 import (
 	"database/sql"
