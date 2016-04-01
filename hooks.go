@@ -14,6 +14,16 @@ func registerMime() error {
 	return nil
 }
 
+func registerRouter() error {
+	// 从数据读取动态配置
+
+	// 与源码配置进行同步
+
+	// 创建真实路由
+	ResetRealRoute()
+	return nil
+}
+
 // func registerSession() error {
 // 	if BConfig.WebConfig.Session.SessionOn {
 // 		var err error

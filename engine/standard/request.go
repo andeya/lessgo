@@ -115,7 +115,7 @@ func (r *Request) FormFile(name string) (*multipart.FileHeader, error) {
 
 // MultipartForm implements `engine.Request#MultipartForm` function.
 func (r *Request) MultipartForm() (*multipart.Form, error) {
-	err := r.ParseMultipartForm(32 << 20) // 32 MB
+	err := r.ParseMultipartForm(engine.MaxMemory)
 	return r.Request.MultipartForm, err
 }
 
