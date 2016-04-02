@@ -1,6 +1,7 @@
 package lessgo
 
 import (
+	"fmt"
 	"net"
 	"time"
 
@@ -15,8 +16,15 @@ type (
 	NewServer func(engine.Config) engine.Server
 )
 
+const (
+	NAME    = "Lessgo"
+	VERSION = "0.4.0"
+	ADDRESS = "https://github.com/lessgo/lessgo"
+)
+
 var (
 	DefLessgo = func() *Lessgo {
+		printInfo()
 		registerConfig()
 		registerMime()
 		l := &Lessgo{
@@ -67,4 +75,8 @@ func checkHooks(err error) {
 		return
 	}
 	DefLessgo.Echo.Logger().Fatal("%v", err)
+}
+
+func printInfo() {
+	fmt.Printf(">%s %s (%s)\n", NAME, VERSION, ADDRESS)
 }
