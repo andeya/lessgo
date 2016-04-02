@@ -46,31 +46,33 @@ func GzipFromConfig(config GzipConfig) lessgo.MiddlewareFunc {
 	if config.Level == 0 {
 		config.Level = DefaultGzipConfig.Level
 	}
+
 	pool := gzipPool(config)
 	scheme := "gzip"
 
 	return func(next lessgo.Handler) lessgo.Handler {
 		return lessgo.HandlerFunc(func(c lessgo.Context) error {
-			c.Response().Header().Add(lessgo.Vary, lessgo.AcceptEncoding)
+			rs := c.Response()
+			rs.Header().Add(lessgo.Vary, lessgo.AcceptEncoding)
 			if strings.Contains(c.Request().Header().Get(lessgo.AcceptEncoding), scheme) {
-				rw := c.Response().Writer()
+				rw := rs.Writer()
 				gw := pool.Get().(*gzip.Writer)
 				gw.Reset(rw)
 				defer func() {
-					if c.Response().Size() == 0 {
+					if rs.Size() == 0 {
 						// We have to reset response to it's pristine state when
 						// nothing is written to body or error is returned.
 						// See issue #424, #407.
-						c.Response().SetWriter(rw)
-						c.Response().Header().Del(lessgo.ContentEncoding)
+						rs.SetWriter(rw)
+						rs.Header().Del(lessgo.ContentEncoding)
 						gw.Reset(ioutil.Discard)
 					}
 					gw.Close()
 					pool.Put(gw)
 				}()
-				g := gzipResponseWriter{Response: c.Response(), Writer: gw}
-				c.Response().Header().Set(lessgo.ContentEncoding, scheme)
-				c.Response().SetWriter(g)
+				g := gzipResponseWriter{Response: rs, Writer: gw}
+				rs.Header().Set(lessgo.ContentEncoding, scheme)
+				rs.SetWriter(g)
 			}
 			return next.Handle(c)
 		})
