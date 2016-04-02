@@ -65,7 +65,7 @@ func (yaml *Config) Parse(filename string) (y config.Configer, err error) {
 // ParseData parse yaml data
 func (yaml *Config) ParseData(data []byte) (config.Configer, error) {
 	// Save memory data to temporary file
-	tmpName := path.Join(os.TempDir(), "beego", fmt.Sprintf("%d", time.Now().Nanosecond()))
+	tmpName := path.Join(os.TempDir(), "leesgo", fmt.Sprintf("%d", time.Now().Nanosecond()))
 	os.MkdirAll(path.Dir(tmpName), os.ModePerm)
 	if err := ioutil.WriteFile(tmpName, data, 0655); err != nil {
 		return nil, err

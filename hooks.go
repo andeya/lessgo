@@ -18,20 +18,21 @@ func registerMime() error {
 }
 
 func registerConfig() (err error) {
-	os.MkdirAll(CONFIG_DIR, 0777)
 	fname := CONFIG_DIR + "/" + APP_CONFIG
 	appconf, err := config.NewConfig("ini", fname)
-	if err != nil {
-		file, err := os.Create(fname)
-		file.Close()
-		appconf, err = config.NewConfig("ini", fname)
-		if err != nil {
-			panic(err)
-		}
-		defaultConfig(appconf)
-	} else {
+	if err == nil {
 		trySet(appconf)
+		return appconf.SaveConfigFile(fname)
 	}
+
+	os.MkdirAll(filepath.Dir(fname), 0777)
+	f, err := os.Create(fname)
+	if err != nil {
+		panic(err)
+	}
+	f.Close()
+	appconf, err = config.NewConfig("ini", fname)
+	defaultConfig(appconf)
 	return appconf.SaveConfigFile(fname)
 }
 

@@ -72,15 +72,15 @@ const (
 
 var (
 	// BConfig is the default config for Application
-	BConfig = new(Config)
+	BConfig = initConfig()
 	// AppConfig is the instance of Config, store the config information from file
-	AppConfig = new(Config)
+	AppConfig = initConfig()
 	// GlobalSessions is the instance for the session manager
 	GlobalSessions *session.Manager
 )
 
-func init() {
-	*BConfig = Config{
+func initConfig() *Config {
+	return &Config{
 		AppName:             "lessgo",
 		Debug:               true,
 		RouterCaseSensitive: true,
