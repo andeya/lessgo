@@ -35,12 +35,16 @@ const (
 )
 
 // 全局动态路由
-var DefDynaRouter = &DynaRouter{
-	Prefix:      "/",
-	Type:        ROOT,
-	Middlewares: []string{},
-	Children:    []*DynaRouter{},
-}
+var (
+	DefDynaRouter = &DynaRouter{
+		Prefix:      "/",
+		Type:        ROOT,
+		Middlewares: []string{},
+		Children:    []*DynaRouter{},
+	}
+	beforeMiddlewares = []string{}
+	afterMiddlewares  = []string{}
+)
 
 var (
 	dynaRouterMap  = map[string]*DynaRouter{}
@@ -130,14 +134,13 @@ func ResetRealRoute() {
 	DefLessgo.Echo.pristineHead = DefLessgo.Echo.head
 	// DefLessgo.Echo.chainMiddleware()
 	rootHooks()
+	DefLessgo.Echo.BeforeUse(getMiddlewares(beforeMiddlewares)...)
+	DefLessgo.Echo.AfterUse(getMiddlewares(afterMiddlewares)...)
 	for _, child := range DefDynaRouter.Children {
 		var group *Group
 		for _, d := range child.Tree() {
 			mws := getMiddlewares(d.Middlewares)
-
 			switch d.Type {
-			case ROOT:
-				DefLessgo.Echo.Use(mws...)
 			case GROUP:
 				if group == nil {
 					group = DefLessgo.Echo.Group(d.Prefix, mws...)

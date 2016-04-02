@@ -17,7 +17,7 @@ func test2(ctx Context) error {
 
 func test3(ctx Context) error {
 	logs.Info("路标：3")
-	return errors.New("text3 error")
+	return nil
 }
 
 func test4(ctx Context) error {

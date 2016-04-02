@@ -63,3 +63,21 @@ func Run(server NewServer, listener ...net.Listener) {
 	DefLessgo.Logger().Sys("> %s listening and serving %s on %v", AppConfig.AppName, h, c.Address)
 	DefLessgo.Run(server(c))
 }
+
+// 在路由执行位置之前紧邻插入中间件队列
+func Before(middleware ...interface{}) {
+	DefLessgo.Echo.BeforeUse(wrapMiddlewares(middleware)...)
+}
+
+// 在路由执行位置之后紧邻插入中间件队列
+func After(middleware ...interface{}) {
+	DefLessgo.Echo.AfterUse(wrapMiddlewares(middleware)...)
+}
+
+func wrapMiddlewares(middleware []interface{}) []Middleware {
+	ms := make([]Middleware, len(middleware))
+	for i, m := range middleware {
+		ms[i] = WrapMiddleware(m)
+	}
+	return ms
+}

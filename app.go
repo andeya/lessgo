@@ -40,6 +40,7 @@ type (
 		router           *Router
 		logger           logs.Logger
 		lock             sync.RWMutex
+		routerIndex      int
 	}
 
 	// Route contains a handler and information for matching against requests.
@@ -296,21 +297,35 @@ func (e *Echo) Debug() bool {
 	return e.debug
 }
 
-// Pre adds middleware to the chain which is run before router.
-func (e *Echo) Pre(middleware ...Middleware) {
+// PreUse adds middlewares to the beginning of chain.
+func (e *Echo) PreUse(middleware ...Middleware) {
+	e.routerIndex += len(middleware)
 	e.middleware = append(middleware, e.middleware...)
 	e.chainMiddleware()
 }
 
-// @ added by henrylee2cn 2016.3.30
-// Suf is an alias for `Use` function.
-func (e *Echo) Suf(middleware ...Middleware) {
-	e.Use(middleware...)
+// SufUse adds middlewares to the end of chain.
+func (e *Echo) SufUse(middleware ...Middleware) {
+	e.middleware = append(e.middleware, middleware...)
+	e.chainMiddleware()
 }
 
-// Use adds middleware to the chain which is run after router.
-func (e *Echo) Use(middleware ...Middleware) {
-	e.middleware = append(e.middleware, middleware...)
+// BeforeUse adds middlewares to the chain which is run before router.
+func (e *Echo) BeforeUse(middleware ...Middleware) {
+	chain := make([]Middleware, e.routerIndex)
+	copy(chain, e.middleware[:e.routerIndex])
+	chain = append(chain, middleware...)
+	e.middleware = append(chain, e.middleware[e.routerIndex:]...)
+	e.routerIndex += len(middleware)
+	e.chainMiddleware()
+}
+
+// AfterUse adds middlewares to the chain which is run after router.
+func (e *Echo) AfterUse(middleware ...Middleware) {
+	chain := make([]Middleware, e.routerIndex+1)
+	copy(chain, e.middleware[:e.routerIndex+1])
+	chain = append(chain, middleware...)
+	e.middleware = append(chain, e.middleware[e.routerIndex+1:]...)
 	e.chainMiddleware()
 }
 
