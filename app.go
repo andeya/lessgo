@@ -196,6 +196,7 @@ func New() (e *Echo) {
 	e.router = NewRouter(e)
 	e.middleware = []Middleware{e.router}
 	e.head = HandlerFunc(func(c Context) error {
+		fmt.Println("-------------------head(目测根本不会调用到)-----------------")
 		return c.Handle(c)
 	})
 	e.pristineHead = e.head
@@ -535,10 +536,23 @@ func (binder) Bind(i interface{}, c Context) (err error) {
 }
 
 // WrapMiddleware wrap `echo.Handler` into `echo.MiddlewareFunc`.
-func WrapMiddleware(h Handler) MiddlewareFunc {
+func WrapMiddleware(h interface{}) MiddlewareFunc {
+	var x Handler
+	switch t := h.(type) {
+	case MiddlewareFunc:
+		return t
+	case Handler:
+		x = t
+	case HandlerFunc:
+		x = Handler(t)
+	case func(Context) error:
+		x = Handler(HandlerFunc(t))
+	default:
+		panic("WrapMiddleware's parameter type is incorrect.")
+	}
 	return func(next Handler) Handler {
 		return HandlerFunc(func(c Context) error {
-			if err := h.Handle(c); err != nil {
+			if err := x.Handle(c); err != nil {
 				return err
 			}
 			return next.Handle(c)

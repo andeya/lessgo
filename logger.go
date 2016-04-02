@@ -12,6 +12,7 @@ import (
 func Logger() MiddlewareFunc {
 	return func(next Handler) Handler {
 		return HandlerFunc(func(c Context) (err error) {
+			logs.Warn("进入Logger")
 			req := c.Request()
 			res := c.Response()
 

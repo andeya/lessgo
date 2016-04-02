@@ -1,7 +1,6 @@
 package lessgo
 
 import (
-	"fmt"
 	"net"
 	"time"
 
@@ -63,20 +62,4 @@ func Run(server NewServer, listener ...net.Listener) {
 	// 启动服务
 	DefLessgo.Logger().Sys("> %s listening and serving %s on %v", AppConfig.AppName, h, c.Address)
 	DefLessgo.Run(server(c))
-}
-
-func rootHooks() {
-	DefLessgo.Echo.Pre(Logger())
-	DefLessgo.Echo.Suf()
-}
-
-func checkHooks(err error) {
-	if err == nil {
-		return
-	}
-	DefLessgo.Echo.Logger().Fatal("%v", err)
-}
-
-func printInfo() {
-	fmt.Printf(">%s %s (%s)\n", NAME, VERSION, ADDRESS)
 }

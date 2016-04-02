@@ -56,9 +56,25 @@ func (r *Router) Handle(next Handler) Handler {
 		method := c.Request().Method()
 		path := c.Request().URL().Path()
 		r.Find(method, path, c)
+		err := c.Handle(c)
+		if err != nil {
+			return err
+		}
+		c.Object().handler = Handler(HandlerFunc(func(c Context) error {
+			return nil
+		}))
 		return next.Handle(c)
 	})
 }
+
+// func (r *Router) Handle(next Handler) Handler {
+// 	return HandlerFunc(func(c Context) error {
+// 		method := c.Request().Method()
+// 		path := c.Request().URL().Path()
+// 		r.Find(method, path, c)
+// 		return next.Handle(c)
+// 	})
+// }
 
 // Priority is super secret.
 func (r *Router) Priority() int {

@@ -34,16 +34,17 @@ const (
 	HANDLER
 )
 
+// 全局动态路由
+var DefDynaRouter = &DynaRouter{
+	Prefix:      "/",
+	Type:        ROOT,
+	Middlewares: []string{},
+	Children:    []*DynaRouter{},
+}
+
 var (
-	HandlerFuncMap = map[string]HandlerFunc{}
-	MiddlewareMap  = map[string]Middleware{}
 	dynaRouterMap  = map[string]*DynaRouter{}
-	DefDynaRouter  = &DynaRouter{
-		Prefix:      "/",
-		Type:        ROOT,
-		Middlewares: []string{},
-		Children:    []*DynaRouter{},
-	}
+	HandlerFuncMap = map[string]HandlerFunc{}
 )
 
 func (d *DynaRouter) Tree() []*DynaRouter {
@@ -115,6 +116,10 @@ func DelRouter(nodeId string) {
 
 // 重建真实路由
 func ResetRealRoute() {
+	if err := middlewareExistCheck(DefDynaRouter); err != nil {
+		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
+		return
+	}
 	DefLessgo.Echo.lock.Lock()
 	defer DefLessgo.Echo.lock.Unlock()
 	DefLessgo.Echo.router = NewRouter(DefLessgo.Echo)
@@ -128,10 +133,7 @@ func ResetRealRoute() {
 	for _, child := range DefDynaRouter.Children {
 		var group *Group
 		for _, d := range child.Tree() {
-			var mws = make([]Middleware, len(d.Middlewares))
-			for i, mw := range d.Middlewares {
-				mws[i] = MiddlewareMap[mw]
-			}
+			mws := getMiddlewares(d.Middlewares)
 
 			switch d.Type {
 			case ROOT:
@@ -153,6 +155,7 @@ func ResetRealRoute() {
 	}
 }
 
+// 必须在init()中调用
 // 从根路由开始配置路由
 func RootRouter(node ...*DynaRouter) {
 	DefDynaRouter.Children = append(DefDynaRouter.Children, node...)
@@ -162,6 +165,7 @@ func RootRouter(node ...*DynaRouter) {
 	DefDynaRouter.init()
 }
 
+// 必须在init()中调用
 // 配置路由分组
 func SubRouter(prefix, name, description string, node ...*DynaRouter) *DynaRouter {
 	p := &DynaRouter{
@@ -178,6 +182,16 @@ func SubRouter(prefix, name, description string, node ...*DynaRouter) *DynaRoute
 	return p
 }
 
+// 配置中间件
+func (d *DynaRouter) Use(middleware ...string) *DynaRouter {
+	for _, name := range middleware {
+		d.Middlewares = append(d.Middlewares, name)
+	}
+	return d
+}
+
+// 必须在init()中调用
+// 配置操作
 func Get(name, description string, handler HandlerFunc, param ...string) *DynaRouter {
 	return route([]string{GET}, name, description, handler, param...)
 }

@@ -2,6 +2,7 @@ package lessgo
 
 import (
 	"encoding/json"
+	"fmt"
 	"mime"
 	"os"
 	"path/filepath"
@@ -9,6 +10,10 @@ import (
 	"github.com/lessgo/lessgo/config"
 	"github.com/lessgo/lessgo/session"
 )
+
+func printInfo() {
+	fmt.Printf(">%s %s (%s)\n", NAME, VERSION, ADDRESS)
+}
 
 func registerMime() error {
 	for k, v := range mimemaps {
@@ -71,4 +76,19 @@ func registerSession() (err error) {
 	}
 	go GlobalSessions.GC()
 	return
+}
+
+func rootHooks() {
+	DefLessgo.Echo.Get("/test4", Handler(HandlerFunc(test2)))
+	DefLessgo.Echo.Suf(WrapMiddleware(test3))
+	DefLessgo.Echo.Suf(WrapMiddleware(test4))
+	DefLessgo.Echo.Pre(WrapMiddleware(test1))
+	DefLessgo.Echo.Pre(Logger())
+}
+
+func checkHooks(err error) {
+	if err == nil {
+		return
+	}
+	DefLessgo.Echo.Logger().Fatal("%v", err)
 }
