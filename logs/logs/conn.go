@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"io"
 	"net"
-	"time"
 )
 
 // connWriter implements LoggerInterface.
@@ -36,7 +35,7 @@ type connWriter struct {
 // NewConn create new ConnWrite returning as LoggerInterface.
 func NewConn() Logger {
 	conn := new(connWriter)
-	conn.Level = LevelTrace
+	conn.Level = LevelDebug
 	return conn
 }
 
@@ -48,8 +47,8 @@ func (c *connWriter) Init(jsonConfig string) error {
 
 // WriteMsg write message in connection.
 // if connection is down, try to re-connect.
-func (c *connWriter) WriteMsg(when time.Time, msg string, level int) error {
-	if level > c.Level {
+func (c *connWriter) WriteMsg(lm logMsg) error {
+	if lm.level > c.Level {
 		return nil
 	}
 	if c.needToConnectOnMsg() {
@@ -63,7 +62,7 @@ func (c *connWriter) WriteMsg(when time.Time, msg string, level int) error {
 		defer c.innerWriter.Close()
 	}
 
-	c.lg.println(when, msg)
+	c.lg.println(&lm)
 	return nil
 }
 

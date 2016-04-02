@@ -22,14 +22,13 @@ var (
 		l := &Lessgo{
 			Echo: New(),
 		}
+		// 初始化日志
+		l.Echo.Logger().SetMsgChan(AppConfig.Log.AsyncChan)
+		l.Echo.SetLogLevel(AppConfig.Log.Level)
 		// 设置运行模式
 		l.Echo.SetDebug(AppConfig.Debug)
 		// 设置上传文件允许的最大尺寸
 		engine.MaxMemory = AppConfig.MaxMemory
-		// 初始化日志
-		l.Echo.SetLogLevel(AppConfig.Log.Level)
-		l.Echo.LogFuncCallDepth(AppConfig.Log.FileLineNum)
-		l.Echo.LogAsync(AppConfig.Log.AsyncChan)
 		return l
 	}()
 )
@@ -44,7 +43,9 @@ func Run(server NewServer, listener ...net.Listener) {
 		ReadTimeout:  time.Duration(AppConfig.Listen.ReadTimeout),
 		WriteTimeout: time.Duration(AppConfig.Listen.WriteTimeout),
 	}
+	h := "HTTP"
 	if AppConfig.Listen.EnableHTTPS {
+		h = "HTTPS"
 		c.TLSKeyfile = AppConfig.Listen.HTTPSKeyFile
 		c.TLSCertfile = AppConfig.Listen.HTTPSCertFile
 	}
@@ -52,11 +53,12 @@ func Run(server NewServer, listener ...net.Listener) {
 		c.Listener = listener[0]
 	}
 	// 启动服务
+	DefLessgo.Logger().Sys("> %s listening and serving %s on %v", AppConfig.AppName, h, c.Address)
 	DefLessgo.Run(server(c))
 }
 
-func rootGroup() {
-	// DefLessgo.Echo.Pre(Logger())
+func rootHooks() {
+	DefLessgo.Echo.Pre(Logger())
 	DefLessgo.Echo.Suf()
 }
 

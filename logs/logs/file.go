@@ -66,7 +66,7 @@ func newFileWriter() Logger {
 		Daily:    true,
 		MaxDays:  7,
 		Rotate:   true,
-		Level:    LevelTrace,
+		Level:    LevelDebug,
 		Perm:     0660,
 	}
 	return w
@@ -126,17 +126,17 @@ func (w *fileLogWriter) needRotate(size int, day int) bool {
 }
 
 // WriteMsg write logger message into file.
-func (w *fileLogWriter) WriteMsg(when time.Time, msg string, level int) error {
-	if level > w.Level {
+func (w *fileLogWriter) WriteMsg(lm logMsg) error {
+	if lm.level > w.Level {
 		return nil
 	}
-	h, d := formatTimeHeader(when)
-	msg = string(h) + msg + "\n"
+	h, d := formatTimeHeader(lm.when)
+	msg := string(h) + lm.line + lm.prefix + " " + lm.msg + "\n"
 	if w.Rotate {
 		if w.needRotate(len(msg), d) {
 			w.Lock()
 			if w.needRotate(len(msg), d) {
-				if err := w.doRotate(when); err != nil {
+				if err := w.doRotate(lm.when); err != nil {
 					fmt.Fprintf(os.Stderr, "FileLogWriter(%q): %s\n", w.Filename, err)
 				}
 			}

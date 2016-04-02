@@ -204,10 +204,10 @@ func New() (e *Echo) {
 	// Defaults
 	e.SetHTTPErrorHandler(e.DefaultHTTPErrorHandler)
 	e.SetBinder(&binder{})
-	e.logger = logs.NewLogger()
-	e.logger.SetLevel(logs.ERROR)
+	e.logger = logs.GlobalLogger
 	e.logger.AddAdapter("console", "")
 	e.logger.AddAdapter("file", `{"filename":"Logger/lessgo.log"}`)
+	e.SetDebug(true)
 	return
 }
 
@@ -229,11 +229,6 @@ func (e *Echo) Router() *Router {
 // LogFuncCallDepth enable log funcCallDepth.
 func (e *Echo) LogFuncCallDepth(b bool) {
 	e.logger.EnableFuncCallDepth(b)
-}
-
-//LogAsync set the log to asynchronous and start the goroutine
-func (e *Echo) LogAsync(channelLen int64) {
-	e.logger.GoAsync(channelLen)
 }
 
 // SetLogLevel sets the log level for the logger
@@ -287,6 +282,12 @@ func (e *Echo) SetRenderer(r Renderer) {
 // SetDebug enable/disable debug mode.
 func (e *Echo) SetDebug(on bool) {
 	e.debug = on
+	if on {
+		e.logger.SetLevel(logs.DEBUG)
+		e.logger.EnableFuncCallDepth(true)
+	} else {
+		e.logger.EnableFuncCallDepth(false)
+	}
 }
 
 // Debug returns debug mode (enabled or disabled).
@@ -404,7 +405,6 @@ func (e *Echo) File(path, file string) {
 }
 
 func (e *Echo) add(method, path string, handler Handler, middleware ...Middleware) {
-	fmt.Println(method, path)
 	name := handlerName(handler)
 	e.router.Add(method, path, HandlerFunc(func(c Context) error {
 		h := handler
@@ -420,9 +420,7 @@ func (e *Echo) add(method, path string, handler Handler, middleware ...Middlewar
 		Handler: name,
 	}
 	e.router.routes = append(e.router.routes, r)
-	if e.debug {
-		e.logger.Info("%-5s %-25s --> %v", method, path, name)
-	}
+	e.logger.Sys("| %-7s | %-30s | %v", method, path, name)
 }
 
 // Group creates a new router group with prefix and optional group-level middleware.

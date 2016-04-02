@@ -45,9 +45,8 @@ type (
 	}
 	// LogConfig holds Log related config
 	LogConfig struct {
-		Level       int
-		AsyncChan   int64
-		FileLineNum bool
+		Level     int
+		AsyncChan int64
 	}
 	// DataBase connection Config
 	DBConfig struct {
@@ -106,9 +105,8 @@ func init() {
 			Domain:          "",
 		},
 		Log: LogConfig{
-			Level:       logs.ERROR,
-			AsyncChan:   1000,
-			FileLineNum: true,
+			Level:     logs.ERROR,
+			AsyncChan: 1000,
 		},
 		DefaultDB: DBConfig{
 			DBName:     "default",
@@ -140,7 +138,6 @@ func defaultConfig(iniconf config.Configer) {
 	iniconf.Set("session::domain", fmt.Sprint(BConfig.Session.Domain))
 	iniconf.Set("log::level", logLevelString(BConfig.Log.Level))
 	iniconf.Set("log::asyncchan", fmt.Sprint(BConfig.Log.AsyncChan))
-	iniconf.Set("log::filelinenum", fmt.Sprint(BConfig.Log.FileLineNum))
 	iniconf.Set("defaultdb::dbname", fmt.Sprint(BConfig.DefaultDB.DBName))
 	iniconf.Set("defaultdb::driver", fmt.Sprint(BConfig.DefaultDB.DriverName))
 	iniconf.Set("defaultdb::connstring", fmt.Sprint(BConfig.DefaultDB.ConnString))
@@ -230,10 +227,6 @@ func trySet(iniconf config.Configer) {
 	if AppConfig.Log.AsyncChan, err = iniconf.Int64("log::asyncchan"); AppConfig.Log.AsyncChan <= 0 || err != nil {
 		iniconf.Set("log::asyncchan", fmt.Sprint(BConfig.Log.AsyncChan))
 		AppConfig.Log.AsyncChan = BConfig.Log.AsyncChan
-	}
-	if AppConfig.Log.FileLineNum, err = iniconf.Bool("log::filelinenum"); err != nil {
-		iniconf.Set("log::filelinenum", fmt.Sprint(BConfig.Log.FileLineNum))
-		AppConfig.Log.FileLineNum = BConfig.Log.FileLineNum
 	}
 	if AppConfig.DefaultDB.DBName = iniconf.String("defaultdb::dbname"); AppConfig.DefaultDB.DBName == "" {
 		iniconf.Set("defaultdb::dbname", fmt.Sprint(BConfig.DefaultDB.DBName))

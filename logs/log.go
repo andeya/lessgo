@@ -6,18 +6,19 @@ import (
 
 type (
 	Logger interface {
+		SetMsgChan(channelLen int64)
 		// SetLevel Set log message level.
 		// If message level (such as LevelDebug) is higher than logger level (such as LevelWarning),
 		// log providers will not even be sent the message.
 		SetLevel(l int)
 		// EnableFuncCallDepth enable log funcCallDepth
 		EnableFuncCallDepth(b bool)
-		//GoAsync set the log to asynchronous and start the goroutine
-		GoAsync(channelLen int64)
 		// AddAdapter provides a given logger adapter into Logger with config string.
 		// config need to be correct JSON as string: {"interval":360}.
 		AddAdapter(adaptername string, config string) error
 
+		Write(p []byte) (n int, err error)
+		Sys(format string, v ...interface{})
 		Fatal(format string, v ...interface{})
 		Error(format string, v ...interface{})
 		Warn(format string, v ...interface{})
@@ -40,8 +41,12 @@ const (
 	OFF
 )
 
-func NewLogger() Logger {
-	tl := &TgLogger{logs.NewLogger()}
+var (
+	GlobalLogger = NewLogger(1000)
+)
+
+func NewLogger(channelLen int64) Logger {
+	tl := &TgLogger{logs.NewLogger(channelLen)}
 	tl.BeeLogger.SetLogFuncCallDepth(3)
 	return tl
 }
@@ -50,12 +55,26 @@ func (t *TgLogger) SetLevel(l int) {
 	t.BeeLogger.SetLevel(level(l))
 }
 
-func (t *TgLogger) GoAsync(channelLen int64) {
-	t.BeeLogger.Async(channelLen)
+func Write(p []byte) (n int, err error) {
+	return GlobalLogger.Write(p)
 }
-
-func (t *TgLogger) AddAdapter(adaptername string, config string) error {
-	return t.BeeLogger.SetLogger(adaptername, config)
+func Sys(format string, v ...interface{}) {
+	GlobalLogger.Sys(format, v...)
+}
+func Fatal(format string, v ...interface{}) {
+	GlobalLogger.Fatal(format, v...)
+}
+func Error(format string, v ...interface{}) {
+	GlobalLogger.Error(format, v...)
+}
+func Warn(format string, v ...interface{}) {
+	GlobalLogger.Warn(format, v...)
+}
+func Info(format string, v ...interface{}) {
+	GlobalLogger.Info(format, v...)
+}
+func Debug(format string, v ...interface{}) {
+	GlobalLogger.Debug(format, v...)
 }
 
 func level(l int) int {

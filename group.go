@@ -100,7 +100,6 @@ func (g *Group) add(method, path string, handler Handler, middleware ...Middlewa
 		Handler: name,
 	}
 	g.echo.router.routes = append(g.echo.router.routes, r)
-	if g.echo.debug {
-		g.echo.logger.Info("%-5s %-25s --> %v", method, path, name)
-	}
+	g.echo.logger.Sys("| %-7s | %-30s | %v", method, path, name)
+	// g.echo.logger.Sys("%-7s %-30s | %v", method, path, name)
 }

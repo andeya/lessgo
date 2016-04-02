@@ -123,7 +123,8 @@ func ResetRealRoute() {
 		return c.Handle(c)
 	})
 	DefLessgo.Echo.pristineHead = DefLessgo.Echo.head
-	DefLessgo.Echo.chainMiddleware()
+	// DefLessgo.Echo.chainMiddleware()
+	rootHooks()
 	for _, child := range DefDynaRouter.Children {
 		var group *Group
 		for _, d := range child.Tree() {

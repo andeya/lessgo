@@ -82,7 +82,7 @@ func NewFromConfig(c engine.Config) engine.Server {
 		handler: engine.HandlerFunc(func(rq engine.Request, rs engine.Response) {
 			s.logger.Error("handler not set, use `SetHandler()` to set it.")
 		}),
-		logger: logs.NewLogger(),
+		logger: logs.GlobalLogger,
 	}
 	s.Handler = s.ServeHTTP
 	return s
