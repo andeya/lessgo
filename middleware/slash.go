@@ -9,15 +9,15 @@ import (
 //
 // Usage `Echo#Pre(AddTrailingSlash())`
 func AddTrailingSlash() lessgo.MiddlewareFunc {
-	return func(next lessgo.Handler) lessgo.Handler {
-		return lessgo.HandlerFunc(func(c lessgo.Context) error {
+	return func(next lessgo.HandlerFunc) lessgo.HandlerFunc {
+		return func(c lessgo.Context) error {
 			url := c.Request().URL()
 			path := url.Path()
 			if path != "/" && path[len(path)-1] != '/' {
 				url.SetPath(path + "/")
 			}
 			return next(c)
-		})
+		}
 	}
 }
 
