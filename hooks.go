@@ -80,11 +80,11 @@ func registerSession() (err error) {
 
 func registerRootMiddlewares() {
 	defer DefLessgo.Echo.PreUse(Logger(), Recover())
-	DefLessgo.Echo.Get("/test2", test2)
-	DefLessgo.Echo.SufUse(WrapMiddleware(test3))
+	// DefLessgo.Echo.Get("/test2", test2)
+	// DefLessgo.Echo.SufUse(WrapMiddleware(test3))
 	// DefLessgo.Echo.AfterUse(WrapMiddleware(test4))
-	DefLessgo.Echo.PreUse(WrapMiddleware(test1))
-	DefLessgo.Echo.BeforeUse(WrapMiddleware(test4))
+	// DefLessgo.Echo.PreUse(WrapMiddleware(test1))
+	// DefLessgo.Echo.BeforeUse(WrapMiddleware(test4))
 }
 
 func checkHooks(err error) {
