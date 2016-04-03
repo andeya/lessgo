@@ -15,7 +15,8 @@ type (
 		AppName             string // Application name
 		Debug               bool   // enable/disable debug mode.
 		RouterCaseSensitive bool   // 是否路由忽略大小写匹配，默认是 true，区分大小写
-		MaxMemory           int64  // 文件上传默认内存缓存大小，默认值是 1 << 26(64M)。
+		FileCacheSecond     int64  // 静态资源缓存监测频率，单位秒，默认600秒
+		MaxMemory           int64  // 文件上传默认内存缓存大小，默认值是 1 << 26(64M)
 		Listen              Listen
 		Session             SessionConfig
 		Log                 LogConfig
@@ -61,13 +62,20 @@ const (
 	BUSINESS_DIR   = "Business"
 	SYSTEM_DIR     = "System"
 	STATIC_DIR     = "Static"
-	UPLOAD_DIR     = "Uploads"
+	IMG_DIR        = STATIC_DIR + "/Img"
+	JS_DIR         = STATIC_DIR + "/Js"
+	CSS_DIR        = STATIC_DIR + "/Css"
+	TPL_DIR        = STATIC_DIR + "/Tpl"
+	PLUGIN_DIR     = STATIC_DIR + "/Plugin"
+	UPLOADS_DIR    = "Uploads"
 	COMMON_DIR     = "Common"
-	MIDDLEWARE_DIR = "Middleware"
-	DB_DIR         = "DB"
+	MIDDLEWARE_DIR = COMMON_DIR + "/Middleware"
+	DB_DIR         = COMMON_DIR + "/DB"
 	CONFIG_DIR     = "Config"
-	APP_CONFIG     = "app.config"
-	DB_CONFIG      = "db.config"
+	APP_CONFIG     = CONFIG_DIR + "/app.config"
+	DB_CONFIG      = CONFIG_DIR + "/db.config"
+	VIEW_PKG       = "/View"
+	MODULE_SUFFIX  = "Module"
 )
 
 var (
@@ -84,6 +92,7 @@ func initConfig() *Config {
 		AppName:             "lessgo",
 		Debug:               true,
 		RouterCaseSensitive: true,
+		FileCacheSecond:     600,
 		MaxMemory:           1 << 26,
 		Listen: Listen{
 			Graceful:      false,
@@ -111,7 +120,7 @@ func initConfig() *Config {
 		DefaultDB: DBConfig{
 			DBName:     "default",
 			DriverName: "sqlite3",
-			ConnString: COMMON_DIR + "/" + DB_DIR + "/lessgo.db",
+			ConnString: DB_DIR + "/lessgo.db",
 		},
 	}
 }
@@ -120,6 +129,7 @@ func defaultConfig(iniconf config.Configer) {
 	iniconf.Set("appname", BConfig.AppName)
 	iniconf.Set("debug", fmt.Sprint(BConfig.Debug))
 	iniconf.Set("casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
+	iniconf.Set("filecachesecond", fmt.Sprint(BConfig.FileCacheSecond))
 	iniconf.Set("maxmemory", fmt.Sprint(BConfig.MaxMemory))
 	iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
 	iniconf.Set("listen::address", fmt.Sprint(BConfig.Listen.Address))
@@ -155,6 +165,10 @@ func trySet(iniconf config.Configer) {
 	if AppConfig.RouterCaseSensitive, err = iniconf.Bool("casesensitive"); err != nil {
 		iniconf.Set("casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
 		AppConfig.RouterCaseSensitive = BConfig.RouterCaseSensitive
+	}
+	if AppConfig.FileCacheSecond, err = iniconf.Int64("filecachesecond"); AppConfig.FileCacheSecond <= 0 || err != nil {
+		iniconf.Set("filecachesecond", fmt.Sprint(BConfig.FileCacheSecond))
+		AppConfig.FileCacheSecond = BConfig.FileCacheSecond
 	}
 	if AppConfig.MaxMemory, err = iniconf.Int64("maxmemory"); AppConfig.MaxMemory <= 0 || err != nil {
 		iniconf.Set("maxmemory", fmt.Sprint(BConfig.MaxMemory))

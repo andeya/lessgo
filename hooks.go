@@ -23,7 +23,7 @@ func registerMime() error {
 }
 
 func registerConfig() (err error) {
-	fname := CONFIG_DIR + "/" + APP_CONFIG
+	fname := APP_CONFIG
 	appconf, err := config.NewConfig("ini", fname)
 	if err == nil {
 		trySet(appconf)
@@ -78,13 +78,13 @@ func registerSession() (err error) {
 	return
 }
 
-func rootHooks() {
+func registerRootMiddlewares() {
+	defer DefLessgo.Echo.PreUse(Logger(), Recover())
 	DefLessgo.Echo.Get("/test2", test2)
 	DefLessgo.Echo.SufUse(WrapMiddleware(test3))
 	// DefLessgo.Echo.AfterUse(WrapMiddleware(test4))
 	DefLessgo.Echo.PreUse(WrapMiddleware(test1))
 	DefLessgo.Echo.BeforeUse(WrapMiddleware(test4))
-	DefLessgo.Echo.PreUse(Logger())
 }
 
 func checkHooks(err error) {

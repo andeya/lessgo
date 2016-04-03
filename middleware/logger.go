@@ -8,11 +8,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/labstack/gommon/color"
-	isatty "github.com/mattn/go-isatty"
 	"github.com/valyala/fasttemplate"
 
 	"github.com/lessgo/lessgo"
+	"github.com/lessgo/lessgo/logs/color"
 )
 
 type (
@@ -71,7 +70,7 @@ func LoggerFromConfig(config LoggerConfig) lessgo.MiddlewareFunc {
 
 	config.template = fasttemplate.New(config.Format, "${", "}")
 	config.color = color.New()
-	if w, ok := config.Output.(*os.File); ok && !isatty.IsTerminal(w.Fd()) {
+	if w, ok := config.Output.(*os.File); ok && !color.IsTerminal(w.Fd()) {
 		config.color.Disable()
 	}
 

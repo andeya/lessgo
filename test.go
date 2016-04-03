@@ -17,6 +17,7 @@ func test2(ctx Context) error {
 
 func test3(ctx Context) error {
 	logs.Info("路标：3")
+	panic("panic test4")
 	return nil
 }
 

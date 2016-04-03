@@ -18,9 +18,11 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 // SelfPath gets compiled executable file absolute path
@@ -98,4 +100,44 @@ func GrepFile(patten string, filename string) (lines []string, err error) {
 		}
 	}
 	return lines, nil
+}
+
+// 遍历目录，可指定后缀，返回相对路径
+func WalkDirs(targpath string, suffixes ...string) (dirlist []string) {
+	if !filepath.IsAbs(targpath) {
+		targpath, _ = filepath.Abs(targpath)
+	}
+	err := filepath.Walk(targpath, func(retpath string, f os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !f.IsDir() {
+			return nil
+		}
+		if len(suffixes) == 0 {
+			dirlist = append(dirlist, RelPath(retpath))
+			return nil
+		}
+		_retpath := RelPath(retpath)
+		for _, suffix := range suffixes {
+			if strings.HasSuffix(_retpath, suffix) {
+				dirlist = append(dirlist, _retpath)
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("utils.WalkRelDirs: %v\n", err)
+		return
+	}
+
+	return
+}
+
+// 转相对路径
+func RelPath(targpath string) string {
+	basepath, _ := filepath.Abs("./")
+	rel, _ := filepath.Rel(basepath, targpath)
+	return strings.Replace(rel, `\`, `/`, -1)
 }

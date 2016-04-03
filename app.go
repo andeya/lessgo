@@ -41,6 +41,8 @@ type (
 		logger           logs.Logger
 		lock             sync.RWMutex
 		routerIndex      int
+		caseSensitive    bool
+		memoryCache      *MemoryCache
 	}
 
 	// Route contains a handler and information for matching against requests.
@@ -172,27 +174,36 @@ var (
 	methodNotAllowedHandler = func(c Context) error {
 		return ErrMethodNotAllowed
 	}
+
+	headHandlerFunc = HandlerFunc(func(c Context) error {
+		fmt.Println("-------------------head(目测根本不会调用到)-----------------")
+		return c.Handle(c)
+	})
+
+	endHandlerFunc = HandlerFunc(func(c Context) error {
+		return nil
+	})
 )
 
 // New creates an instance of Echo.
 func New() (e *Echo) {
-	e = &Echo{maxParam: new(int)}
+	e = &Echo{
+		pristineHead:  headHandlerFunc,
+		head:          headHandlerFunc,
+		maxParam:      new(int),
+		logger:        logs.GlobalLogger,
+		binder:        &binder{},
+		caseSensitive: true,
+	}
 	e.pool.New = func() interface{} {
 		return NewContext(nil, nil, e)
 	}
 	e.router = NewRouter(e)
 	e.middleware = []MiddlewareFunc{e.router.Process}
-	e.head = func(c Context) error {
-		fmt.Println("-------------------head(目测根本不会调用到)-----------------")
-		return c.Handle(c)
-	}
-	e.pristineHead = e.head
 	e.chainMiddleware()
 
 	// Defaults
 	e.SetHTTPErrorHandler(e.DefaultHTTPErrorHandler)
-	e.SetBinder(&binder{})
-	e.logger = logs.GlobalLogger
 	e.logger.AddAdapter("console", "")
 	e.logger.AddAdapter("file", `{"filename":"Logger/lessgo.log"}`)
 	e.SetDebug(true)
@@ -223,6 +234,14 @@ func (e *Echo) AddLogAdapter(adaptername string, config string) error {
 //logs.Logger returns the logger instance.
 func (e *Echo) Logger() logs.Logger {
 	return e.logger
+}
+
+func (e *Echo) SetCaseSensitive(sensitive bool) {
+	e.caseSensitive = sensitive
+}
+
+func (e *Echo) CaseSensitive() bool {
+	return e.caseSensitive
 }
 
 // DefaultHTTPErrorHandler invokes the default HTTP error handler.
@@ -260,6 +279,9 @@ func (e *Echo) SetRenderer(r Renderer) {
 // SetDebug enable/disable debug mode.
 func (e *Echo) SetDebug(on bool) {
 	e.debug = on
+	if e.memoryCache != nil {
+		e.memoryCache.SetEnable(!on)
+	}
 	if on {
 		e.logger.SetLevel(logs.DEBUG)
 		e.logger.EnableFuncCallDepth(true)
@@ -271,6 +293,15 @@ func (e *Echo) SetDebug(on bool) {
 // Debug returns debug mode (enabled or disabled).
 func (e *Echo) Debug() bool {
 	return e.debug
+}
+
+func (e *Echo) MemoryCacheEnable() bool {
+	return e.memoryCache != nil && e.memoryCache.Enable()
+}
+
+func (e *Echo) SetMemoryCache(m *MemoryCache) {
+	m.SetEnable(!e.debug)
+	e.memoryCache = m
 }
 
 // PreUse adds middlewares to the beginning of chain.
@@ -384,19 +415,30 @@ func (e *Echo) Match(methods []string, path string, handler HandlerFunc, middlew
 
 // Static serves files from provided `root` directory for `/<prefix>*` HTTP path.
 func (e *Echo) Static(prefix, root string) {
-	e.Get(prefix+"*", func(c Context) error {
+	e.addwithlog(false, GET, prefix+"*", func(c Context) error {
 		return c.File(path.Join(root, c.P(0))) // Param `_`
 	})
+	e.logger.Sys("| %-7s | %-30s | %v", GET, prefix+"*", root)
 }
 
 // File serves provided file for `/<path>` HTTP path.
 func (e *Echo) File(path, file string) {
-	e.Get(path, HandlerFunc(func(c Context) error {
+	e.addwithlog(false, GET, path, HandlerFunc(func(c Context) error {
 		return c.File(file)
 	}))
+	e.logger.Sys("| %-7s | %-30s | %v", GET, path, file)
 }
 
 func (e *Echo) add(method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	e.addwithlog(true, method, path, handler, middleware...)
+}
+
+func (e *Echo) addwithlog(logprint bool, method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	path = joinpath(path, "")
+	// not case sensitive
+	if !e.caseSensitive {
+		path = strings.ToLower(path)
+	}
 	name := handlerName(handler)
 	e.router.Add(method, path, func(c Context) error {
 		h := handler
@@ -406,13 +448,16 @@ func (e *Echo) add(method, path string, handler HandlerFunc, middleware ...Middl
 		}
 		return h(c)
 	}, e)
+
 	r := Route{
 		Method:  method,
 		Path:    path,
 		Handler: name,
 	}
 	e.router.routes = append(e.router.routes, r)
-	e.logger.Sys("| %-7s | %-30s | %v", method, path, name)
+	if logprint {
+		e.logger.Sys("| %-7s | %-30s | %v", method, path, name)
+	}
 }
 
 // Group creates a new router group with prefix and optional group-level middleware.
@@ -476,6 +521,9 @@ func (e *Echo) PutContext(c Context) {
 func (e *Echo) ServeHTTP(rq engine.Request, rs engine.Response) {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
+	if !e.caseSensitive {
+		rq.URL().SetPath(strings.ToLower(rq.URL().Path()))
+	}
 
 	c := e.pool.Get().(*context)
 	c.Reset(rq, rs)
@@ -549,10 +597,23 @@ func WrapMiddleware(h interface{}) MiddlewareFunc {
 	}
 }
 
+func wrapMiddlewares(middleware []interface{}) []MiddlewareFunc {
+	ms := make([]MiddlewareFunc, len(middleware))
+	for i, m := range middleware {
+		ms[i] = WrapMiddleware(m)
+	}
+	return ms
+}
+
 func handlerName(h HandlerFunc) string {
 	t := reflect.ValueOf(h).Type()
 	if t.Kind() == reflect.Func {
 		return runtime.FuncForPC(reflect.ValueOf(h).Pointer()).Name()
 	}
 	return t.String()
+}
+
+func joinpath(prefix, p string) string {
+	u := path.Join(prefix, p)
+	return path.Clean("/" + strings.Split(u, "?")[0])
 }

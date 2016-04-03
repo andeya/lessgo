@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/labstack/gommon/color"
-
 	"github.com/lessgo/lessgo"
+	"github.com/lessgo/lessgo/logs/color"
 )
 
 type (

@@ -1,5 +1,9 @@
 package lessgo
 
+import (
+	"strings"
+)
+
 type (
 	// Group is a set of sub-routes for a specified route. It can be used for inner
 	// routes that share a common middlware or functionality that should be separate
@@ -82,7 +86,12 @@ func (g *Group) Group(prefix string, m ...MiddlewareFunc) *Group {
 }
 
 func (g *Group) add(method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
-	path = g.prefix + path
+	ishandle := path != ""
+	path = joinpath(g.prefix, path)
+	// not case sensitive
+	if !g.echo.caseSensitive {
+		path = strings.ToLower(path)
+	}
 	name := handlerName(handler)
 	middleware = append(g.middleware, middleware...)
 
@@ -94,11 +103,16 @@ func (g *Group) add(method, path string, handler HandlerFunc, middleware ...Midd
 		}
 		return h(c)
 	}, g.echo)
+
 	r := Route{
 		Method:  method,
 		Path:    path,
 		Handler: name,
 	}
 	g.echo.router.routes = append(g.echo.router.routes, r)
-	g.echo.logger.Sys("| %-7s | %-30s | %v", method, path, name)
+	if ishandle {
+		g.echo.logger.Sys("| %-7s | %-30s | %v", method, path, name)
+	} else {
+		g.echo.logger.Sys("| %-7s | %-30s | %v", method, path, "can be used with static middleware")
+	}
 }

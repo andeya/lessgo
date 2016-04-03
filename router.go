@@ -39,10 +39,6 @@ const (
 	akind
 )
 
-var endHandler = HandlerFunc(func(c Context) error {
-	return nil
-})
-
 // NewRouter returns a new Router instance.
 func NewRouter(e *Echo) *Router {
 	return &Router{
@@ -63,7 +59,7 @@ func (r *Router) Process(next HandlerFunc) HandlerFunc {
 		if err := c.Handle(c); err != nil {
 			return err
 		}
-		c.Object().handler = endHandler
+		c.Object().handler = endHandlerFunc
 		return next(c)
 	}
 }

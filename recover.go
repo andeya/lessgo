@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/labstack/gommon/color"
+	"github.com/lessgo/lessgo/logs"
+	"github.com/lessgo/lessgo/logs/color"
 )
 
 type (
@@ -50,6 +51,7 @@ func RecoverFromConfig(config RecoverConfig) MiddlewareFunc {
 
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c Context) error {
+			logs.Warn("进入Recover")
 			defer func() {
 				if r := recover(); r != nil {
 					var err error
@@ -66,6 +68,7 @@ func RecoverFromConfig(config RecoverConfig) MiddlewareFunc {
 					}
 					c.Error(err)
 				}
+				logs.Warn("退出Recover")
 			}()
 			return next(c)
 		}

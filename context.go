@@ -364,6 +364,14 @@ func (c *context) XMLBlob(code int, b []byte) (err error) {
 }
 
 func (c *context) File(file string) error {
+	e := c.Echo()
+	if e.MemoryCacheEnable() {
+		f, fi, exist := e.memoryCache.GetCacheFile(file)
+		if !exist {
+			return ErrNotFound
+		}
+		return c.ServeContent(f, fi.Name(), fi.ModTime())
+	}
 	f, err := os.Open(file)
 	if err != nil {
 		return ErrNotFound
