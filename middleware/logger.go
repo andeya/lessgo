@@ -75,12 +75,12 @@ func LoggerFromConfig(config LoggerConfig) lessgo.MiddlewareFunc {
 		config.color.Disable()
 	}
 
-	return func(next lessgo.Handler) lessgo.Handler {
-		return lessgo.HandlerFunc(func(c lessgo.Context) (err error) {
+	return func(next lessgo.HandlerFunc) lessgo.HandlerFunc {
+		return func(c lessgo.Context) (err error) {
 			rq := c.Request()
 			rs := c.Response()
 			start := time.Now()
-			if err = next.Handle(c); err != nil {
+			if err = next(c); err != nil {
 				c.Error(err)
 			}
 			stop := time.Now()
@@ -130,6 +130,6 @@ func LoggerFromConfig(config LoggerConfig) lessgo.MiddlewareFunc {
 				}
 			})
 			return
-		})
+		}
 	}
 }

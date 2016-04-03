@@ -163,15 +163,15 @@ func WrapHandler(h fasthttp.RequestHandler) lessgo.HandlerFunc {
 
 // WrapMiddleware wraps `fasthttp.RequestHandler` into `lessgo.MiddlewareFunc`
 func WrapMiddleware(h fasthttp.RequestHandler) lessgo.MiddlewareFunc {
-	return func(next lessgo.Handler) lessgo.Handler {
-		return lessgo.HandlerFunc(func(c lessgo.Context) error {
+	return func(next lessgo.HandlerFunc) lessgo.HandlerFunc {
+		return func(c lessgo.Context) error {
 			rq := c.Request().(*Request)
 			rs := c.Response().(*Response)
 			ctx := rq.RequestCtx
 			h(ctx)
 			rs.status = ctx.Response.StatusCode()
 			rs.size = int64(ctx.Response.Header.ContentLength())
-			return next.Handle(c)
-		})
+			return next(c)
+		}
 	}
 }

@@ -51,8 +51,8 @@ func StaticFromConfig(config StaticConfig) lessgo.MiddlewareFunc {
 		config.Index = DefaultStaticConfig.Index
 	}
 
-	return func(next lessgo.Handler) lessgo.Handler {
-		return lessgo.HandlerFunc(func(c lessgo.Context) error {
+	return func(next lessgo.HandlerFunc) lessgo.HandlerFunc {
+		return func(c lessgo.Context) error {
 			fs := http.Dir(config.Root)
 			p := c.Request().URL().Path()
 			if c.P(0) != "" { // If serving from `Group`, e.g. `/static/*`
@@ -61,7 +61,7 @@ func StaticFromConfig(config StaticConfig) lessgo.MiddlewareFunc {
 			file := path.Clean(p)
 			f, err := fs.Open(file)
 			if err != nil {
-				return next.Handle(c)
+				return next(c)
 			}
 			defer f.Close()
 
@@ -108,11 +108,11 @@ func StaticFromConfig(config StaticConfig) lessgo.MiddlewareFunc {
 						_, err = fmt.Fprintf(rs, "</pre>\n")
 						return err
 					}
-					return next.Handle(c)
+					return next(c)
 				}
 				fi, _ = f.Stat() // Index file stat
 			}
 			return c.ServeContent(f, fi.Name(), fi.ModTime())
-		})
+		}
 	}
 }

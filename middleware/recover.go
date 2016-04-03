@@ -50,8 +50,8 @@ func RecoverFromConfig(config RecoverConfig) lessgo.MiddlewareFunc {
 		config.StackSize = DefaultRecoverConfig.StackSize
 	}
 
-	return func(next lessgo.Handler) lessgo.Handler {
-		return lessgo.HandlerFunc(func(c lessgo.Context) error {
+	return func(next lessgo.HandlerFunc) lessgo.HandlerFunc {
+		return func(c lessgo.Context) error {
 			defer func() {
 				if r := recover(); r != nil {
 					var err error
@@ -69,7 +69,7 @@ func RecoverFromConfig(config RecoverConfig) lessgo.MiddlewareFunc {
 					c.Error(err)
 				}
 			}()
-			return next.Handle(c)
-		})
+			return next(c)
+		}
 	}
 }

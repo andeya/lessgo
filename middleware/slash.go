@@ -16,7 +16,7 @@ func AddTrailingSlash() lessgo.MiddlewareFunc {
 			if path != "/" && path[len(path)-1] != '/' {
 				url.SetPath(path + "/")
 			}
-			return next.Handle(c)
+			return next(c)
 		})
 	}
 }
@@ -26,15 +26,15 @@ func AddTrailingSlash() lessgo.MiddlewareFunc {
 //
 // Usage `Echo#Pre(RemoveTrailingSlash())`
 func RemoveTrailingSlash() lessgo.MiddlewareFunc {
-	return func(next lessgo.Handler) lessgo.Handler {
-		return lessgo.HandlerFunc(func(c lessgo.Context) error {
+	return func(next lessgo.HandlerFunc) lessgo.HandlerFunc {
+		return func(c lessgo.Context) error {
 			url := c.Request().URL()
 			path := url.Path()
 			l := len(path) - 1
 			if path != "/" && path[l] == '/' {
 				url.SetPath(path[:l])
 			}
-			return next.Handle(c)
-		})
+			return next(c)
+		}
 	}
 }

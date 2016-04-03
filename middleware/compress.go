@@ -50,8 +50,8 @@ func GzipFromConfig(config GzipConfig) lessgo.MiddlewareFunc {
 	pool := gzipPool(config)
 	scheme := "gzip"
 
-	return func(next lessgo.Handler) lessgo.Handler {
-		return lessgo.HandlerFunc(func(c lessgo.Context) error {
+	return func(next lessgo.HandlerFunc) lessgo.HandlerFunc {
+		return func(c lessgo.Context) error {
 			rs := c.Response()
 			rs.Header().Add(lessgo.Vary, lessgo.AcceptEncoding)
 			if strings.Contains(c.Request().Header().Get(lessgo.AcceptEncoding), scheme) {
@@ -74,8 +74,8 @@ func GzipFromConfig(config GzipConfig) lessgo.MiddlewareFunc {
 				rs.Header().Set(lessgo.ContentEncoding, scheme)
 				rs.SetWriter(g)
 			}
-			return next.Handle(c)
-		})
+			return next(c)
+		}
 	}
 }
 

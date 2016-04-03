@@ -8,7 +8,7 @@ import (
 type MiddlewareObj struct {
 	Name        string // 全局唯一
 	Description string
-	Middleware
+	MiddlewareFunc
 }
 
 // 全局中间件登记
@@ -17,14 +17,14 @@ var middlewareMap = map[string]MiddlewareObj{}
 // 必须在init()中调用
 func RegMiddleware(name, description string, middleware interface{}) error {
 	if _, ok := middlewareMap[name]; ok {
-		err := fmt.Errorf("RegisterMiddleware called twice for middleware %v.", name)
+		err := fmt.Errorf("RegisterMiddlewareFunc called twice for middleware %v.", name)
 		DefLessgo.Logger().Error("%v", err)
 		return err
 	}
 	middlewareMap[name] = MiddlewareObj{
-		Name:        name,
-		Description: description,
-		Middleware:  WrapMiddleware(middleware),
+		Name:           name,
+		Description:    description,
+		MiddlewareFunc: WrapMiddleware(middleware),
 	}
 	return nil
 }
@@ -51,10 +51,10 @@ func middlewareExistCheck(node *DynaRouter) error {
 	return fmt.Errorf("Specified below middlewares does not exist: %v", errstring)
 }
 
-func getMiddlewares(names []string) []Middleware {
-	mws := make([]Middleware, len(names))
+func getMiddlewares(names []string) []MiddlewareFunc {
+	mws := make([]MiddlewareFunc, len(names))
 	for i, mw := range names {
-		mws[i] = middlewareMap[mw]
+		mws[i] = middlewareMap[mw].MiddlewareFunc
 	}
 	return mws
 }

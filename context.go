@@ -154,7 +154,7 @@ type (
 		pvalues    []string
 		query      url.Values
 		store      store
-		handler    Handler
+		handler    HandlerFunc
 		echo       *Echo
 	}
 
@@ -202,7 +202,7 @@ func (c *context) Value(key interface{}) interface{} {
 }
 
 func (c *context) Handle(ctx Context) error {
-	return c.handler.Handle(ctx)
+	return c.handler(ctx)
 }
 
 func (c *context) Request() engine.Request {

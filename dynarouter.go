@@ -127,7 +127,7 @@ func ResetRealRoute() {
 	DefLessgo.Echo.lock.Lock()
 	defer DefLessgo.Echo.lock.Unlock()
 	DefLessgo.Echo.router = NewRouter(DefLessgo.Echo)
-	DefLessgo.Echo.middleware = []Middleware{DefLessgo.Echo.router}
+	DefLessgo.Echo.middleware = []MiddlewareFunc{DefLessgo.Echo.router.Process}
 	DefLessgo.Echo.head = HandlerFunc(func(c Context) error {
 		return c.Handle(c)
 	})

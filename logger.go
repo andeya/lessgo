@@ -10,8 +10,8 @@ import (
 
 // Logger returns a middleware that logs HTTP requests.
 func Logger() MiddlewareFunc {
-	return func(next Handler) Handler {
-		return HandlerFunc(func(c Context) (err error) {
+	return func(next HandlerFunc) HandlerFunc {
+		return func(c Context) (err error) {
 			logs.Warn("进入Logger")
 			req := c.Request()
 			res := c.Response()
@@ -26,7 +26,7 @@ func Logger() MiddlewareFunc {
 			}
 
 			start := time.Now()
-			if err := next.Handle(c); err != nil {
+			if err := next(c); err != nil {
 				c.Error(err)
 			}
 			stop := time.Now()
@@ -50,6 +50,6 @@ func Logger() MiddlewareFunc {
 
 			logs.Debug("%s | %s | %s | %s | %s | %d", remoteAddr, method, path, code, stop.Sub(start), size)
 			return nil
-		})
+		}
 	}
 }

@@ -48,8 +48,8 @@ func RecoverFromConfig(config RecoverConfig) MiddlewareFunc {
 		config.StackSize = DefaultRecoverConfig.StackSize
 	}
 
-	return func(next Handler) Handler {
-		return HandlerFunc(func(c Context) error {
+	return func(next HandlerFunc) HandlerFunc {
+		return func(c Context) error {
 			defer func() {
 				if r := recover(); r != nil {
 					var err error
@@ -67,7 +67,7 @@ func RecoverFromConfig(config RecoverConfig) MiddlewareFunc {
 					c.Error(err)
 				}
 			}()
-			return next.Handle(c)
-		})
+			return next(c)
+		}
 	}
 }

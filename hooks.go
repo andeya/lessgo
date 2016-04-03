@@ -79,7 +79,7 @@ func registerSession() (err error) {
 }
 
 func rootHooks() {
-	DefLessgo.Echo.Get("/test2", Handler(HandlerFunc(test2)))
+	DefLessgo.Echo.Get("/test2", test2)
 	DefLessgo.Echo.SufUse(WrapMiddleware(test3))
 	// DefLessgo.Echo.AfterUse(WrapMiddleware(test4))
 	DefLessgo.Echo.PreUse(WrapMiddleware(test1))

@@ -39,8 +39,8 @@ func BasicAuth(f BasicAuthFunc) lessgo.MiddlewareFunc {
 // BasicAuthFromConfig returns an HTTP basic auth middleware from config.
 // See `BasicAuth()`.
 func BasicAuthFromConfig(config BasicAuthConfig) lessgo.MiddlewareFunc {
-	return func(next lessgo.Handler) lessgo.Handler {
-		return lessgo.HandlerFunc(func(c lessgo.Context) error {
+	return func(next lessgo.HandlerFunc) lessgo.HandlerFunc {
+		return func(c lessgo.Context) error {
 			auth := c.Request().Header().Get(lessgo.Authorization)
 			l := len(basic)
 
@@ -52,7 +52,7 @@ func BasicAuthFromConfig(config BasicAuthConfig) lessgo.MiddlewareFunc {
 						if cred[i] == ':' {
 							// Verify credentials
 							if config.AuthFunc(cred[:i], cred[i+1:]) {
-								return next.Handle(c)
+								return next(c)
 							}
 						}
 					}
@@ -60,6 +60,6 @@ func BasicAuthFromConfig(config BasicAuthConfig) lessgo.MiddlewareFunc {
 			}
 			c.Response().Header().Set(lessgo.WWWAuthenticate, basic+" realm=Restricted")
 			return lessgo.ErrUnauthorized
-		})
+		}
 	}
 }

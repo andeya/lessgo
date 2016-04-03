@@ -74,8 +74,8 @@ func After(middleware ...interface{}) {
 	DefLessgo.Echo.AfterUse(wrapMiddlewares(middleware)...)
 }
 
-func wrapMiddlewares(middleware []interface{}) []Middleware {
-	ms := make([]Middleware, len(middleware))
+func wrapMiddlewares(middleware []interface{}) []MiddlewareFunc {
+	ms := make([]MiddlewareFunc, len(middleware))
 	for i, m := range middleware {
 		ms[i] = WrapMiddleware(m)
 	}
