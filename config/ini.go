@@ -205,7 +205,7 @@ func (c *IniConfigContainer) MainKeys() []string {
 }
 
 func (c *IniConfigContainer) Sections() []string {
-	l := len(c.data) - 1
+	l := len(c.data)
 	a := make([]string, l)
 	i := 0
 	for k := range c.data {

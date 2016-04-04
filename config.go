@@ -2,7 +2,6 @@ package lessgo
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/lessgo/lessgo/config"
@@ -78,8 +77,8 @@ const (
 	APPCONFIG_FILE = CONFIG_DIR + "/app.config"
 	DBCONFIG_FILE  = CONFIG_DIR + "/db.config"
 
-	DB_DIR        = COMMON_DIR + "/DB"
-	DBLIST_PREFIX = "db_" // example: db_1, db_2.
+	DB_DIR            = COMMON_DIR + "/DB"
+	DEFAULTDB_SECTION = "defaultdb"
 
 	VIEW_PKG      = "/View"
 	MODULE_SUFFIX = "Module"
@@ -124,10 +123,10 @@ func initConfig() *Config {
 			Level:     logs.ERROR,
 			AsyncChan: 1000,
 		},
-		DefaultDB: "default",
+		DefaultDB: "preset",
 		DBList: map[string]DBConfig{
-			"default": {
-				Name:         "default",
+			"preset": {
+				Name:         "preset",
 				Driver:       "sqlite3",
 				ConnString:   DB_DIR + "/sqlite.db",
 				MaxOpenConns: 1,
@@ -163,15 +162,13 @@ func defaultAppConfig(iniconf *config.IniConfigContainer) {
 }
 
 func defaultDBConfig(iniconf *config.IniConfigContainer) {
-	iniconf.Set("defaultdb", fmt.Sprint(BConfig.DefaultDB))
-	var ks []string
-	for k := range BConfig.DBList {
-		ks = append(ks, k)
-	}
-	sort.Strings(ks)
-	for i, k := range ks {
-		section := fmt.Sprintf("db_%v::", i)
-		db := BConfig.DBList[k]
+	for _, db := range BConfig.DBList {
+		var section string
+		if BConfig.DefaultDB == db.Name {
+			section = fmt.Sprintf("%v::", DEFAULTDB_SECTION)
+		} else {
+			section = fmt.Sprintf("%v::", db.Name)
+		}
 		iniconf.Set(section+"name", db.Name)
 		iniconf.Set(section+"driver", db.Driver)
 		iniconf.Set(section+"connstring", db.ConnString)
@@ -273,20 +270,16 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 }
 
 func trySetDBConfig(iniconf *config.IniConfigContainer) {
-	if AppConfig.DefaultDB = iniconf.String("defaultdb"); AppConfig.DefaultDB == "" {
-		iniconf.Set("defaultdb", fmt.Sprint(BConfig.DefaultDB))
-		AppConfig.DefaultDB = BConfig.DefaultDB
-	}
 	for _, s := range iniconf.Sections() {
-		if !strings.HasPrefix(s, DBLIST_PREFIX) {
-			continue
-		}
 		dbconfig := DBConfig{
 			Name:         iniconf.String(s + "::name"),
 			Driver:       iniconf.String(s + "::driver"),
 			ConnString:   iniconf.String(s + "::connstring"),
 			MaxOpenConns: iniconf.DefaultInt(s+"::maxopenconns", 1),
 			MaxIdleConns: iniconf.DefaultInt(s+"::maxidleconns", 1),
+		}
+		if strings.ToLower(s) == DEFAULTDB_SECTION {
+			AppConfig.DefaultDB = dbconfig.Name
 		}
 		AppConfig.DBList[dbconfig.Name] = dbconfig
 	}
