@@ -13,9 +13,9 @@ import (
 
 func staticRoute() {
 	// 注册固定的静态文件与目录
-	DefLessgo.Echo.Static("/uploads", strings.ToLower(UPLOADS_DIR))
-	DefLessgo.Echo.Static("/static", strings.ToLower(STATIC_DIR))
-	DefLessgo.Echo.File("/favicon.ico", strings.ToLower(IMG_DIR)+"/favicon.ico")
+	DefLessgo.Echo.Static("/uploads", UPLOADS_DIR)
+	DefLessgo.Echo.Static("/static", STATIC_DIR)
+	DefLessgo.Echo.File("/favicon.ico", IMG_DIR+"/favicon.ico")
 
 	// 注册模块中的静态目录
 	staticModule(BUSINESS_DIR)
