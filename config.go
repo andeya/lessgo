@@ -61,17 +61,22 @@ type (
 
 // 项目固定目录文件名称
 const (
-	BUSINESS_DIR   = "Business"
-	SYSTEM_DIR     = "System"
-	STATIC_DIR     = "Static"
-	IMG_DIR        = STATIC_DIR + "/Img"
-	JS_DIR         = STATIC_DIR + "/Js"
-	CSS_DIR        = STATIC_DIR + "/Css"
-	TPL_DIR        = STATIC_DIR + "/Tpl"
-	PLUGIN_DIR     = STATIC_DIR + "/Plugin"
-	UPLOADS_DIR    = "Uploads"
-	COMMON_DIR     = "Common"
-	MIDDLEWARE_DIR = COMMON_DIR + "/Middleware"
+	BUSINESS_API_DIR  = "BusinessApi"
+	BUSINESS_VIEW_DIR = "BusinessView"
+	SYSTEM_API_DIR    = "SystemApi"
+	SYSTEM_VIEW_DIR   = "SystemView"
+	STATIC_DIR        = "Static"
+	IMG_DIR           = STATIC_DIR + "/Img"
+	JS_DIR            = STATIC_DIR + "/Js"
+	CSS_DIR           = STATIC_DIR + "/Css"
+	TPL_DIR           = STATIC_DIR + "/Tpl"
+	PLUGIN_DIR        = STATIC_DIR + "/Plugin"
+	UPLOADS_DIR       = "Uploads"
+	COMMON_DIR        = "Common"
+	MIDDLEWARE_DIR    = COMMON_DIR + "/Middleware"
+
+	TPL_EXT         = ".tpl"
+	STATIC_HTML_EXT = ".html"
 
 	CONFIG_DIR     = "Config"
 	APPCONFIG_FILE = CONFIG_DIR + "/app.config"
