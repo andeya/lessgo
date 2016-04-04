@@ -22,11 +22,11 @@ func registerMime() error {
 	return nil
 }
 
-func registerConfig() (err error) {
-	fname := APP_CONFIG
+func registerAppConfig() (err error) {
+	fname := APPCONFIG_FILE
 	appconf, err := config.NewConfig("ini", fname)
 	if err == nil {
-		trySet(appconf)
+		trySetAppConfig(appconf.(*config.IniConfigContainer))
 		return appconf.SaveConfigFile(fname)
 	}
 
@@ -37,7 +37,26 @@ func registerConfig() (err error) {
 	}
 	f.Close()
 	appconf, err = config.NewConfig("ini", fname)
-	defaultConfig(appconf)
+	defaultAppConfig(appconf.(*config.IniConfigContainer))
+	return appconf.SaveConfigFile(fname)
+}
+
+func registerDBConfig() (err error) {
+	fname := DBCONFIG_FILE
+	appconf, err := config.NewConfig("ini", fname)
+	if err == nil {
+		trySetDBConfig(appconf.(*config.IniConfigContainer))
+		return appconf.SaveConfigFile(fname)
+	}
+
+	os.MkdirAll(filepath.Dir(fname), 0777)
+	f, err := os.Create(fname)
+	if err != nil {
+		panic(err)
+	}
+	f.Close()
+	appconf, err = config.NewConfig("ini", fname)
+	defaultDBConfig(appconf.(*config.IniConfigContainer))
 	return appconf.SaveConfigFile(fname)
 }
 

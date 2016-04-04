@@ -25,7 +25,8 @@ const (
 var (
 	DefLessgo = func() *Lessgo {
 		printInfo()
-		registerConfig()
+		registerAppConfig()
+		registerDBConfig()
 		registerMime()
 		l := &Lessgo{
 			Echo: New(),

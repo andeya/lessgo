@@ -2,6 +2,7 @@ package lessgo
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/lessgo/lessgo/config"
@@ -20,8 +21,8 @@ type (
 		Listen              Listen
 		Session             SessionConfig
 		Log                 LogConfig
-		DefaultDB           DBConfig
-		ExtendDB            map[string]DBConfig
+		DefaultDB           string
+		DBList              map[string]DBConfig
 	}
 	// Listen holds for http and https related config
 	Listen struct {
@@ -51,9 +52,11 @@ type (
 	}
 	// DataBase connection Config
 	DBConfig struct {
-		DBName     string
-		DriverName string // DriverName：mssql | odbc(mssql) | mysql | mymysql | postgres | sqlite3 | oci8 | goracle
-		ConnString string
+		Name         string
+		Driver       string // Driver：mssql | odbc(mssql) | mysql | mymysql | postgres | sqlite3 | oci8 | goracle
+		ConnString   string
+		MaxOpenConns int
+		MaxIdleConns int
 	}
 )
 
@@ -70,12 +73,16 @@ const (
 	UPLOADS_DIR    = "Uploads"
 	COMMON_DIR     = "Common"
 	MIDDLEWARE_DIR = COMMON_DIR + "/Middleware"
-	DB_DIR         = COMMON_DIR + "/DB"
+
 	CONFIG_DIR     = "Config"
-	APP_CONFIG     = CONFIG_DIR + "/app.config"
-	DB_CONFIG      = CONFIG_DIR + "/db.config"
-	VIEW_PKG       = "/View"
-	MODULE_SUFFIX  = "Module"
+	APPCONFIG_FILE = CONFIG_DIR + "/app.config"
+	DBCONFIG_FILE  = CONFIG_DIR + "/db.config"
+
+	DB_DIR        = COMMON_DIR + "/DB"
+	DBLIST_PREFIX = "db_" // example: db_1, db_2.
+
+	VIEW_PKG      = "/View"
+	MODULE_SUFFIX = "Module"
 )
 
 var (
@@ -117,15 +124,20 @@ func initConfig() *Config {
 			Level:     logs.ERROR,
 			AsyncChan: 1000,
 		},
-		DefaultDB: DBConfig{
-			DBName:     "default",
-			DriverName: "sqlite3",
-			ConnString: DB_DIR + "/lessgo.db",
+		DefaultDB: "default",
+		DBList: map[string]DBConfig{
+			"default": {
+				Name:         "default",
+				Driver:       "sqlite3",
+				ConnString:   DB_DIR + "/sqlite.db",
+				MaxOpenConns: 1,
+				MaxIdleConns: 1,
+			},
 		},
 	}
 }
 
-func defaultConfig(iniconf config.Configer) {
+func defaultAppConfig(iniconf *config.IniConfigContainer) {
 	iniconf.Set("appname", BConfig.AppName)
 	iniconf.Set("debug", fmt.Sprint(BConfig.Debug))
 	iniconf.Set("casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
@@ -148,11 +160,27 @@ func defaultConfig(iniconf config.Configer) {
 	iniconf.Set("session::domain", fmt.Sprint(BConfig.Session.Domain))
 	iniconf.Set("log::level", logLevelString(BConfig.Log.Level))
 	iniconf.Set("log::asyncchan", fmt.Sprint(BConfig.Log.AsyncChan))
-	iniconf.Set("defaultdb::dbname", fmt.Sprint(BConfig.DefaultDB.DBName))
-	iniconf.Set("defaultdb::driver", fmt.Sprint(BConfig.DefaultDB.DriverName))
-	iniconf.Set("defaultdb::connstring", fmt.Sprint(BConfig.DefaultDB.ConnString))
 }
-func trySet(iniconf config.Configer) {
+
+func defaultDBConfig(iniconf *config.IniConfigContainer) {
+	iniconf.Set("defaultdb", fmt.Sprint(BConfig.DefaultDB))
+	var ks []string
+	for k := range BConfig.DBList {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	for i, k := range ks {
+		section := fmt.Sprintf("db_%v::", i)
+		db := BConfig.DBList[k]
+		iniconf.Set(section+"name", db.Name)
+		iniconf.Set(section+"driver", db.Driver)
+		iniconf.Set(section+"connstring", db.ConnString)
+		iniconf.Set(section+"maxopenconns", fmt.Sprint(db.MaxOpenConns))
+		iniconf.Set(section+"maxidleconns", fmt.Sprint(db.MaxIdleConns))
+	}
+}
+
+func trySetAppConfig(iniconf *config.IniConfigContainer) {
 	var err error
 	if AppConfig.AppName = iniconf.String("appname"); AppConfig.AppName == "" {
 		iniconf.Set("appname", BConfig.AppName)
@@ -242,31 +270,28 @@ func trySet(iniconf config.Configer) {
 		iniconf.Set("log::asyncchan", fmt.Sprint(BConfig.Log.AsyncChan))
 		AppConfig.Log.AsyncChan = BConfig.Log.AsyncChan
 	}
-	if AppConfig.DefaultDB.DBName = iniconf.String("defaultdb::dbname"); AppConfig.DefaultDB.DBName == "" {
-		iniconf.Set("defaultdb::dbname", fmt.Sprint(BConfig.DefaultDB.DBName))
-		AppConfig.DefaultDB.DBName = BConfig.DefaultDB.DBName
-	}
-	if AppConfig.DefaultDB.DriverName = iniconf.String("defaultdb::driver"); AppConfig.DefaultDB.DriverName == "" {
-		iniconf.Set("defaultdb::driver", fmt.Sprint(BConfig.DefaultDB.DriverName))
-		AppConfig.DefaultDB.DriverName = BConfig.DefaultDB.DriverName
-	}
-	if AppConfig.DefaultDB.ConnString = iniconf.String("defaultdb::connstring"); AppConfig.DefaultDB.ConnString == "" {
-		iniconf.Set("defaultdb::connstring", fmt.Sprint(BConfig.DefaultDB.ConnString))
-		AppConfig.DefaultDB.ConnString = BConfig.DefaultDB.ConnString
-	}
+}
 
-	AppConfig.ExtendDB = map[string]DBConfig{}
-	for k, v := range iniconf.(*config.IniConfigContainer).GetAllSections() {
-		if !strings.HasPrefix(k, "extenddb_") {
+func trySetDBConfig(iniconf *config.IniConfigContainer) {
+	if AppConfig.DefaultDB = iniconf.String("defaultdb"); AppConfig.DefaultDB == "" {
+		iniconf.Set("defaultdb", fmt.Sprint(BConfig.DefaultDB))
+		AppConfig.DefaultDB = BConfig.DefaultDB
+	}
+	for _, s := range iniconf.Sections() {
+		if !strings.HasPrefix(s, DBLIST_PREFIX) {
 			continue
 		}
-		AppConfig.ExtendDB[k] = DBConfig{
-			DBName:     v["dbname"],
-			DriverName: v["driver"],
-			ConnString: v["connstring"],
+		dbconfig := DBConfig{
+			Name:         iniconf.String(s + "::name"),
+			Driver:       iniconf.String(s + "::driver"),
+			ConnString:   iniconf.String(s + "::connstring"),
+			MaxOpenConns: iniconf.DefaultInt(s+"::maxopenconns", 1),
+			MaxIdleConns: iniconf.DefaultInt(s+"::maxidleconns", 1),
 		}
+		AppConfig.DBList[dbconfig.Name] = dbconfig
 	}
 }
+
 func logLevelInt(l string) int {
 	switch strings.ToLower(l) {
 	case "debug":

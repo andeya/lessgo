@@ -193,6 +193,42 @@ type IniConfigContainer struct {
 	sync.RWMutex
 }
 
+func (c *IniConfigContainer) MainKeys() []string {
+	l := len(c.data[defaultSection])
+	a := make([]string, l)
+	i := 0
+	for k := range c.data[defaultSection] {
+		a[i] = k
+		i++
+	}
+	return a
+}
+
+func (c *IniConfigContainer) Sections() []string {
+	l := len(c.data) - 1
+	a := make([]string, l)
+	i := 0
+	for k := range c.data {
+		if k == defaultSection {
+			continue
+		}
+		a[i] = k
+		i++
+	}
+	return a
+}
+
+func (c *IniConfigContainer) SectionKeys(section string) []string {
+	l := len(c.data[section])
+	a := make([]string, l)
+	i := 0
+	for k := range c.data[section] {
+		a[i] = k
+		i++
+	}
+	return a
+}
+
 // Bool returns the boolean value for a given key.
 func (c *IniConfigContainer) Bool(key string) (bool, error) {
 	return ParseBool(c.getdata(key))
