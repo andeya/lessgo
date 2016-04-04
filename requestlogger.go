@@ -8,11 +8,10 @@ import (
 	"github.com/lessgo/lessgo/logs/color"
 )
 
-// Logger returns a middleware that logs HTTP requests.
-func Logger() MiddlewareFunc {
+// RequestLogger returns a middleware that logs HTTP requests.
+func RequestLogger() MiddlewareFunc {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c Context) (err error) {
-			logs.Warn("进入Logger")
 			req := c.Request()
 			res := c.Response()
 

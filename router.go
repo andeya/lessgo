@@ -59,7 +59,6 @@ func (r *Router) Process(next HandlerFunc) HandlerFunc {
 		if err := c.Handle(c); err != nil {
 			return err
 		}
-		c.Object().handler = endHandlerFunc
 		return next(c)
 	}
 }

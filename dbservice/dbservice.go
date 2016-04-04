@@ -4,9 +4,11 @@
 package dbservice
 
 import (
-	"database/sql"
-	_ "github.com/go-xorm/core"
-	_ "github.com/go-xorm/xorm"
+	"fmt"
+
+	"github.com/go-xorm/xorm"
+
+	"github.com/lessgo/lessgo"
 )
 
 /**
@@ -14,39 +16,89 @@ import (
  */
 type (
 	DBAccess struct {
-		DefaultDB *Engine
-		ExtendDBs map[string]*Engine
+		Default *xorm.Engine
+		List    map[string]*xorm.Engine
 	}
 )
 
-func DBAccess() *DBAccess {
+var globalDBAccess = func() *DBAccess {
+	access := &DBAccess{
+		List: map[string]*xorm.Engine{},
+	}
+	for _, conf := range lessgo.AppConfig.DBList {
+		engine, err := xorm.NewEngine(conf.Driver, conf.ConnString)
+		if err != nil {
+			lessgo.Logger().Error("%v", err)
+			continue
+		}
+		engine.SetMaxOpenConns(conf.MaxOpenConns)
+		engine.SetMaxIdleConns(conf.MaxIdleConns)
+		access.List[conf.Name] = engine
+		if lessgo.AppConfig.DefaultDB == conf.Name {
+			access.Default = engine
+		}
+	}
+	return access
+}()
 
+/**
+ * 获取默认数据库引擎
+ */
+func DefaultDB() *xorm.Engine {
+	return globalDBAccess.Default
 }
 
 /**
- * 根据数据库连接配置创建数据库连接
+ * 获取全部数据库引擎列表
  */
-func (this *DBAccess) InitDBAccess() {
-
+func DBList() map[string]*xorm.Engine {
+	return globalDBAccess.List
 }
 
 /**
- * 根据 name获取DB访问实例
+ * 设置默认数据库引擎
  */
-func (this *DBAccess) ExtendDB(name string) *Engine {
-	return this.ExtendDBs[name]
+func SetDefaultDB(name string) error {
+	engine, ok := globalDBAccess.List[name]
+	if !ok {
+		return fmt.Errorf("Specified database does not exist: %v.", name)
+	}
+	globalDBAccess.Default = engine
+	return nil
 }
 
 /**
- * 获取默认数据库访问实例
+ * 获取指定数据库引擎
  */
-func (this *DBAccess) DefaultDB() *Engine {
-	return this.DefaultDB
+func GetDB(name string) (*xorm.Engine, bool) {
+	engine, ok := globalDBAccess.List[name]
+	return engine, ok
 }
 
-/**
- * 释放
- */
-func (this *DBAccess) Close() {
+// /**
+//  * 根据数据库连接配置创建数据库连接
+//  */
+// func (this *DBAccess) InitDBAccess() {
 
-}
+// }
+
+// /**
+//  * 根据 name获取DB访问实例
+//  */
+// func (this *DBAccess) ExtendDB(name string) *Engine {
+// 	return this.ExtendDBs[name]
+// }
+
+// /**
+//  * 获取默认数据库访问实例
+//  */
+// func (this *DBAccess) DefaultDB() *Engine {
+// 	return this.DefaultDB
+// }
+
+// /**
+//  * 释放
+//  */
+// func (this *DBAccess) Close() {
+
+// }

@@ -175,12 +175,9 @@ var (
 		return ErrMethodNotAllowed
 	}
 
+	// 请求最后被调用的空操作
 	headHandlerFunc = HandlerFunc(func(c Context) error {
-		fmt.Println("-------------------head(目测根本不会调用到)-----------------")
-		return c.Handle(c)
-	})
-
-	endHandlerFunc = HandlerFunc(func(c Context) error {
+		// c.Logger().Warn("请求最后被调用的空操作")
 		return nil
 	})
 )
@@ -414,18 +411,18 @@ func (e *Echo) Match(methods []string, path string, handler HandlerFunc, middlew
 }
 
 // Static serves files from provided `root` directory for `/<prefix>*` HTTP path.
-func (e *Echo) Static(prefix, root string) {
+func (e *Echo) Static(prefix, root string, middleware ...MiddlewareFunc) {
 	e.addwithlog(false, GET, prefix+"*", func(c Context) error {
 		return c.File(path.Join(root, c.P(0))) // Param `_`
-	})
+	}, middleware...)
 	e.logger.Sys("| %-7s | %-30s | %v", GET, prefix+"*", root)
 }
 
 // File serves provided file for `/<path>` HTTP path.
-func (e *Echo) File(path, file string) {
+func (e *Echo) File(path, file string, middleware ...MiddlewareFunc) {
 	e.addwithlog(false, GET, path, HandlerFunc(func(c Context) error {
 		return c.File(file)
-	}))
+	}), middleware...)
 	e.logger.Sys("| %-7s | %-30s | %v", GET, path, file)
 }
 

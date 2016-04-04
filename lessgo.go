@@ -7,6 +7,7 @@ import (
 
 	_ "github.com/lessgo/lessgo/_fixture"
 	"github.com/lessgo/lessgo/engine"
+	"github.com/lessgo/lessgo/logs"
 )
 
 type (
@@ -128,4 +129,8 @@ func ResetRealRoute() {
 			}
 		}
 	}
+}
+
+func Logger() logs.Logger {
+	return DefLessgo.Echo.Logger()
 }

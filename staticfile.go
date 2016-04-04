@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -13,8 +14,8 @@ import (
 
 func staticRoute() {
 	// 注册固定的静态文件与目录
-	DefLessgo.Echo.Static("/uploads", UPLOADS_DIR)
-	DefLessgo.Echo.Static("/static", STATIC_DIR)
+	DefLessgo.Echo.Static("/uploads", UPLOADS_DIR, autoHTMLSuffix())
+	DefLessgo.Echo.Static("/static", STATIC_DIR, autoHTMLSuffix())
 	DefLessgo.Echo.File("/favicon.ico", IMG_DIR+"/favicon.ico")
 
 	// 注册模块中的静态目录
@@ -25,7 +26,7 @@ func staticRoute() {
 func staticModule(root string) {
 	dirs := utils.WalkDirs(root, VIEW_PKG)
 	for _, dir := range dirs {
-		DefLessgo.Echo.Static(urlPrefix(dir), dir)
+		DefLessgo.Echo.Static(urlPrefix(dir), dir, autoHTMLSuffix())
 	}
 }
 
@@ -166,4 +167,17 @@ func (m *MemoryCache) GetCacheFile(fname string) (*bytes.Reader, os.FileInfo, bo
 	m.filemap[fname] = cfile
 
 	return cfile.Reader, cfile.info, cfile.exist
+}
+
+func autoHTMLSuffix() MiddlewareFunc {
+	return func(next HandlerFunc) HandlerFunc {
+		return func(c Context) (err error) {
+			p := c.Request().URL().Path()
+			ext := path.Ext(p)
+			if ext == "" || ext[0] != '.' {
+				c.Request().URL().SetPath(strings.TrimSuffix(p, ext) + ".html" + ext)
+			}
+			return next(c)
+		}
+	}
 }
