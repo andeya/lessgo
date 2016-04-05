@@ -87,6 +87,11 @@ $ lessgo run
 └─Main.go 应用入口文件
 ```
 
+##框架相关
+
+* 核心框架：[lessgo](https://github.com/lessgo/lessgo)
+* 框架扩展：[lessgoext](https://github.com/lessgo/lessgoext)
+* 项目Demo：[demo](https://github.com/lessgo/lessgoext)
 
 
 ##项目架构
