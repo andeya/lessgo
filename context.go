@@ -370,6 +370,7 @@ func (c *context) File(file string) error {
 		if !exist {
 			return ErrNotFound
 		}
+		c.Logger().Warn("File MemoryCache: %v", (f.Len()))
 		return c.ServeContent(f, fi.Name(), fi.ModTime())
 	}
 	f, err := os.Open(file)

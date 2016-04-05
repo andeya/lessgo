@@ -17,6 +17,7 @@ var (
 		Type:        ROOT,
 		Middlewares: []string{},
 		Children:    []*DynaRouter{},
+		Enable:      true,
 	}
 
 	dynaRouterMap  = map[string]*DynaRouter{}
@@ -26,6 +27,12 @@ var (
 // 返回路由列表
 func DynaRouterTree() []*DynaRouter {
 	return DefDynaRouter.Tree()
+}
+
+// 返回指定路由节点
+func GetDynaRouter(id string) (*DynaRouter, bool) {
+	d, ok := dynaRouterMap[id]
+	return d, ok
 }
 
 // 设置或添加路由
@@ -74,6 +81,7 @@ func SubRouter(prefix, name, description string, node ...*DynaRouter) *DynaRoute
 		Description: description,
 		Middlewares: []string{},
 		Children:    node,
+		Enable:      true,
 	}
 	for _, r := range node {
 		r.Parent = p
@@ -86,6 +94,12 @@ func (d *DynaRouter) Use(middleware ...string) *DynaRouter {
 	for _, name := range middleware {
 		d.Middlewares = append(d.Middlewares, name)
 	}
+	return d
+}
+
+// 配置启用状态，默认为启用
+func (d *DynaRouter) SetEnable(enable bool) *DynaRouter {
+	d.Enable = enable
 	return d
 }
 
@@ -141,6 +155,7 @@ func route(methods []string, name, description string, handler HandlerFunc, para
 		Param:       param[0],
 		Handler:     hUri,
 		Middlewares: []string{},
+		Enable:      true,
 	}
 }
 
@@ -180,6 +195,7 @@ type DynaRouter struct {
 	ParentUrl   string   // 允许动态指定父节点
 	Parent      *DynaRouter
 	Children    []*DynaRouter
+	Enable      bool
 }
 
 const (

@@ -75,7 +75,7 @@ type (
 	Cachefile struct {
 		fname string
 		info  os.FileInfo
-		*bytes.Reader
+		bytes []byte
 		exist bool
 	}
 )
@@ -97,10 +97,9 @@ func (c *Cachefile) Update() {
 	info, _ := file.Stat()
 	var bufferWriter bytes.Buffer
 	io.Copy(&bufferWriter, file)
-	r := bytes.NewReader(bufferWriter.Bytes())
+	c.bytes = bufferWriter.Bytes()
 	c.exist = true
 	c.info = info
-	c.Reader = r
 }
 
 func (m *MemoryCache) Enable() bool {
@@ -148,7 +147,7 @@ func (m *MemoryCache) memoryCacheMonitor() {
 				if err != nil {
 					if os.IsNotExist(err) {
 						cfile.exist = false
-						cfile.Reader = nil
+						cfile.bytes = nil
 						cfile.info = nil
 					}
 					continue
@@ -166,7 +165,7 @@ func (m *MemoryCache) memoryCacheMonitor() {
 func (m *MemoryCache) GetCacheFile(fname string) (*bytes.Reader, os.FileInfo, bool) {
 	cfile, ok := m.filemap[fname]
 	if ok {
-		return cfile.Reader, cfile.info, cfile.exist
+		return bytes.NewReader(cfile.bytes), cfile.info, cfile.exist
 	}
 
 	m.Lock()
@@ -174,7 +173,7 @@ func (m *MemoryCache) GetCacheFile(fname string) (*bytes.Reader, os.FileInfo, bo
 
 	cfile, ok = m.filemap[fname]
 	if ok {
-		return cfile.Reader, cfile.info, cfile.exist
+		return bytes.NewReader(cfile.bytes), cfile.info, cfile.exist
 	}
 
 	file, err := os.Open(fname)
@@ -185,14 +184,13 @@ func (m *MemoryCache) GetCacheFile(fname string) (*bytes.Reader, os.FileInfo, bo
 	info, _ := file.Stat()
 	var bufferWriter bytes.Buffer
 	io.Copy(&bufferWriter, file)
-	r := bytes.NewReader(bufferWriter.Bytes())
 	cfile = &Cachefile{
-		fname:  fname,
-		Reader: r,
-		info:   info,
-		exist:  true,
+		fname: fname,
+		bytes: bufferWriter.Bytes(),
+		info:  info,
+		exist: true,
 	}
 	m.filemap[fname] = cfile
 
-	return cfile.Reader, cfile.info, cfile.exist
+	return bytes.NewReader(cfile.bytes), cfile.info, cfile.exist
 }
