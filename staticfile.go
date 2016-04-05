@@ -66,13 +66,13 @@ func autoHTMLSuffix() MiddlewareFunc {
 
 type (
 	MemoryCache struct {
-		usedSize int64 // 已用容量
-		maxAllow int64 // 允许的最大文件
-		maxCap   int64 // 最大缓存总量
-		enable   *bool
-		gc       time.Duration // 缓存更新检查时长及动态过期时长
-		filemap  map[string]*Cachefile
-		once     sync.Once
+		usedSize        int64 // 已用容量
+		singleFileAllow int64 // 允许的最大文件
+		maxCap          int64 // 最大缓存总量
+		enable          *bool
+		gc              time.Duration // 缓存更新检查时长及动态过期时长
+		filemap         map[string]*Cachefile
+		once            sync.Once
 		sync.RWMutex
 	}
 	Cachefile struct {
@@ -93,13 +93,13 @@ const (
 	_willoverflow        // 将超出缓存空间
 )
 
-func NewMemoryCache(maxAllow, maxCap int64, gc time.Duration) *MemoryCache {
+func NewMemoryCache(singleFileAllow, maxCap int64, gc time.Duration) *MemoryCache {
 	return &MemoryCache{
-		maxAllow: maxAllow,
-		maxCap:   maxCap,
-		gc:       gc,
-		enable:   new(bool),
-		filemap:  map[string]*Cachefile{},
+		singleFileAllow: singleFileAllow,
+		maxCap:          maxCap,
+		gc:              gc,
+		enable:          new(bool),
+		filemap:         map[string]*Cachefile{},
 	}
 }
 
@@ -259,7 +259,7 @@ func (m *MemoryCache) check(fname string) (os.FileInfo, int) {
 		}
 		return info, _unknown
 	}
-	if info.Size() > m.maxAllow {
+	if info.Size() > m.singleFileAllow {
 		return info, _notallowed
 	}
 	cfile, ok := m.filemap[fname]

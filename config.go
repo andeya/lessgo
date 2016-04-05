@@ -15,7 +15,7 @@ type (
 		AppName             string // Application name
 		Debug               bool   // enable/disable debug mode.
 		RouterCaseSensitive bool   // 是否路由忽略大小写匹配，默认是 true，区分大小写
-		MaxMemory           int64  // 文件上传默认内存缓存大小，默认值是 1 << 26(64M)
+		MaxMemoryMB         int64  // 文件上传默认内存缓存大小，默认值是 1 << 26(64M)
 		Listen              Listen
 		Session             SessionConfig
 		Log                 LogConfig
@@ -50,9 +50,9 @@ type (
 		AsyncChan int64
 	}
 	FileCacheConfig struct {
-		CacheSecond int64 // 静态资源缓存监测频率与缓存动态释放的最大时长，单位秒，默认600秒
-		MaxAllow    int64 // 允许的最大文件
-		MaxCap      int64 // 最大缓存总量
+		CacheSecond       int64 // 静态资源缓存监测频率与缓存动态释放的最大时长，单位秒，默认600秒
+		SingleFileAllowMB int64 // 允许的最大文件，单位MB
+		MaxCapMB          int64 // 最大缓存总量，单位MB
 	}
 	// DataBase connection Config
 	DBConfig struct {
@@ -108,7 +108,7 @@ func initConfig() *Config {
 		AppName:             "lessgo",
 		Debug:               true,
 		RouterCaseSensitive: false,
-		MaxMemory:           1 << 26, // 64MB
+		MaxMemoryMB:         64, // 64MB
 		Listen: Listen{
 			Graceful:      false,
 			Address:       "0.0.0.0:8080",
@@ -129,9 +129,9 @@ func initConfig() *Config {
 			Domain:          "",
 		},
 		FileCache: FileCacheConfig{
-			CacheSecond: 600,     // 600s
-			MaxAllow:    1 << 26, // 64MB
-			MaxCap:      1 << 28, // 256MB
+			CacheSecond:       600, // 600s
+			SingleFileAllowMB: 64,  // 64MB
+			MaxCapMB:          256, // 256MB
 		},
 		Log: LogConfig{
 			Level:     logs.ERROR,
@@ -155,9 +155,9 @@ func defaultAppConfig(iniconf *config.IniConfigContainer) {
 	iniconf.Set("debug", fmt.Sprint(BConfig.Debug))
 	iniconf.Set("casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
 	iniconf.Set("filecache::cachesecond", fmt.Sprint(BConfig.FileCache.CacheSecond))
-	iniconf.Set("filecache::maxallow", fmt.Sprint(BConfig.FileCache.MaxAllow))
-	iniconf.Set("filecache::maxcap", fmt.Sprint(BConfig.FileCache.MaxCap))
-	iniconf.Set("maxmemory", fmt.Sprint(BConfig.MaxMemory))
+	iniconf.Set("filecache::singlefileallowmb", fmt.Sprint(BConfig.FileCache.SingleFileAllowMB))
+	iniconf.Set("filecache::maxcapmb", fmt.Sprint(BConfig.FileCache.MaxCapMB))
+	iniconf.Set("maxmemorymb", fmt.Sprint(BConfig.MaxMemoryMB))
 	iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
 	iniconf.Set("listen::address", fmt.Sprint(BConfig.Listen.Address))
 	iniconf.Set("listen::readtimeout", fmt.Sprint(BConfig.Listen.ReadTimeout))
@@ -211,17 +211,17 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 		iniconf.Set("filecache::cachesecond", fmt.Sprint(BConfig.FileCache.CacheSecond))
 		AppConfig.FileCache.CacheSecond = BConfig.FileCache.CacheSecond
 	}
-	if AppConfig.FileCache.MaxAllow, err = iniconf.Int64("filecache::maxallow"); AppConfig.FileCache.MaxAllow <= 0 || err != nil {
-		iniconf.Set("filecache::maxallow", fmt.Sprint(BConfig.FileCache.MaxAllow))
-		AppConfig.FileCache.MaxAllow = BConfig.FileCache.MaxAllow
+	if AppConfig.FileCache.SingleFileAllowMB, err = iniconf.Int64("filecache::singlefileallowmb"); AppConfig.FileCache.SingleFileAllowMB <= 0 || err != nil {
+		iniconf.Set("filecache::singlefileallowmb", fmt.Sprint(BConfig.FileCache.SingleFileAllowMB))
+		AppConfig.FileCache.SingleFileAllowMB = BConfig.FileCache.SingleFileAllowMB
 	}
-	if AppConfig.FileCache.MaxCap, err = iniconf.Int64("filecache::maxcap"); AppConfig.FileCache.MaxCap <= 0 || err != nil {
-		iniconf.Set("filecache::maxcap", fmt.Sprint(BConfig.FileCache.MaxCap))
-		AppConfig.FileCache.MaxCap = BConfig.FileCache.MaxCap
+	if AppConfig.FileCache.MaxCapMB, err = iniconf.Int64("filecache::maxcapmb"); AppConfig.FileCache.MaxCapMB <= 0 || err != nil {
+		iniconf.Set("filecache::maxcapmb", fmt.Sprint(BConfig.FileCache.MaxCapMB))
+		AppConfig.FileCache.MaxCapMB = BConfig.FileCache.MaxCapMB
 	}
-	if AppConfig.MaxMemory, err = iniconf.Int64("maxmemory"); AppConfig.MaxMemory <= 0 || err != nil {
-		iniconf.Set("maxmemory", fmt.Sprint(BConfig.MaxMemory))
-		AppConfig.MaxMemory = BConfig.MaxMemory
+	if AppConfig.MaxMemoryMB, err = iniconf.Int64("maxmemorymb"); AppConfig.MaxMemoryMB <= 0 || err != nil {
+		iniconf.Set("maxmemorymb", fmt.Sprint(BConfig.MaxMemoryMB))
+		AppConfig.MaxMemoryMB = BConfig.MaxMemoryMB
 	}
 	if AppConfig.Listen.Graceful, err = iniconf.Bool("listen::graceful"); err != nil {
 		iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
