@@ -94,18 +94,19 @@ $ lessgo run
 * 项目Demo：[demo](https://github.com/lessgo/lessgoext)
 
 
+
+## 贡献者名单
+
+贡献者                          |贡献概要
+--------------------------------|--------------------------------------------------
+[henrylee2cn](https://github.com/henrylee2cn)|第一作者 (主要代码实现者) 
+[changyu72](https://github.com/changyu72)|第二作者 (主要架构设计者) 
+
+
 ##项目架构
 
 ![Lessgo Web Framework](https://github.com/lessgo/lessgo/raw/master/doc/LessgoWebFramework.jpg)
 
-
-
-#### 贡献者名单
-
-贡献者                          |贡献概要
---------------------------------|--------------------------------------------------
-henrylee2cn|第一作者 (主要的代码实现者) 
-changyu72|第二作者 (主要的架构设计者) 
 
 ##开源协议
 
