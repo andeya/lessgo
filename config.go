@@ -102,7 +102,7 @@ func initConfig() *Config {
 	return &Config{
 		AppName:             "lessgo",
 		Debug:               true,
-		RouterCaseSensitive: true,
+		RouterCaseSensitive: false,
 		FileCacheSecond:     600,
 		MaxMemory:           1 << 26,
 		Listen: Listen{
