@@ -1,3 +1,9 @@
+/*
+Package lessgo implements a simple, stable, efficient and flexible web framework for Go.
+
+Author1: https://github.com/henrylee2cn
+Author2: https://github.com/changyu72
+*/
 package lessgo
 
 import (

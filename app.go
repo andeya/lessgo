@@ -1,8 +1,3 @@
-/*
-Package echo implements a fast and unfancy micro web framework for Go.
-
-Learn more at https://labstack.com/echo
-*/
 package lessgo
 
 import (
