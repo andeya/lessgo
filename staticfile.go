@@ -12,31 +12,18 @@ import (
 	// "github.com/lessgo/lessgo/utils"
 )
 
+// 注册固定的静态文件与目录
 func staticRoute() {
-	// 注册固定的静态文件与目录
 	DefLessgo.Echo.File("/favicon.ico", IMG_DIR+"/favicon.ico")
 	DefLessgo.Echo.Static("/uploads", UPLOADS_DIR, autoHTMLSuffix())
 	DefLessgo.Echo.Static("/static", STATIC_DIR, filterTemplate(), autoHTMLSuffix())
+	DefLessgo.Echo.Static("/static/img", IMG_DIR)
+	DefLessgo.Echo.Static("/static/js", JS_DIR)
+	DefLessgo.Echo.Static("/static/css", CSS_DIR)
+	DefLessgo.Echo.Static("/static/plugin", PLUGIN_DIR)
 	DefLessgo.Echo.Static("/business", BUSINESS_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
 	DefLessgo.Echo.Static("/system", SYSTEM_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
-
-	// 注册模块中的静态目录
-	// staticModule(BUSINESS_VIEW_DIR)
-	// staticModule(SYSTEM_VIEW_DIR)
 }
-
-// func staticModule(root string) {
-// 	dirs := utils.WalkDirs(root, VIEW_PKG)
-// 	for _, dir := range dirs {
-// 		DefLessgo.Echo.Static(urlPrefix(dir), dir, autoHTMLSuffix())
-// 	}
-// }
-
-// func urlPrefix(dir string) string {
-// 	urlprefix := strings.TrimSuffix(dir, VIEW_PKG)
-// 	urlprefix = strings.Replace(urlprefix, MODULE_SUFFIX, "", -1)
-// 	return "/" + strings.ToLower(urlprefix)
-// }
 
 func filterTemplate() MiddlewareFunc {
 	return func(next HandlerFunc) HandlerFunc {

@@ -134,7 +134,7 @@ func initConfig() *Config {
 			MaxCapMB:          256, // 256MB
 		},
 		Log: LogConfig{
-			Level:     logs.ERROR,
+			Level:     logs.DEBUG,
 			AsyncChan: 1000,
 		},
 		DefaultDB: "preset",
@@ -151,13 +151,13 @@ func initConfig() *Config {
 }
 
 func defaultAppConfig(iniconf *config.IniConfigContainer) {
-	iniconf.Set("appname", BConfig.AppName)
-	iniconf.Set("debug", fmt.Sprint(BConfig.Debug))
-	iniconf.Set("casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
+	iniconf.Set("system::appname", BConfig.AppName)
+	iniconf.Set("system::debug", fmt.Sprint(BConfig.Debug))
+	iniconf.Set("system::casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
+	iniconf.Set("system::maxmemorymb", fmt.Sprint(BConfig.MaxMemoryMB))
 	iniconf.Set("filecache::cachesecond", fmt.Sprint(BConfig.FileCache.CacheSecond))
 	iniconf.Set("filecache::singlefileallowmb", fmt.Sprint(BConfig.FileCache.SingleFileAllowMB))
 	iniconf.Set("filecache::maxcapmb", fmt.Sprint(BConfig.FileCache.MaxCapMB))
-	iniconf.Set("maxmemorymb", fmt.Sprint(BConfig.MaxMemoryMB))
 	iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
 	iniconf.Set("listen::address", fmt.Sprint(BConfig.Listen.Address))
 	iniconf.Set("listen::readtimeout", fmt.Sprint(BConfig.Listen.ReadTimeout))
@@ -195,17 +195,21 @@ func defaultDBConfig(iniconf *config.IniConfigContainer) {
 
 func trySetAppConfig(iniconf *config.IniConfigContainer) {
 	var err error
-	if AppConfig.AppName = iniconf.String("appname"); AppConfig.AppName == "" {
-		iniconf.Set("appname", BConfig.AppName)
+	if AppConfig.AppName = iniconf.String("system::appname"); AppConfig.AppName == "" {
+		iniconf.Set("system::appname", BConfig.AppName)
 		AppConfig.AppName = BConfig.AppName
 	}
-	if AppConfig.Debug, err = iniconf.Bool("debug"); err != nil {
-		iniconf.Set("debug", fmt.Sprint(BConfig.Debug))
+	if AppConfig.Debug, err = iniconf.Bool("system::debug"); err != nil {
+		iniconf.Set("system::debug", fmt.Sprint(BConfig.Debug))
 		AppConfig.Debug = BConfig.Debug
 	}
-	if AppConfig.RouterCaseSensitive, err = iniconf.Bool("casesensitive"); err != nil {
-		iniconf.Set("casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
+	if AppConfig.RouterCaseSensitive, err = iniconf.Bool("system::casesensitive"); err != nil {
+		iniconf.Set("system::casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
 		AppConfig.RouterCaseSensitive = BConfig.RouterCaseSensitive
+	}
+	if AppConfig.MaxMemoryMB, err = iniconf.Int64("system::maxmemorymb"); AppConfig.MaxMemoryMB <= 0 || err != nil {
+		iniconf.Set("system::maxmemorymb", fmt.Sprint(BConfig.MaxMemoryMB))
+		AppConfig.MaxMemoryMB = BConfig.MaxMemoryMB
 	}
 	if AppConfig.FileCache.CacheSecond, err = iniconf.Int64("filecache::cachesecond"); AppConfig.FileCache.CacheSecond <= 0 || err != nil {
 		iniconf.Set("filecache::cachesecond", fmt.Sprint(BConfig.FileCache.CacheSecond))
@@ -218,10 +222,6 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 	if AppConfig.FileCache.MaxCapMB, err = iniconf.Int64("filecache::maxcapmb"); AppConfig.FileCache.MaxCapMB <= 0 || err != nil {
 		iniconf.Set("filecache::maxcapmb", fmt.Sprint(BConfig.FileCache.MaxCapMB))
 		AppConfig.FileCache.MaxCapMB = BConfig.FileCache.MaxCapMB
-	}
-	if AppConfig.MaxMemoryMB, err = iniconf.Int64("maxmemorymb"); AppConfig.MaxMemoryMB <= 0 || err != nil {
-		iniconf.Set("maxmemorymb", fmt.Sprint(BConfig.MaxMemoryMB))
-		AppConfig.MaxMemoryMB = BConfig.MaxMemoryMB
 	}
 	if AppConfig.Listen.Graceful, err = iniconf.Bool("listen::graceful"); err != nil {
 		iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))

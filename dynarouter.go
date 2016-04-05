@@ -100,6 +100,9 @@ func (d *DynaRouter) Use(middleware ...string) *DynaRouter {
 // 配置启用状态，默认为启用
 func (d *DynaRouter) SetEnable(enable bool) *DynaRouter {
 	d.Enable = enable
+	for _, child := range d.Children {
+		child.SetEnable(enable)
+	}
 	return d
 }
 

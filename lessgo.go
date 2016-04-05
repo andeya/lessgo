@@ -3,6 +3,8 @@ package lessgo
 import (
 	"net"
 	"path"
+	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/lessgo/lessgo/_fixture"
@@ -13,6 +15,10 @@ import (
 type (
 	Lessgo struct {
 		*Echo
+		AppConfig    *Config
+		home         string // 根路径"/"对应的url
+		serverEnable bool   // 服务是否启用
+		lock         sync.RWMutex
 	}
 	NewServer func(engine.Config) engine.Server
 )
@@ -34,7 +40,10 @@ var (
 		registerDBConfig()
 		registerMime()
 		l := &Lessgo{
-			Echo: New(),
+			Echo:         New(),
+			AppConfig:    AppConfig,
+			home:         "/",
+			serverEnable: true,
 		}
 		// 初始化日志
 		l.Echo.Logger().SetMsgChan(AppConfig.Log.AsyncChan)
@@ -57,6 +66,42 @@ var (
 	}()
 )
 
+// 设置主页
+func SetHome(homeurl string) {
+	if DefLessgo.AppConfig.RouterCaseSensitive {
+		DefLessgo.home = homeurl
+	} else {
+		DefLessgo.home = strings.ToLower(homeurl)
+	}
+}
+
+// 查询主页
+func Home() string {
+	return DefLessgo.home
+}
+
+// 开启网站服务
+func EnableServer() {
+	DefLessgo.lock.Lock()
+	DefLessgo.serverEnable = true
+	DefLessgo.lock.Unlock()
+}
+
+// 关闭网站服务
+func DisableServer() {
+	DefLessgo.lock.Lock()
+	DefLessgo.serverEnable = false
+	DefLessgo.lock.Unlock()
+}
+
+// 查询网站服务状态
+func ServerEnable() bool {
+	DefLessgo.lock.RLock()
+	defer DefLessgo.lock.RUnlock()
+	return DefLessgo.serverEnable
+}
+
+// 运行服务
 func Run(server NewServer, listener ...net.Listener) {
 	checkHooks(registerRouter())
 	checkHooks(registerSession())
@@ -118,8 +163,14 @@ func ResetRealRoute() {
 	DefLessgo.Echo.BeforeUse(getMiddlewares(beforeMiddlewares)...)
 	DefLessgo.Echo.AfterUse(getMiddlewares(afterMiddlewares)...)
 	for _, child := range DefDynaRouter.Children {
+		if !child.Enable {
+			continue
+		}
 		var group *Group
 		for _, d := range child.Tree() {
+			if !d.Enable {
+				continue
+			}
 			mws := getMiddlewares(d.Middlewares)
 			switch d.Type {
 			case GROUP:
@@ -130,8 +181,14 @@ func ResetRealRoute() {
 				group = group.Group(d.Prefix, mws...)
 			case HANDLER:
 				if group == nil {
+					if d.Prefix == "/index" {
+						DefLessgo.Echo.Match(d.Methods, path.Join("/", d.Param), handlerFuncMap[d.Handler], mws...)
+					}
 					DefLessgo.Echo.Match(d.Methods, path.Join(d.Prefix, d.Param), handlerFuncMap[d.Handler], mws...)
 					break
+				}
+				if d.Prefix == "/index" {
+					group.Match(d.Methods, path.Join("/", d.Param), handlerFuncMap[d.Handler], mws...)
 				}
 				group.Match(d.Methods, path.Join(d.Prefix, d.Param), handlerFuncMap[d.Handler], mws...)
 			}
