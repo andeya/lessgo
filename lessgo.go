@@ -37,8 +37,12 @@ var (
 		l.Echo.SetLogLevel(AppConfig.Log.Level)
 		// 设置运行模式
 		l.Echo.SetDebug(AppConfig.Debug)
-		// 设置静态资源缓存刷新频率
-		l.Echo.SetMemoryCache(NewMemoryCache(time.Duration(AppConfig.FileCacheSecond) * time.Second))
+		// 设置静态资源缓存
+		l.Echo.SetMemoryCache(NewMemoryCache(
+			AppConfig.FileCache.MaxAllow,
+			AppConfig.FileCache.MaxCap,
+			time.Duration(AppConfig.FileCache.CacheSecond)*time.Second),
+		)
 		// 设置渲染接口
 		l.Echo.SetRenderer(NewPongo2Render(AppConfig.Debug))
 		// 设置大小写敏感

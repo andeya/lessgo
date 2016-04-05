@@ -15,11 +15,11 @@ type (
 		AppName             string // Application name
 		Debug               bool   // enable/disable debug mode.
 		RouterCaseSensitive bool   // 是否路由忽略大小写匹配，默认是 true，区分大小写
-		FileCacheSecond     int64  // 静态资源缓存监测频率，单位秒，默认600秒
 		MaxMemory           int64  // 文件上传默认内存缓存大小，默认值是 1 << 26(64M)
 		Listen              Listen
 		Session             SessionConfig
 		Log                 LogConfig
+		FileCache           FileCacheConfig
 		DefaultDB           string
 		DBList              map[string]DBConfig
 	}
@@ -48,6 +48,11 @@ type (
 	LogConfig struct {
 		Level     int
 		AsyncChan int64
+	}
+	FileCacheConfig struct {
+		CacheSecond int64 // 静态资源缓存监测频率与缓存动态释放的最大时长，单位秒，默认600秒
+		MaxAllow    int64 // 允许的最大文件
+		MaxCap      int64 // 最大缓存总量
 	}
 	// DataBase connection Config
 	DBConfig struct {
@@ -103,8 +108,7 @@ func initConfig() *Config {
 		AppName:             "lessgo",
 		Debug:               true,
 		RouterCaseSensitive: false,
-		FileCacheSecond:     600,
-		MaxMemory:           1 << 26,
+		MaxMemory:           1 << 26, // 64MB
 		Listen: Listen{
 			Graceful:      false,
 			Address:       "0.0.0.0:8080",
@@ -123,6 +127,11 @@ func initConfig() *Config {
 			CookieLifeTime:  3600,
 			EnableSetCookie: true,
 			Domain:          "",
+		},
+		FileCache: FileCacheConfig{
+			CacheSecond: 600,     // 600s
+			MaxAllow:    1 << 26, // 64MB
+			MaxCap:      1 << 28, // 256MB
 		},
 		Log: LogConfig{
 			Level:     logs.ERROR,
@@ -145,7 +154,9 @@ func defaultAppConfig(iniconf *config.IniConfigContainer) {
 	iniconf.Set("appname", BConfig.AppName)
 	iniconf.Set("debug", fmt.Sprint(BConfig.Debug))
 	iniconf.Set("casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
-	iniconf.Set("filecachesecond", fmt.Sprint(BConfig.FileCacheSecond))
+	iniconf.Set("filecache::cachesecond", fmt.Sprint(BConfig.FileCache.CacheSecond))
+	iniconf.Set("filecache::maxallow", fmt.Sprint(BConfig.FileCache.MaxAllow))
+	iniconf.Set("filecache::maxcap", fmt.Sprint(BConfig.FileCache.MaxCap))
 	iniconf.Set("maxmemory", fmt.Sprint(BConfig.MaxMemory))
 	iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
 	iniconf.Set("listen::address", fmt.Sprint(BConfig.Listen.Address))
@@ -196,9 +207,17 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 		iniconf.Set("casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
 		AppConfig.RouterCaseSensitive = BConfig.RouterCaseSensitive
 	}
-	if AppConfig.FileCacheSecond, err = iniconf.Int64("filecachesecond"); AppConfig.FileCacheSecond <= 0 || err != nil {
-		iniconf.Set("filecachesecond", fmt.Sprint(BConfig.FileCacheSecond))
-		AppConfig.FileCacheSecond = BConfig.FileCacheSecond
+	if AppConfig.FileCache.CacheSecond, err = iniconf.Int64("filecache::cachesecond"); AppConfig.FileCache.CacheSecond <= 0 || err != nil {
+		iniconf.Set("filecache::cachesecond", fmt.Sprint(BConfig.FileCache.CacheSecond))
+		AppConfig.FileCache.CacheSecond = BConfig.FileCache.CacheSecond
+	}
+	if AppConfig.FileCache.MaxAllow, err = iniconf.Int64("filecache::maxallow"); AppConfig.FileCache.MaxAllow <= 0 || err != nil {
+		iniconf.Set("filecache::maxallow", fmt.Sprint(BConfig.FileCache.MaxAllow))
+		AppConfig.FileCache.MaxAllow = BConfig.FileCache.MaxAllow
+	}
+	if AppConfig.FileCache.MaxCap, err = iniconf.Int64("filecache::maxcap"); AppConfig.FileCache.MaxCap <= 0 || err != nil {
+		iniconf.Set("filecache::maxcap", fmt.Sprint(BConfig.FileCache.MaxCap))
+		AppConfig.FileCache.MaxCap = BConfig.FileCache.MaxCap
 	}
 	if AppConfig.MaxMemory, err = iniconf.Int64("maxmemory"); AppConfig.MaxMemory <= 0 || err != nil {
 		iniconf.Set("maxmemory", fmt.Sprint(BConfig.MaxMemory))
