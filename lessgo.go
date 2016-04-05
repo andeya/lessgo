@@ -22,6 +22,7 @@ const (
 	VERSION = "0.4.0"
 	ADDRESS = "https://github.com/lessgo/lessgo"
 )
+
 const (
 	MB = 1 << 20
 )
