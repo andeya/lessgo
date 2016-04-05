@@ -15,7 +15,7 @@ type (
 		AppName             string // Application name
 		Debug               bool   // enable/disable debug mode.
 		RouterCaseSensitive bool   // 是否路由忽略大小写匹配，默认是 true，区分大小写
-		MaxMemoryMB         int64  // 文件上传默认内存缓存大小，默认值是 1 << 26(64M)
+		MaxMemoryMB         int64  // 文件上传默认内存缓存大小，单位MB
 		Listen              Listen
 		Session             SessionConfig
 		Log                 LogConfig
