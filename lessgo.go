@@ -22,6 +22,9 @@ const (
 	VERSION = "0.4.0"
 	ADDRESS = "https://github.com/lessgo/lessgo"
 )
+const (
+	MB = 1 << 20
+)
 
 var (
 	DefLessgo = func() *Lessgo {
@@ -39,8 +42,8 @@ var (
 		l.Echo.SetDebug(AppConfig.Debug)
 		// 设置静态资源缓存
 		l.Echo.SetMemoryCache(NewMemoryCache(
-			AppConfig.FileCache.SingleFileAllowMB*1<<20,
-			AppConfig.FileCache.MaxCapMB*1<<20,
+			AppConfig.FileCache.SingleFileAllowMB*MB,
+			AppConfig.FileCache.MaxCapMB*MB,
 			time.Duration(AppConfig.FileCache.CacheSecond)*time.Second),
 		)
 		// 设置渲染接口
@@ -48,7 +51,7 @@ var (
 		// 设置大小写敏感
 		l.Echo.SetCaseSensitive(AppConfig.RouterCaseSensitive)
 		// 设置上传文件允许的最大尺寸
-		engine.MaxMemory = AppConfig.MaxMemoryMB
+		engine.MaxMemory = AppConfig.MaxMemoryMB * MB
 		return l
 	}()
 )
