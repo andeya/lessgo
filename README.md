@@ -16,8 +16,8 @@ Lessgo 是一款 Go 语言编写的简单、稳定、高效、灵活的 web 完�
 
 1.下载框架源码
 ```sh
-go get github.com/lessgo/lessgo
-go get github.com/lessgo/lessgoext/...
+go get -u github.com/lessgo/lessgo
+go get -u github.com/lessgo/lessgoext/...
 ```
 
 2.下载第三方依赖包，解压至 GOPATH/src 目录下 [[点击下载 ZIP]](https://github.com/lessgo/dependency/archive/master.zip)
