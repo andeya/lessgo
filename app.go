@@ -532,7 +532,10 @@ func (e *Echo) ServeHTTP(rq engine.Request, rs engine.Response) {
 func (e *Echo) Run(s engine.Server) {
 	s.SetHandler(e)
 	s.SetLogger(e.logger)
-	e.logger.Error("%v", s.Start())
+	if err := s.Start(); err != nil {
+		e.logger.Fatal("%v", err)
+		select {}
+	}
 }
 
 // NewHTTPError creates a new HTTPError instance.
