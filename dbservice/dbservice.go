@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/go-xorm/xorm"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 /**
