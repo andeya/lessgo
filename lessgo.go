@@ -77,7 +77,7 @@ var DefLessgo = func() *Lessgo {
 	return l
 }()
 
-/**
+/*
  * 设置主页
  */
 func SetHome(homeurl string) {
@@ -88,14 +88,14 @@ func SetHome(homeurl string) {
 	}
 }
 
-/**
+/*
  * 返回设置的主页
  */
 func Home() string {
 	return DefLessgo.home
 }
 
-/**
+/*
  * 开启网站服务
  */
 func EnableServer() {
@@ -104,7 +104,7 @@ func EnableServer() {
 	DefLessgo.lock.Unlock()
 }
 
-/**
+/*
  * 关闭网站服务
  */
 func DisableServer() {
@@ -113,7 +113,7 @@ func DisableServer() {
 	DefLessgo.lock.Unlock()
 }
 
-/**
+/*
  * 查询网站服务状态
  */
 func ServerEnable() bool {
@@ -122,7 +122,7 @@ func ServerEnable() bool {
 	return DefLessgo.serverEnable
 }
 
-/**
+/*
  * 运行服务
  */
 func Run(server NewServer, listener ...net.Listener) {
@@ -153,49 +153,49 @@ func Run(server NewServer, listener ...net.Listener) {
 	DefLessgo.Run(server(c))
 }
 
-/**
+/*
  * 在路由执行位置之前紧邻插入中间件队列
  */
 func Before(middleware ...interface{}) {
 	DefLessgo.Echo.BeforeUse(wrapMiddlewares(middleware)...)
 }
 
-/**
+/*
  * 在路由执行位置之后紧邻插入中间件队列
  */
 func After(middleware ...interface{}) {
 	DefLessgo.Echo.AfterUse(wrapMiddlewares(middleware)...)
 }
 
-/**
+/*
  * 获取默认数据库引擎
  */
 func DefaultDB() *xorm.Engine {
 	return DefLessgo.DBAccess.DefaultDB()
 }
 
-/**
+/*
  * 获取全部数据库引擎列表
  */
 func DBList() map[string]*xorm.Engine {
 	return DefLessgo.DBAccess.DBList()
 }
 
-/**
+/*
  * 设置默认数据库引擎
  */
 func SetDefaultDB(name string) error {
 	return DefLessgo.DBAccess.SetDefaultDB(name)
 }
 
-/**
+/*
  * 获取指定数据库引擎
  */
 func GetDB(name string) (*xorm.Engine, bool) {
 	return DefLessgo.DBAccess.GetDB(name)
 }
 
-/**
+/*
  * 重建真实路由
  */
 func ResetRealRoute() {
@@ -253,7 +253,7 @@ func ResetRealRoute() {
 	}
 }
 
-/**
+/*
  * 返回打印实例
  */
 func Logger() logs.Logger {
