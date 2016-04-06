@@ -49,6 +49,7 @@ $ lessgo run
 │  └─db.config 数据库配置文件
 ├─Common 后端公共目录
 │  ├─Middleware 中间件目录
+│  └─Model 数据模型
 │  └─... 其他
 ├─Static 前端公共目录 (url: /static)
 │  ├─Tpl 公共tpl模板目录
@@ -58,6 +59,10 @@ $ lessgo run
 │  └─Plugin 公共js插件 (url: /static/plugin)
 ├─SystemAPI 系统模块后端目录
 │  ├─SysRouter.go 系统模块路由文件
+│  ├─SysCommon 后端公共目录
+│  │  ├─Middleware 中间件目录
+│  │  └─Model 数据模型
+│  │  └─... 其他
 │  ├─Xxx Xxx子模块目录
 │  │  ├─ExampleHandle.go Example操作
 │  │  ├─ExampleModel.go Example数据模型及模板函数
@@ -72,6 +77,10 @@ $ lessgo run
 │  │  └─... Xxx的子模块目录
 ├─BusinessAPI 业务模块后端目录
 │  ├─BusRouter.go 业务模块路由文件
+│  ├─BusCommon Business公共目录
+│  │  ├─Middleware 中间件目录
+│  │  └─Model 数据模型
+│  │  └─... 其他
 │  ├─Xxx Xxx子模块目录
 │  │  ├─ExampleHandle.go Example操作
 │  │  ├─ExampleModel.go Example数据模型及模板函数
