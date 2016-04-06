@@ -13,7 +13,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-xorm/xorm"
+
 	_ "github.com/lessgo/lessgo/_fixture"
+	"github.com/lessgo/lessgo/dbservice"
 	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
 )
@@ -24,6 +27,7 @@ type (
 		AppConfig    *Config
 		home         string // 根路径"/"对应的url
 		serverEnable bool   // 服务是否启用
+		DBAccess     *dbservice.DBAccess
 		lock         sync.RWMutex
 	}
 	NewServer func(engine.Config) engine.Server
@@ -39,40 +43,43 @@ const (
 	MB = 1 << 20
 )
 
-var (
-	DefLessgo = func() *Lessgo {
-		printInfo()
-		registerAppConfig()
-		registerDBConfig()
-		registerMime()
-		l := &Lessgo{
-			Echo:         New(),
-			AppConfig:    AppConfig,
-			home:         "/",
-			serverEnable: true,
-		}
-		// 初始化日志
-		l.Echo.Logger().SetMsgChan(AppConfig.Log.AsyncChan)
-		l.Echo.SetLogLevel(AppConfig.Log.Level)
-		// 设置运行模式
-		l.Echo.SetDebug(AppConfig.Debug)
-		// 设置静态资源缓存
-		l.Echo.SetMemoryCache(NewMemoryCache(
-			AppConfig.FileCache.SingleFileAllowMB*MB,
-			AppConfig.FileCache.MaxCapMB*MB,
-			time.Duration(AppConfig.FileCache.CacheSecond)*time.Second),
-		)
-		// 设置渲染接口
-		l.Echo.SetRenderer(NewPongo2Render(AppConfig.Debug))
-		// 设置大小写敏感
-		l.Echo.SetCaseSensitive(AppConfig.RouterCaseSensitive)
-		// 设置上传文件允许的最大尺寸
-		engine.MaxMemory = AppConfig.MaxMemoryMB * MB
-		return l
-	}()
-)
+// 初始化全局Lessgo实例
+var DefLessgo = func() *Lessgo {
+	printInfo()
+	registerAppConfig()
+	registerDBConfig()
+	registerMime()
+	l := &Lessgo{
+		Echo:         New(),
+		AppConfig:    AppConfig,
+		home:         "/",
+		serverEnable: true,
+	}
+	// 初始化日志
+	l.Echo.Logger().SetMsgChan(AppConfig.Log.AsyncChan)
+	l.Echo.SetLogLevel(AppConfig.Log.Level)
+	// 设置运行模式
+	l.Echo.SetDebug(AppConfig.Debug)
+	// 设置静态资源缓存
+	l.Echo.SetMemoryCache(NewMemoryCache(
+		AppConfig.FileCache.SingleFileAllowMB*MB,
+		AppConfig.FileCache.MaxCapMB*MB,
+		time.Duration(AppConfig.FileCache.CacheSecond)*time.Second),
+	)
+	// 设置渲染接口
+	l.Echo.SetRenderer(NewPongo2Render(AppConfig.Debug))
+	// 设置大小写敏感
+	l.Echo.SetCaseSensitive(AppConfig.RouterCaseSensitive)
+	// 设置上传文件允许的最大尺寸
+	engine.MaxMemory = AppConfig.MaxMemoryMB * MB
+	// 配置数据库
+	l.DBAccess = newDBAccess()
+	return l
+}()
 
-// 设置主页
+/**
+ * 设置主页
+ */
 func SetHome(homeurl string) {
 	if DefLessgo.AppConfig.RouterCaseSensitive {
 		DefLessgo.home = homeurl
@@ -81,33 +88,43 @@ func SetHome(homeurl string) {
 	}
 }
 
-// 查询主页
+/**
+ * 返回设置的主页
+ */
 func Home() string {
 	return DefLessgo.home
 }
 
-// 开启网站服务
+/**
+ * 开启网站服务
+ */
 func EnableServer() {
 	DefLessgo.lock.Lock()
 	DefLessgo.serverEnable = true
 	DefLessgo.lock.Unlock()
 }
 
-// 关闭网站服务
+/**
+ * 关闭网站服务
+ */
 func DisableServer() {
 	DefLessgo.lock.Lock()
 	DefLessgo.serverEnable = false
 	DefLessgo.lock.Unlock()
 }
 
-// 查询网站服务状态
+/**
+ * 查询网站服务状态
+ */
 func ServerEnable() bool {
 	DefLessgo.lock.RLock()
 	defer DefLessgo.lock.RUnlock()
 	return DefLessgo.serverEnable
 }
 
-// 运行服务
+/**
+ * 运行服务
+ */
 func Run(server NewServer, listener ...net.Listener) {
 	checkHooks(registerRouter())
 	checkHooks(registerSession())
@@ -136,17 +153,51 @@ func Run(server NewServer, listener ...net.Listener) {
 	DefLessgo.Run(server(c))
 }
 
-// 在路由执行位置之前紧邻插入中间件队列
+/**
+ * 在路由执行位置之前紧邻插入中间件队列
+ */
 func Before(middleware ...interface{}) {
 	DefLessgo.Echo.BeforeUse(wrapMiddlewares(middleware)...)
 }
 
-// 在路由执行位置之后紧邻插入中间件队列
+/**
+ * 在路由执行位置之后紧邻插入中间件队列
+ */
 func After(middleware ...interface{}) {
 	DefLessgo.Echo.AfterUse(wrapMiddlewares(middleware)...)
 }
 
-// 重建真实路由
+/**
+ * 获取默认数据库引擎
+ */
+func DefaultDB() *xorm.Engine {
+	return DefLessgo.DBAccess.DefaultDB()
+}
+
+/**
+ * 获取全部数据库引擎列表
+ */
+func DBList() map[string]*xorm.Engine {
+	return DefLessgo.DBAccess.DBList()
+}
+
+/**
+ * 设置默认数据库引擎
+ */
+func SetDefaultDB(name string) error {
+	return DefLessgo.DBAccess.SetDefaultDB(name)
+}
+
+/**
+ * 获取指定数据库引擎
+ */
+func GetDB(name string) (*xorm.Engine, bool) {
+	return DefLessgo.DBAccess.GetDB(name)
+}
+
+/**
+ * 重建真实路由
+ */
 func ResetRealRoute() {
 	if err := middlewareExistCheck(DefDynaRouter); err != nil {
 		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
@@ -202,6 +253,9 @@ func ResetRealRoute() {
 	}
 }
 
+/**
+ * 返回打印实例
+ */
 func Logger() logs.Logger {
 	return DefLessgo.Echo.Logger()
 }

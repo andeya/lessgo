@@ -7,7 +7,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/go-xorm/xorm"
+
 	"github.com/lessgo/lessgo/config"
+	"github.com/lessgo/lessgo/dbservice"
+	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
 )
 
@@ -111,4 +115,24 @@ func checkHooks(err error) {
 		return
 	}
 	DefLessgo.Echo.Logger().Fatal("%v", err)
+}
+
+func newDBAccess() *dbservice.DBAccess {
+	access := &dbservice.DBAccess{
+		List: map[string]*xorm.Engine{},
+	}
+	for _, conf := range AppConfig.DBList {
+		engine, err := xorm.NewEngine(conf.Driver, conf.ConnString)
+		if err != nil {
+			logs.Error("%v", err)
+			continue
+		}
+		engine.SetMaxOpenConns(conf.MaxOpenConns)
+		engine.SetMaxIdleConns(conf.MaxIdleConns)
+		access.List[conf.Name] = engine
+		if AppConfig.DefaultDB == conf.Name {
+			access.Default = engine
+		}
+	}
+	return access
 }
