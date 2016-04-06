@@ -20,19 +20,21 @@ go get github.com/lessgo/lessgo
 go get github.com/lessgo/lessgoext/...
 ```
 
-2.安装部署工具
+2.下载第三方依赖包，解压至 GOPATH/src 目录下 [[点击下载 ZIP]](https://github.com/lessgo/dependency/archive/master.zip)
+
+3.安装部署工具
 ```sh
 cd %GOPATH%/github.com/lessgo/lessgoext/lessgo
 go install
 ```
 (该工具将会自动创建一套Demo，以供学习与开发)
 
-3.创建项目（在项目目录下运行cmd）
+4.创建项目（在项目目录下运行cmd）
 ```sh
 $ lessgo new appname
 ```
 
-4.以热编译模式运行（在项目目录下运行cmd）
+5.以热编译模式运行（在项目目录下运行cmd）
 ```sh
 $ cd appname
 $ lessgo run
