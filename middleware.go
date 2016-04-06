@@ -2,6 +2,8 @@ package lessgo
 
 import (
 	"fmt"
+
+	"github.com/lessgo/lessgo/virtrouter"
 )
 
 // 一旦注册，不可再更改
@@ -38,9 +40,9 @@ func existMiddleware(name string) bool {
 	return ok
 }
 
-func middlewareExistCheck(node *DynaRouter) error {
+func middlewareExistCheck(node *virtrouter.VirtRouter) error {
 	var errstring string
-	for _, m := range node.Middlewares {
+	for _, m := range node.Middleware() {
 		if !existMiddleware(m) {
 			errstring += " \"" + m + "\""
 		}

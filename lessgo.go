@@ -8,7 +8,6 @@ package lessgo
 
 import (
 	"net"
-	"path"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +18,7 @@ import (
 	"github.com/lessgo/lessgo/dbservice"
 	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
+	"github.com/lessgo/lessgo/virtrouter"
 )
 
 type (
@@ -199,7 +199,7 @@ func GetDB(name string) (*xorm.Engine, bool) {
  * 重建真实路由
  */
 func ResetRealRoute() {
-	if err := middlewareExistCheck(DefDynaRouter); err != nil {
+	if err := middlewareExistCheck(DefVirtRouter); err != nil {
 		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
 		return
 	}
@@ -219,35 +219,37 @@ func ResetRealRoute() {
 	registerRootMiddlewares()
 	DefLessgo.Echo.BeforeUse(getMiddlewares(beforeMiddlewares)...)
 	DefLessgo.Echo.AfterUse(getMiddlewares(afterMiddlewares)...)
-	for _, child := range DefDynaRouter.Children {
-		if !child.Enable {
+	for _, child := range DefVirtRouter.Children() {
+		if !child.Enable() {
 			continue
 		}
 		var group *Group
-		for _, d := range child.Tree() {
-			if !d.Enable {
+		for _, d := range child.Progeny() {
+			if !d.Enable() {
 				continue
 			}
-			mws := getMiddlewares(d.Middlewares)
-			switch d.Type {
-			case GROUP:
+			mws := getMiddlewares(d.Middleware())
+			switch d.Type() {
+			case virtrouter.GROUP:
 				if group == nil {
-					group = DefLessgo.Echo.Group(d.Prefix, mws...)
+					group = DefLessgo.Echo.Group(d.Prefix(), mws...)
 					break
 				}
-				group = group.Group(d.Prefix, mws...)
-			case HANDLER:
+				group = group.Group(d.Prefix(), mws...)
+			case virtrouter.HANDLER:
+				methods := d.VirtHandler().Methods()
+				handler := getHandlerMap(d.VirtHandler().Id())
 				if group == nil {
-					if d.Prefix == "/index" {
-						DefLessgo.Echo.Match(d.Methods, path.Join("/", d.Param), handlerFuncMap[d.Handler], mws...)
+					if d.Prefix() == "/index" {
+						DefLessgo.Echo.Match(methods, d.VirtHandler().Suffix(), handler, mws...)
 					}
-					DefLessgo.Echo.Match(d.Methods, path.Join(d.Prefix, d.Param), handlerFuncMap[d.Handler], mws...)
+					DefLessgo.Echo.Match(methods, d.SubUrl(), handler, mws...)
 					break
 				}
-				if d.Prefix == "/index" {
-					group.Match(d.Methods, path.Join("/", d.Param), handlerFuncMap[d.Handler], mws...)
+				if d.Prefix() == "/index" {
+					group.Match(methods, d.VirtHandler().Suffix(), handler, mws...)
 				}
-				group.Match(d.Methods, path.Join(d.Prefix, d.Param), handlerFuncMap[d.Handler], mws...)
+				group.Match(methods, d.SubUrl(), handler, mws...)
 			}
 		}
 	}
