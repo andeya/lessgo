@@ -92,7 +92,7 @@ func SetHome(homeurl string) {
 /*
  * 返回设置的主页
  */
-func Home() string {
+func GetHome() string {
 	return DefLessgo.home
 }
 
