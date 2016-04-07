@@ -2,13 +2,15 @@ package virtrouter
 
 import (
 	"path"
+	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 )
 
 // 虚拟操作
 type VirtHandler struct {
-	id          string            // 操作的唯一标识符(HandlerFunc的完整名)
+	id          string            // 操作的唯一标识符
 	methods     []string          // 方法列表
 	prefix      string            // 路由节点的url前缀(或含参数)
 	prefixPath  string            // 路由节点的url前缀的固定路径部分
@@ -35,14 +37,15 @@ func GetVirtHandler(id string) (*VirtHandler, bool) {
 
 // 创建全局唯一、完整的VirtHandler
 func NewVirtHandler(
-	id, prefix string,
+	handlerfunc interface{},
+	prefix string,
 	methods []string,
 	description, success, failure string,
 	param map[string]string,
 
 ) *VirtHandler {
-
 	prefix, prefixPath, prefixParam := creatPrefix(prefix)
+	id := handleWareUri(handlerfunc, methods, prefix)
 	v := &VirtHandler{
 		id:          id,
 		methods:     methods,
@@ -135,4 +138,16 @@ func creatPrefix(prefix string) (cleanPrefix, prefixPath, prefixParam string) {
 		prefixParam = "/:" + strings.Join(s[1:], "/:")
 	}
 	return
+}
+
+func handleWareUri(hw interface{}, methods []string, prefix string) string {
+	add := "[" + prefix + "]"
+	for _, m := range methods {
+		add += "[" + m + "]"
+	}
+	t := reflect.ValueOf(hw).Type()
+	if t.Kind() == reflect.Func {
+		return runtime.FuncForPC(reflect.ValueOf(hw).Pointer()).Name() + add
+	}
+	return t.String() + add
 }

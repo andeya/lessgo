@@ -1,8 +1,6 @@
 package lessgo
 
 import (
-	"reflect"
-	"runtime"
 	"sort"
 
 	"github.com/lessgo/lessgo/virtrouter"
@@ -72,8 +70,6 @@ func Match(methods []string, prefix, name string, descHandlerOrhandler interface
 
 func route(methods []string, prefix, name string, descHandlerOrhandler interface{}, middleware []string) *virtrouter.VirtRouter {
 	sort.Strings(methods)
-	hid := handleWareUri(descHandlerOrhandler, methods, prefix)
-
 	var (
 		handler                       HandlerFunc
 		description, success, failure string
@@ -91,24 +87,12 @@ func route(methods []string, prefix, name string, descHandlerOrhandler interface
 		failure = h.Failure
 		param = h.Param
 	}
-	// 保存至全局记录
-	handlerMap[hid] = handler
 	// 生成VirtHandler
-	virtHandler := virtrouter.NewVirtHandler(hid, prefix, methods, description, success, failure, param)
+	virtHandler := virtrouter.NewVirtHandler(descHandlerOrhandler, prefix, methods, description, success, failure, param)
+	// 保存至全局记录
+	handlerMap[virtHandler.Id()] = handler
 	// 生成虚拟路由操作
 	return virtrouter.NewVirtRouterHandler(name, virtHandler).ResetUse(middleware)
-}
-
-func handleWareUri(hw interface{}, methods []string, prefix string) string {
-	add := "[" + prefix + "]"
-	for _, m := range methods {
-		add += "[" + m + "]"
-	}
-	t := reflect.ValueOf(hw).Type()
-	if t.Kind() == reflect.Func {
-		return runtime.FuncForPC(reflect.ValueOf(hw).Pointer()).Name() + add
-	}
-	return t.String() + add
 }
 
 // 路由执行前后的中间件

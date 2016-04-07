@@ -235,7 +235,7 @@ func ResetRealRoute() {
 			}
 			mws := getMiddlewares(d.Middleware())
 			prefix := d.VirtHandler().Prefix()
-			prefix2 := strings.TrimSuffix(d.VirtHandler().PrefixPath(), "/index") + d.VirtHandler().PrefixParam()
+			prefix2 := strings.TrimSuffix(d.VirtHandler().PrefixPath(), "/index") + d.VirtHandler().PrefixParam() + "/"
 			hasIndex := prefix2 != prefix
 			switch d.Type() {
 			case virtrouter.GROUP:
