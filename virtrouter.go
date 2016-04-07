@@ -4,15 +4,13 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
-	"strings"
 
-	"github.com/lessgo/lessgo/utils"
 	"github.com/lessgo/lessgo/virtrouter"
 )
 
 var (
 	// 全局虚拟路由
-	DefVirtRouter, _ = virtrouter.NewRootVirtRouter()
+	DefVirtRouter, _ = virtrouter.NewVirtRouterRoot()
 	// 全部handler及其id
 	handlerMap = map[string]HandlerFunc{}
 )
@@ -22,9 +20,9 @@ func VirtRouterProgeny() []*virtrouter.VirtRouter {
 	return DefVirtRouter.Progeny()
 }
 
-// 快速返回指定url对于的虚拟路由节点
-func GetVirtRouter(u string) (*virtrouter.VirtRouter, bool) {
-	return virtrouter.GetVirtRouter(u)
+// 快速返回指定uri对应的虚拟路由节点
+func GetVirtRouter(id string) (*virtrouter.VirtRouter, bool) {
+	return virtrouter.GetVirtRouter(id)
 }
 
 // 必须在init()中调用
@@ -36,49 +34,45 @@ func RootRouter(node ...*virtrouter.VirtRouter) {
 // 必须在init()中调用
 // 配置路由分组
 func SubRouter(prefix, name string, node ...*virtrouter.VirtRouter) *virtrouter.VirtRouter {
-	return virtrouter.NewVirtRouter(virtrouter.GROUP, prefix, name, nil).AddChildren(node)
+	return virtrouter.NewVirtRouterGroup(prefix, name).AddChildren(node)
 }
 
 // 必须在init()中调用
 // 配置操作
-func Get(name string, descHandlerOrhandler interface{}, suffix ...string) *virtrouter.VirtRouter {
-	return route([]string{GET}, name, descHandlerOrhandler, suffix...)
+func Get(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *virtrouter.VirtRouter {
+	return route([]string{GET}, prefix, name, descHandlerOrhandler, middleware)
 }
-func Head(name string, descHandlerOrhandler interface{}, suffix ...string) *virtrouter.VirtRouter {
-	return route([]string{HEAD}, name, descHandlerOrhandler, suffix...)
+func Head(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *virtrouter.VirtRouter {
+	return route([]string{HEAD}, prefix, name, descHandlerOrhandler, middleware)
 }
-func Options(name string, descHandlerOrhandler interface{}, suffix ...string) *virtrouter.VirtRouter {
-	return route([]string{OPTIONS}, name, descHandlerOrhandler, suffix...)
+func Options(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *virtrouter.VirtRouter {
+	return route([]string{OPTIONS}, prefix, name, descHandlerOrhandler, middleware)
 }
-func Patch(name string, descHandlerOrhandler interface{}, suffix ...string) *virtrouter.VirtRouter {
-	return route([]string{PATCH}, name, descHandlerOrhandler, suffix...)
+func Patch(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *virtrouter.VirtRouter {
+	return route([]string{PATCH}, prefix, name, descHandlerOrhandler, middleware)
 }
-func Post(name string, descHandlerOrhandler interface{}, suffix ...string) *virtrouter.VirtRouter {
-	return route([]string{POST}, name, descHandlerOrhandler, suffix...)
+func Post(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *virtrouter.VirtRouter {
+	return route([]string{POST}, prefix, name, descHandlerOrhandler, middleware)
 }
-func Put(name string, descHandlerOrhandler interface{}, suffix ...string) *virtrouter.VirtRouter {
-	return route([]string{PUT}, name, descHandlerOrhandler, suffix...)
+func Put(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *virtrouter.VirtRouter {
+	return route([]string{PUT}, prefix, name, descHandlerOrhandler, middleware)
 }
-func Trace(name string, descHandlerOrhandler interface{}, suffix ...string) *virtrouter.VirtRouter {
-	return route([]string{TRACE}, name, descHandlerOrhandler, suffix...)
+func Trace(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *virtrouter.VirtRouter {
+	return route([]string{TRACE}, prefix, name, descHandlerOrhandler, middleware)
 }
-func Any(name string, descHandlerOrhandler interface{}, suffix ...string) *virtrouter.VirtRouter {
-	return route([]string{CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE}, name, descHandlerOrhandler, suffix...)
+func Any(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *virtrouter.VirtRouter {
+	return route([]string{CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE}, prefix, name, descHandlerOrhandler, middleware)
 }
-func Match(methods []string, name string, descHandlerOrhandler interface{}, suffix ...string) *virtrouter.VirtRouter {
+func Match(methods []string, prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *virtrouter.VirtRouter {
 	if len(methods) == 0 {
 		DefLessgo.logger.Error("The method can not be empty: %v", name)
 	}
-	return route(methods, name, descHandlerOrhandler, suffix...)
+	return route(methods, prefix, name, descHandlerOrhandler, middleware)
 }
 
-func route(methods []string, name string, descHandlerOrhandler interface{}, suffix ...string) *virtrouter.VirtRouter {
+func route(methods []string, prefix, name string, descHandlerOrhandler interface{}, middleware []string) *virtrouter.VirtRouter {
 	sort.Strings(methods)
-	hid := handleWareUri(descHandlerOrhandler)
-	var _suffix string
-	if len(suffix) > 0 {
-		_suffix = suffix[0]
-	}
+	hid := handleWareUri(descHandlerOrhandler, methods, prefix)
 
 	var (
 		handler                       HandlerFunc
@@ -100,21 +94,21 @@ func route(methods []string, name string, descHandlerOrhandler interface{}, suff
 	// 保存至全局记录
 	handlerMap[hid] = handler
 	// 生成VirtHandler
-	virtHandler, _ := virtrouter.NewVirtHandler(hid, _suffix, methods, description, success, failure, param)
-
-	ns := strings.Split(hid, ".")
-	n := strings.TrimSuffix(ns[len(ns)-1], "Handle")
-	prefix := "/" + utils.SnakeString(n)
-
-	return virtrouter.NewVirtRouter(virtrouter.HANDLER, prefix, name, virtHandler)
+	virtHandler := virtrouter.NewVirtHandler(hid, prefix, methods, description, success, failure, param)
+	// 生成虚拟路由操作
+	return virtrouter.NewVirtRouterHandler(name, virtHandler).ResetUse(middleware)
 }
 
-func handleWareUri(hw interface{}) string {
+func handleWareUri(hw interface{}, methods []string, prefix string) string {
+	add := "[" + prefix + "]"
+	for _, m := range methods {
+		add += "[" + m + "]"
+	}
 	t := reflect.ValueOf(hw).Type()
 	if t.Kind() == reflect.Func {
-		return runtime.FuncForPC(reflect.ValueOf(hw).Pointer()).Name()
+		return runtime.FuncForPC(reflect.ValueOf(hw).Pointer()).Name() + add
 	}
-	return t.String()
+	return t.String() + add
 }
 
 // 路由执行前后的中间件

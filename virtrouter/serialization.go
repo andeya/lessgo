@@ -2,17 +2,15 @@ package virtrouter
 
 import (
 	"fmt"
-	"path"
 	"sync"
 )
 
 // 可序列化存储的虚拟路由信息
 type SerialRouter struct {
-	Url           string   // 访问链接(=parent.url+prefix+virtHandler.suffix)
+	Id            string   // parent.id+VirtHandler.prefix+[METHOD1]+[METHOD...]
 	Type          int      // 操作类型: 根目录/路由分组/操作
-	Prefix        string   // 路由节点的url前缀路径(允许运行时修改)
 	Name          string   // 名称(建议唯一)
-	Children      []string // 子节点url列表
+	Children      []string // 子节点id列表
 	Enable        bool     // 是否启用当前路由节点
 	Middleware    []string // 中间件 (允许运行时修改)
 	VirtHandlerId string   // 虚拟操作id
@@ -27,8 +25,7 @@ var (
 func RegSerialRouter(s *SerialRouter) {
 	serialRouterLock.Lock()
 	defer serialRouterLock.Unlock()
-	s.Prefix = path.Clean(path.Join("/", s.Prefix))
-	serialRouterMap[s.Url] = s
+	serialRouterMap[s.Id] = s
 }
 
 // 从根路径开始反序列化虚拟路由，返回根路由
@@ -71,19 +68,18 @@ func SerialRouterMap() map[string]*SerialRouter {
 func (s *SerialRouter) virtRouterTree() (*VirtRouter, error) {
 	vh, _ := GetVirtHandler(s.VirtHandlerId)
 	vr := &VirtRouter{
-		url:         s.Url,
+		id:          s.Id,
 		typ:         s.Type,
-		prefix:      path.Clean(path.Join("/", s.Prefix)),
 		name:        s.Name,
 		children:    []*VirtRouter{},
 		enable:      s.Enable,
 		middleware:  s.Middleware,
 		virtHandler: vh,
 	}
-	for _, u := range s.Children {
-		child, ok := getSerialRouterMap(u)
+	for _, id := range s.Children {
+		child, ok := getSerialRouterMap(id)
 		if !ok {
-			return vr, fmt.Errorf("不存在url为 %v 的虚拟路由节点", u)
+			return vr, fmt.Errorf("不存在id为 %v 的虚拟路由节点", id)
 		}
 		cvr, err := child.virtRouterTree()
 		if err != nil {
@@ -94,10 +90,10 @@ func (s *SerialRouter) virtRouterTree() (*VirtRouter, error) {
 	return vr, nil
 }
 
-func getSerialRouterMap(u string) (*SerialRouter, bool) {
+func getSerialRouterMap(id string) (*SerialRouter, bool) {
 	serialRouterLock.RLock()
 	defer serialRouterLock.RUnlock()
-	s, ok := serialRouterMap[u]
+	s, ok := serialRouterMap[id]
 	return s, ok
 }
 

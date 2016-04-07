@@ -1,8 +1,8 @@
 package virtrouter
 
 import (
-	"fmt"
 	"path"
+	"strings"
 	"sync"
 )
 
@@ -10,7 +10,9 @@ import (
 type VirtHandler struct {
 	id          string            // 操作的唯一标识符(HandlerFunc的完整名)
 	methods     []string          // 方法列表
-	suffix      string            // 路由节点的url后缀参数
+	prefix      string            // 路由节点的url前缀(或含参数)
+	prefixPath  string            // 路由节点的url前缀的固定路径部分
+	prefixParam string            // 路由节点的url前缀的参数部分
 	description string            // 描述
 	success     string            // 成功后返回的内容描述
 	failure     string            // 失败后返回的内容描述
@@ -31,26 +33,32 @@ func GetVirtHandler(id string) (*VirtHandler, bool) {
 	return vh, ok
 }
 
+// 创建全局唯一、完整的VirtHandler
 func NewVirtHandler(
-	id, suffix string,
+	id, prefix string,
 	methods []string,
 	description, success, failure string,
 	param map[string]string,
-) (*VirtHandler, error) {
+
+) *VirtHandler {
+
+	prefix, prefixPath, prefixParam := creatPrefix(prefix)
 	v := &VirtHandler{
 		id:          id,
 		methods:     methods,
-		suffix:      path.Clean(path.Join("/", suffix)),
+		prefix:      prefix,
+		prefixPath:  prefixPath,
+		prefixParam: prefixParam,
 		description: description,
 		success:     success,
 		failure:     failure,
 		param:       param,
 	}
 	if hasVirtHandler(id) {
-		return nil, fmt.Errorf("id为 %v 的VirtHandler已经存在，不能重复注册", id)
+		return virtHandlerMap[id]
 	}
 	setVirtHandler(v)
-	return v, nil
+	return v
 }
 
 // 返回虚拟操作列表的副本
@@ -66,8 +74,18 @@ func (v *VirtHandler) Id() string {
 }
 
 // 操作的url前缀
-func (v *VirtHandler) Suffix() string {
-	return v.suffix
+func (v *VirtHandler) Prefix() string {
+	return v.prefix
+}
+
+// 操作的url前缀的固定路径部分
+func (v *VirtHandler) PrefixPath() string {
+	return v.prefixPath
+}
+
+// 操作的url前缀的参数部分
+func (v *VirtHandler) PrefixParam() string {
+	return v.prefixParam
 }
 
 // 操作的描述
@@ -105,4 +123,16 @@ func hasVirtHandler(id string) bool {
 	defer virtHandlerLock.RUnlock()
 	_, ok := virtHandlerMap[id]
 	return ok
+}
+
+// 清洗并拆分固定路径与参数
+func creatPrefix(prefix string) (cleanPrefix, prefixPath, prefixParam string) {
+	cleanPrefix = path.Clean(path.Join("/", prefix))
+	cleanPrefix = strings.Split(cleanPrefix, "?")[0]
+	s := strings.Split(cleanPrefix, "/:")
+	prefixPath = s[0]
+	if len(s) > 1 {
+		prefixParam = "/:" + strings.Join(s[1:], "/:")
+	}
+	return
 }

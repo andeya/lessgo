@@ -8,6 +8,7 @@ package lessgo
 
 import (
 	"net"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -144,6 +145,10 @@ func Run(server NewServer, listener ...net.Listener) {
 	if len(listener) > 0 && listener[0] != nil {
 		c.Listener = listener[0]
 	}
+
+	// 开启最大核心数运行
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
 	// 启动服务
 	mode := "release"
 	if AppConfig.Debug {
@@ -229,27 +234,40 @@ func ResetRealRoute() {
 				continue
 			}
 			mws := getMiddlewares(d.Middleware())
+			prefix := d.VirtHandler().Prefix()
+			prefix2 := strings.TrimSuffix(d.VirtHandler().PrefixPath(), "/index") + d.VirtHandler().PrefixParam()
+			hasIndex := prefix2 != prefix
 			switch d.Type() {
 			case virtrouter.GROUP:
 				if group == nil {
-					group = DefLessgo.Echo.Group(d.Prefix(), mws...)
+					if hasIndex {
+						// "/index"分组会被默认为"/"
+						group = DefLessgo.Echo.Group(prefix2, mws...)
+					} else {
+						group = DefLessgo.Echo.Group(prefix, mws...)
+					}
 					break
 				}
-				group = group.Group(d.Prefix(), mws...)
+				if hasIndex {
+					// "/index"分组会被默认为"/"
+					group = group.Group(prefix2, mws...)
+				} else {
+					group = group.Group(prefix, mws...)
+				}
 			case virtrouter.HANDLER:
 				methods := d.VirtHandler().Methods()
 				handler := getHandlerMap(d.VirtHandler().Id())
 				if group == nil {
-					if d.Prefix() == "/index" {
-						DefLessgo.Echo.Match(methods, d.VirtHandler().Suffix(), handler, mws...)
+					if hasIndex {
+						DefLessgo.Echo.Match(methods, prefix2, handler, mws...)
 					}
-					DefLessgo.Echo.Match(methods, d.SubUrl(), handler, mws...)
+					DefLessgo.Echo.Match(methods, prefix, handler, mws...)
 					break
 				}
-				if d.Prefix() == "/index" {
-					group.Match(methods, d.VirtHandler().Suffix(), handler, mws...)
+				if hasIndex {
+					group.Match(methods, prefix2, handler, mws...)
 				}
-				group.Match(methods, d.SubUrl(), handler, mws...)
+				group.Match(methods, prefix, handler, mws...)
 			}
 		}
 	}
