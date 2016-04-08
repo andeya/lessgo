@@ -16,9 +16,9 @@ func RequestLogger() MiddlewareFunc {
 			res := c.Response()
 
 			remoteAddr := req.RemoteAddress()
-			if ip := req.Header().Get(XRealIP); ip != "" {
+			if ip := req.Header().Get(HeaderXRealIP); ip != "" {
 				remoteAddr = ip
-			} else if ip = req.Header().Get(XForwardedFor); ip != "" {
+			} else if ip = req.Header().Get(HeaderXForwardedFor); ip != "" {
 				remoteAddr = ip
 			} else {
 				remoteAddr, _, _ = net.SplitHostPort(remoteAddr)

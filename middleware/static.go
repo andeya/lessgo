@@ -12,16 +12,16 @@ type (
 	// StaticConfig defines the config for static middleware.
 	StaticConfig struct {
 		// Root is the directory from where the static content is served.
-		// Optional with default value as `DefaultStaticConfig.Root`.
+		// Optional with default value as ``.
 		Root string `json:"root"`
 
 		// Index is the list of index files to be searched and used when serving
 		// a directory.
-		// Optional with default value as `DefaultStaticConfig.Index`.
+		// Optional with default value as []string{"index.html"}.
 		Index []string `json:"index"`
 
 		// Browse is a flag to enable/disable directory browsing.
-		// Required.
+		// Optional with default value as false.
 		Browse bool `json:"browse"`
 	}
 )
@@ -55,7 +55,7 @@ func StaticFromConfig(config StaticConfig) lessgo.MiddlewareFunc {
 		return func(c lessgo.Context) error {
 			fs := http.Dir(config.Root)
 			p := c.Request().URL().Path()
-			if c.P(0) != "" { // If serving from `Group`, e.g. `/static/*`
+			if c.P(0) != "" { // If serving from `Group`, e.g. `/static*`
 				p = c.P(0)
 			}
 			file := path.Clean(p)
@@ -90,7 +90,7 @@ func StaticFromConfig(config StaticConfig) lessgo.MiddlewareFunc {
 
 						// Create a directory index
 						rs := c.Response()
-						rs.Header().Set(lessgo.ContentType, lessgo.TextHTMLCharsetUTF8)
+						rs.Header().Set(lessgo.HeaderContentType, lessgo.MIMETextHTMLCharsetUTF8)
 						if _, err = fmt.Fprintf(rs, "<pre>\n"); err != nil {
 							return err
 						}

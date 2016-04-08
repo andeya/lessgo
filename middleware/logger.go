@@ -30,7 +30,7 @@ type (
 		//
 		// Example "${remote_id} ${status}"
 		//
-		// Optional with default value as `DefaultLoggerConfig.Format`.
+		// Optional with default value as os.Stdout.
 		Format string
 
 		// Output is the writer where logs are written.
@@ -90,9 +90,9 @@ func LoggerFromConfig(config LoggerConfig) lessgo.MiddlewareFunc {
 					return w.Write([]byte(time.Now().Format(time.RFC3339)))
 				case "remote_ip":
 					ra := rq.RemoteAddress()
-					if ip := rq.Header().Get(lessgo.XRealIP); ip != "" {
+					if ip := rq.Header().Get(lessgo.HeaderXRealIP); ip != "" {
 						ra = ip
-					} else if ip = rq.Header().Get(lessgo.XForwardedFor); ip != "" {
+					} else if ip = rq.Header().Get(lessgo.HeaderXForwardedFor); ip != "" {
 						ra = ip
 					} else {
 						ra, _, _ = net.SplitHostPort(ra)

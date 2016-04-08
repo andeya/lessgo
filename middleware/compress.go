@@ -16,7 +16,7 @@ type (
 	// GzipConfig defines the config for gzip middleware.
 	GzipConfig struct {
 		// Level is the gzip level.
-		// Optional with default value as `DefaultGzipConfig.Level`.
+		// Optional with default value as -1.
 		Level int
 	}
 
@@ -53,8 +53,8 @@ func GzipFromConfig(config GzipConfig) lessgo.MiddlewareFunc {
 	return func(next lessgo.HandlerFunc) lessgo.HandlerFunc {
 		return func(c lessgo.Context) error {
 			rs := c.Response()
-			rs.Header().Add(lessgo.Vary, lessgo.AcceptEncoding)
-			if strings.Contains(c.Request().Header().Get(lessgo.AcceptEncoding), scheme) {
+			rs.Header().Add(lessgo.HeaderVary, lessgo.HeaderAcceptEncoding)
+			if strings.Contains(c.Request().Header().Get(lessgo.HeaderAcceptEncoding), scheme) {
 				rw := rs.Writer()
 				gw := pool.Get().(*gzip.Writer)
 				gw.Reset(rw)
@@ -64,14 +64,14 @@ func GzipFromConfig(config GzipConfig) lessgo.MiddlewareFunc {
 						// nothing is written to body or error is returned.
 						// See issue #424, #407.
 						rs.SetWriter(rw)
-						rs.Header().Del(lessgo.ContentEncoding)
+						rs.Header().Del(lessgo.HeaderContentEncoding)
 						gw.Reset(ioutil.Discard)
 					}
 					gw.Close()
 					pool.Put(gw)
 				}()
 				g := gzipResponseWriter{Response: rs, Writer: gw}
-				rs.Header().Set(lessgo.ContentEncoding, scheme)
+				rs.Header().Set(lessgo.HeaderContentEncoding, scheme)
 				rs.SetWriter(g)
 			}
 			return next(c)
@@ -80,8 +80,8 @@ func GzipFromConfig(config GzipConfig) lessgo.MiddlewareFunc {
 }
 
 func (g gzipResponseWriter) Write(b []byte) (int, error) {
-	if g.Header().Get(lessgo.ContentType) == "" {
-		g.Header().Set(lessgo.ContentType, http.DetectContentType(b))
+	if g.Header().Get(lessgo.HeaderContentType) == "" {
+		g.Header().Set(lessgo.HeaderContentType, http.DetectContentType(b))
 	}
 	return g.Writer.Write(b)
 }
