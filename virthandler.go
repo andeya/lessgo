@@ -1,4 +1,4 @@
-package virtrouter
+package lessgo
 
 import (
 	"path"
@@ -22,8 +22,8 @@ type VirtHandler struct {
 	lock        sync.Mutex
 }
 
-// 防止VirtHandler的id重复
 var (
+	// 防止VirtHandler的id重复
 	virtHandlerMap  = map[string]*VirtHandler{}
 	virtHandlerLock sync.RWMutex
 )
@@ -37,7 +37,7 @@ func GetVirtHandler(id string) (*VirtHandler, bool) {
 
 // 创建全局唯一、完整的VirtHandler
 func NewVirtHandler(
-	handlerfunc interface{},
+	handlerfunc HandlerFunc,
 	prefix string,
 	methods []string,
 	description, success, failure string,
@@ -61,6 +61,7 @@ func NewVirtHandler(
 		return virtHandlerMap[id]
 	}
 	setVirtHandler(v)
+	setHandlerMap(id, handlerfunc)
 	return v
 }
 
@@ -150,4 +151,15 @@ func handleWareUri(hw interface{}, methods []string, prefix string) string {
 		return runtime.FuncForPC(reflect.ValueOf(hw).Pointer()).Name() + add
 	}
 	return t.String() + add
+}
+
+// 全部handler及其id
+var handlerMap = map[string]HandlerFunc{}
+
+func getHandlerMap(id string) HandlerFunc {
+	return handlerMap[id]
+}
+
+func setHandlerMap(id string, handler HandlerFunc) {
+	handlerMap[id] = handler
 }

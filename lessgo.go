@@ -8,6 +8,7 @@ package lessgo
 
 import (
 	"net"
+	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -19,7 +20,6 @@ import (
 	"github.com/lessgo/lessgo/dbservice"
 	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
-	"github.com/lessgo/lessgo/virtrouter"
 )
 
 type (
@@ -29,6 +29,7 @@ type (
 		home         string // 根路径"/"对应的url
 		serverEnable bool   // 服务是否启用
 		DBAccess     *dbservice.DBAccess
+		VirtRouter   *VirtRouter
 		lock         sync.RWMutex
 	}
 	NewServer func(engine.Config) engine.Server
@@ -56,6 +57,8 @@ var DefLessgo = func() *Lessgo {
 		home:         "/",
 		serverEnable: true,
 	}
+	// 初始化全局虚拟路由
+	l.VirtRouter, _ = NewVirtRouterRoot()
 	// 初始化日志
 	l.Echo.Logger().SetMsgChan(AppConfig.Log.AsyncChan)
 	l.Echo.SetLogLevel(AppConfig.Log.Level)
@@ -159,20 +162,6 @@ func Run(server NewServer, listener ...net.Listener) {
 }
 
 /*
- * 在路由执行位置之前紧邻插入中间件队列
- */
-func Before(middleware ...interface{}) {
-	DefLessgo.Echo.BeforeUse(wrapMiddlewares(middleware)...)
-}
-
-/*
- * 在路由执行位置之后紧邻插入中间件队列
- */
-func After(middleware ...interface{}) {
-	DefLessgo.Echo.AfterUse(wrapMiddlewares(middleware)...)
-}
-
-/*
  * 获取默认数据库引擎
  */
 func DefaultDB() *xorm.Engine {
@@ -201,10 +190,17 @@ func GetDB(name string) (*xorm.Engine, bool) {
 }
 
 /*
+ * 返回打印实例
+ */
+func Logger() logs.Logger {
+	return DefLessgo.Echo.Logger()
+}
+
+/*
  * 重建真实路由
  */
 func ResetRealRoute() {
-	if err := middlewareExistCheck(DefVirtRouter); err != nil {
+	if err := middlewareExistCheck(DefLessgo.VirtRouter); err != nil {
 		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
 		return
 	}
@@ -221,61 +217,106 @@ func ResetRealRoute() {
 	DefLessgo.Echo.router = NewRouter(DefLessgo.Echo)
 	DefLessgo.Echo.middleware = []MiddlewareFunc{DefLessgo.Echo.router.Process}
 	DefLessgo.Echo.head = DefLessgo.Echo.pristineHead
-	registerRootMiddlewares()
 	DefLessgo.Echo.BeforeUse(getMiddlewares(beforeMiddlewares)...)
 	DefLessgo.Echo.AfterUse(getMiddlewares(afterMiddlewares)...)
-	for _, child := range DefVirtRouter.Children() {
+	for _, child := range DefLessgo.VirtRouter.Children() {
 		if !child.Enable() {
 			continue
 		}
-		var group *Group
-		for _, d := range child.Progeny() {
-			if !d.Enable() {
-				continue
+
+		mws := getMiddlewares(child.Middleware())
+		prefix := child.VirtHandler().Prefix()
+		prefix2 := path.Join("/", strings.TrimSuffix(child.VirtHandler().PrefixPath(), "/index"), child.VirtHandler().PrefixParam())
+		hasIndex := prefix2 != prefix
+		switch child.Type() {
+		case GROUP:
+			var group *Group
+			if hasIndex {
+				// "/index"分组会被默认为"/"
+				group = DefLessgo.Echo.Group(prefix2, mws...)
+			} else {
+				group = DefLessgo.Echo.Group(prefix, mws...)
 			}
-			mws := getMiddlewares(d.Middleware())
-			prefix := d.VirtHandler().Prefix()
-			prefix2 := strings.TrimSuffix(d.VirtHandler().PrefixPath(), "/index") + d.VirtHandler().PrefixParam() + "/"
-			hasIndex := prefix2 != prefix
-			switch d.Type() {
-			case virtrouter.GROUP:
-				if group == nil {
-					if hasIndex {
-						// "/index"分组会被默认为"/"
-						group = DefLessgo.Echo.Group(prefix2, mws...)
-					} else {
-						group = DefLessgo.Echo.Group(prefix, mws...)
-					}
-					break
-				}
-				if hasIndex {
-					// "/index"分组会被默认为"/"
-					group = group.Group(prefix2, mws...)
-				} else {
-					group = group.Group(prefix, mws...)
-				}
-			case virtrouter.HANDLER:
-				methods := d.VirtHandler().Methods()
-				handler := getHandlerMap(d.VirtHandler().Id())
-				if group == nil {
-					if hasIndex {
-						DefLessgo.Echo.Match(methods, prefix2, handler, mws...)
-					}
-					DefLessgo.Echo.Match(methods, prefix, handler, mws...)
-					break
-				}
-				if hasIndex {
-					group.Match(methods, prefix2, handler, mws...)
-				}
-				group.Match(methods, prefix, handler, mws...)
+			child.route(group)
+
+		case HANDLER:
+			methods := child.VirtHandler().Methods()
+			handler := getHandlerMap(child.VirtHandler().Id())
+			if hasIndex {
+				DefLessgo.Echo.Match(methods, prefix2, handler, mws...)
 			}
+			DefLessgo.Echo.Match(methods, prefix, handler, mws...)
 		}
 	}
 }
 
 /*
- * 返回打印实例
+ * 注册虚拟路由
  */
-func Logger() logs.Logger {
-	return DefLessgo.Echo.Logger()
+
+// 路由执行前后的中间件
+var (
+	beforeMiddlewares = []string{
+		"检查网站是否开启",
+		"自动匹配home页面",
+		"运行时请求日志",
+		"异常恢复",
+	}
+	afterMiddlewares = []string{}
+)
+
+// 在路由执行位置之前紧邻插入中间件队列
+func BeforeUse(middleware ...string) {
+	beforeMiddlewares = append(middleware, beforeMiddlewares...)
+}
+
+// 在路由执行位置之后紧邻插入中间件队列
+func AfterUser(middleware ...string) {
+	afterMiddlewares = append(afterMiddlewares, middleware...)
+}
+
+// 必须在init()中调用
+// 从根路由开始配置路由
+func RootRouter(node ...*VirtRouter) *VirtRouter {
+	DefLessgo.VirtRouter.AddChildren(node)
+	return DefLessgo.VirtRouter
+}
+
+// 必须在init()中调用
+// 配置路由分组
+func SubRouter(prefix, name string, node ...*VirtRouter) *VirtRouter {
+	return NewVirtRouterGroup(prefix, name).AddChildren(node)
+}
+
+// 必须在init()中调用
+// 配置操作
+func Get(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
+	return route([]string{GET}, prefix, name, descHandlerOrhandler, middleware)
+}
+func Head(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
+	return route([]string{HEAD}, prefix, name, descHandlerOrhandler, middleware)
+}
+func Options(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
+	return route([]string{OPTIONS}, prefix, name, descHandlerOrhandler, middleware)
+}
+func Patch(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
+	return route([]string{PATCH}, prefix, name, descHandlerOrhandler, middleware)
+}
+func Post(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
+	return route([]string{POST}, prefix, name, descHandlerOrhandler, middleware)
+}
+func Put(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
+	return route([]string{PUT}, prefix, name, descHandlerOrhandler, middleware)
+}
+func Trace(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
+	return route([]string{TRACE}, prefix, name, descHandlerOrhandler, middleware)
+}
+func Any(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
+	return route([]string{CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE}, prefix, name, descHandlerOrhandler, middleware)
+}
+func Match(methods []string, prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
+	if len(methods) == 0 {
+		DefLessgo.logger.Error("The method can not be empty: %v", name)
+	}
+	return route(methods, prefix, name, descHandlerOrhandler, middleware)
 }

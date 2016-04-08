@@ -101,15 +101,6 @@ func registerSession() (err error) {
 	return
 }
 
-func registerRootMiddlewares() {
-	defer DefLessgo.Echo.PreUse(
-		checkServer(),
-		checkHome(),
-		RequestLogger(),
-		Recover(),
-	)
-}
-
 func checkHooks(err error) {
 	if err == nil {
 		return
