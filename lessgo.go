@@ -8,7 +8,6 @@ package lessgo
 
 import (
 	"net"
-	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -219,34 +218,12 @@ func ResetRealRoute() {
 	DefLessgo.Echo.head = DefLessgo.Echo.pristineHead
 	DefLessgo.Echo.BeforeUse(getMiddlewares(beforeMiddlewares)...)
 	DefLessgo.Echo.AfterUse(getMiddlewares(afterMiddlewares)...)
+	group := DefLessgo.Echo.Group(
+		DefLessgo.VirtRouter.VirtHandler().Prefix(),
+		getMiddlewares(DefLessgo.VirtRouter.Middleware())...,
+	)
 	for _, child := range DefLessgo.VirtRouter.Children() {
-		if !child.Enable() {
-			continue
-		}
-
-		mws := getMiddlewares(child.Middleware())
-		prefix := child.VirtHandler().Prefix()
-		prefix2 := path.Join("/", strings.TrimSuffix(child.VirtHandler().PrefixPath(), "/index"), child.VirtHandler().PrefixParam())
-		hasIndex := prefix2 != prefix
-		switch child.Type() {
-		case GROUP:
-			var group *Group
-			if hasIndex {
-				// "/index"分组会被默认为"/"
-				group = DefLessgo.Echo.Group(prefix2, mws...)
-			} else {
-				group = DefLessgo.Echo.Group(prefix, mws...)
-			}
-			child.route(group)
-
-		case HANDLER:
-			methods := child.VirtHandler().Methods()
-			handler := getHandlerMap(child.VirtHandler().Id())
-			if hasIndex {
-				DefLessgo.Echo.Match(methods, prefix2, handler, mws...)
-			}
-			DefLessgo.Echo.Match(methods, prefix, handler, mws...)
-		}
+		child.route(group)
 	}
 }
 
