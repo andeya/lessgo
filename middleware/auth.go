@@ -33,12 +33,12 @@ var (
 func BasicAuth(f BasicAuthFunc) lessgo.MiddlewareFunc {
 	c := DefaultBasicAuthConfig
 	c.AuthFunc = f
-	return BasicAuthFromConfig(c)
+	return BasicAuthWithConfig(c)
 }
 
-// BasicAuthFromConfig returns an HTTP basic auth middleware from config.
+// BasicAuthWithConfig returns an HTTP basic auth middleware from config.
 // See `BasicAuth()`.
-func BasicAuthFromConfig(config BasicAuthConfig) lessgo.MiddlewareFunc {
+func BasicAuthWithConfig(config BasicAuthConfig) lessgo.MiddlewareFunc {
 	return func(next lessgo.HandlerFunc) lessgo.HandlerFunc {
 		return func(c lessgo.Context) error {
 			auth := c.Request().Header().Get(lessgo.HeaderAuthorization)
