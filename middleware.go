@@ -40,15 +40,11 @@ func MiddlewareMap() map[string]MiddlewareObj {
 	return middlewareMap
 }
 
-func existMiddleware(name string) bool {
-	_, ok := middlewareMap[name]
-	return ok
-}
-
-func middlewareExistCheck(node *VirtRouter) error {
+func middlewareCheck(middlewareNames []string) error {
 	var errstring string
-	for _, m := range node.AllMiddleware() {
-		if !existMiddleware(m) {
+	for _, m := range middlewareNames {
+		_, ok := middlewareMap[m]
+		if !ok {
 			errstring += " \"" + m + "\""
 		}
 	}

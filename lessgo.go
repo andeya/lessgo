@@ -199,7 +199,15 @@ func Logger() logs.Logger {
  * 重建真实路由
  */
 func ResetRealRoute() {
-	if err := middlewareExistCheck(DefLessgo.VirtRouter); err != nil {
+	if err := middlewareCheck(beforeMiddlewares); err != nil {
+		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
+		return
+	}
+	if err := middlewareCheck(afterMiddlewares); err != nil {
+		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
+		return
+	}
+	if err := middlewareCheck(DefLessgo.VirtRouter.AllMiddleware()); err != nil {
 		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
 		return
 	}
@@ -244,12 +252,12 @@ var (
 
 // 在路由执行位置之前紧邻插入中间件队列
 func BeforeUse(middleware ...string) {
-	beforeMiddlewares = append(middleware, beforeMiddlewares...)
+	beforeMiddlewares = append(beforeMiddlewares, middleware...)
 }
 
 // 在路由执行位置之后紧邻插入中间件队列
 func AfterUser(middleware ...string) {
-	afterMiddlewares = append(afterMiddlewares, middleware...)
+	afterMiddlewares = append(middleware, afterMiddlewares...)
 }
 
 // 必须在init()中调用
