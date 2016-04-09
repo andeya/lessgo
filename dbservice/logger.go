@@ -15,9 +15,13 @@ type ILogger struct {
 	showSQL bool
 }
 
-func NewILogger(l int) *ILogger {
+func NewILogger(channelLen int64, l int, filename string) *ILogger {
+	tl := logs.NewLogger(channelLen)
+	tl.SetLogFuncCallDepth(3)
+	tl.AddAdapter("console", "")
+	tl.AddAdapter("file", `{"filename":"Logger/`+filename+`.lessgo.log"}`)
 	return &ILogger{
-		BeeLogger: log.GlobalLogger.(*log.TgLogger).BeeLogger,
+		BeeLogger: tl,
 		level:     level(core.LogLevel(l)),
 	}
 }

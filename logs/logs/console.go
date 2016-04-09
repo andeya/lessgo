@@ -45,11 +45,12 @@ var (
 		color.Green,   // Debug              green
 	}
 )
+var out = newLogWriter(color.NewColorableStdout())
 
 // NewConsole create ConsoleWriter returning as LoggerInterface.
 func NewConsole() Logger {
 	cw := &consoleWriter{
-		lg:       newLogWriter(color.NewColorableStdout()),
+		lg:       out,
 		Level:    LevelDebug,
 		Colorful: true,
 	}

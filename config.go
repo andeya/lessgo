@@ -61,6 +61,15 @@ type (
 		ConnString   string
 		MaxOpenConns int
 		MaxIdleConns int
+		TableFix     string // 表命名空间是前缀还是后缀：prefix | suffix
+		TableSpace   string // 表命名空间
+		TableSnake   bool   // 表名使用snake风格或保持不变
+		ColumnFix    string // 列命名空间是前缀还是后缀：prefix | suffix
+		ColumnSpace  string // 列命名空间
+		ColumnSnake  bool   // 列名使用snake风格或保持不变
+		DisableCache bool
+		ShowExecTime bool
+		ShowSql      bool
 	}
 )
 
@@ -145,6 +154,15 @@ func initConfig() *Config {
 				ConnString:   DB_DIR + "/sqlite.db",
 				MaxOpenConns: 1,
 				MaxIdleConns: 1,
+				TableFix:     "prefix",
+				TableSpace:   "",
+				TableSnake:   true,
+				ColumnFix:    "prefix",
+				ColumnSpace:  "",
+				ColumnSnake:  true,
+				DisableCache: false,
+				ShowExecTime: false,
+				ShowSql:      false,
 			},
 		},
 	}
@@ -190,6 +208,41 @@ func defaultDBConfig(iniconf *config.IniConfigContainer) {
 		iniconf.Set(section+"connstring", db.ConnString)
 		iniconf.Set(section+"maxopenconns", fmt.Sprint(db.MaxOpenConns))
 		iniconf.Set(section+"maxidleconns", fmt.Sprint(db.MaxIdleConns))
+		iniconf.Set(section+"tablefix", strings.ToLower(db.TableFix))
+		iniconf.Set(section+"tablespace", db.TableSpace)
+		iniconf.Set(section+"tablesnake", fmt.Sprint(db.TableSnake))
+		iniconf.Set(section+"columnfix", strings.ToLower(db.ColumnFix))
+		iniconf.Set(section+"columnpace", db.ColumnSpace)
+		iniconf.Set(section+"columnsnake", fmt.Sprint(db.ColumnSnake))
+		iniconf.Set(section+"disablecache", fmt.Sprint(db.DisableCache))
+		iniconf.Set(section+"showexectime", fmt.Sprint(db.ShowExecTime))
+		iniconf.Set(section+"showsql", fmt.Sprint(db.ShowSql))
+	}
+}
+
+func trySetDBConfig(iniconf *config.IniConfigContainer) {
+	defDB := BConfig.DBList["preset"]
+	for _, s := range iniconf.Sections() {
+		dbconfig := DBConfig{
+			Name:         iniconf.String(s + "::name"),
+			Driver:       iniconf.String(s + "::driver"),
+			ConnString:   iniconf.String(s + "::connstring"),
+			MaxOpenConns: iniconf.DefaultInt(s+"::maxopenconns", defDB.MaxOpenConns),
+			MaxIdleConns: iniconf.DefaultInt(s+"::maxidleconns", defDB.MaxIdleConns),
+			TableFix:     strings.ToLower(iniconf.String(s + "::tablefix")),
+			TableSpace:   iniconf.String(s + "::tablespace"),
+			TableSnake:   iniconf.DefaultBool(s+"::tablesnake", defDB.TableSnake),
+			ColumnFix:    strings.ToLower(iniconf.String(s + "::columnfix")),
+			ColumnSpace:  iniconf.String(s + "::columnpace"),
+			ColumnSnake:  iniconf.DefaultBool(s+"::columnsnake", defDB.ColumnSnake),
+			DisableCache: iniconf.DefaultBool(s+"::disablecache", defDB.DisableCache),
+			ShowExecTime: iniconf.DefaultBool(s+"::showexectime", defDB.ShowExecTime),
+			ShowSql:      iniconf.DefaultBool(s+"::showsql", defDB.ShowSql),
+		}
+		if strings.ToLower(s) == DEFAULTDB_SECTION {
+			AppConfig.DefaultDB = dbconfig.Name
+		}
+		AppConfig.DBList[dbconfig.Name] = dbconfig
 	}
 }
 
@@ -290,22 +343,6 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 	if AppConfig.Log.AsyncChan, err = iniconf.Int64("log::asyncchan"); AppConfig.Log.AsyncChan <= 0 || err != nil {
 		iniconf.Set("log::asyncchan", fmt.Sprint(BConfig.Log.AsyncChan))
 		AppConfig.Log.AsyncChan = BConfig.Log.AsyncChan
-	}
-}
-
-func trySetDBConfig(iniconf *config.IniConfigContainer) {
-	for _, s := range iniconf.Sections() {
-		dbconfig := DBConfig{
-			Name:         iniconf.String(s + "::name"),
-			Driver:       iniconf.String(s + "::driver"),
-			ConnString:   iniconf.String(s + "::connstring"),
-			MaxOpenConns: iniconf.DefaultInt(s+"::maxopenconns", 1),
-			MaxIdleConns: iniconf.DefaultInt(s+"::maxidleconns", 1),
-		}
-		if strings.ToLower(s) == DEFAULTDB_SECTION {
-			AppConfig.DefaultDB = dbconfig.Name
-		}
-		AppConfig.DBList[dbconfig.Name] = dbconfig
 	}
 }
 
