@@ -32,7 +32,7 @@ func level(l core.LogLevel) core.LogLevel {
 		return core.LOG_WARNING
 	case log.ERROR:
 		return core.LOG_ERR
-	case log.OFF:
+	case log.OFF, log.FATAL:
 		return core.LOG_OFF
 	}
 	return core.LOG_UNKNOWN
