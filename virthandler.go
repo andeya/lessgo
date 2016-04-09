@@ -16,8 +16,6 @@ type VirtHandler struct {
 	prefixPath  string            // 路由节点的url前缀的固定路径部分
 	prefixParam string            // 路由节点的url前缀的参数部分
 	description string            // 描述
-	success     string            // 成功后返回的内容描述
-	failure     string            // 失败后返回的内容描述
 	param       map[string]string // 参数描述
 	lock        sync.Mutex
 }
@@ -53,8 +51,6 @@ func NewVirtHandler(
 		prefixPath:  prefixPath,
 		prefixParam: prefixParam,
 		description: description,
-		success:     success,
-		failure:     failure,
 		param:       param,
 	}
 	if hasVirtHandler(id) {
@@ -95,16 +91,6 @@ func (v *VirtHandler) PrefixParam() string {
 // 操作的描述
 func (v *VirtHandler) Description() string {
 	return v.description
-}
-
-// 操作成功后返回的内容描述
-func (v *VirtHandler) Success() string {
-	return v.success
-}
-
-// 操作失败后返回的内容描述
-func (v *VirtHandler) Failure() string {
-	return v.failure
 }
 
 // 操作的参数描述的副本

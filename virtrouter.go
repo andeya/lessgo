@@ -372,9 +372,7 @@ func route(methods []string, prefix, name string, descHandlerOrhandler interface
 		handler = HandlerFunc(h)
 	case DescHandler:
 		handler = h.Handler
-		description = h.Description
-		success = h.Success
-		failure = h.Failure
+		description = h.Desc
 		param = h.Param
 	}
 	// 生成VirtHandler
