@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	_ "github.com/denisenkom/go-mssqldb" //mssql
-	_ "github.com/go-sql-driver/mysql"   //mysq
+	_ "github.com/go-sql-driver/mysql"   //mysql
 	"github.com/go-xorm/xorm"
 	_ "github.com/lib/pq" //postgres
 	// _ "github.com/mattn/go-oci8"    // oracle，需安装pkg-config工具

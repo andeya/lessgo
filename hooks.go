@@ -112,6 +112,7 @@ func newDBAccess() *dbservice.DBAccess {
 	access := &dbservice.DBAccess{
 		List: map[string]*xorm.Engine{},
 	}
+	logger := dbservice.NewILogger(AppConfig.Log.Level)
 	for _, conf := range AppConfig.DBList {
 		engine, err := xorm.NewEngine(conf.Driver, conf.ConnString)
 		if err != nil {
@@ -120,6 +121,7 @@ func newDBAccess() *dbservice.DBAccess {
 		}
 		engine.SetMaxOpenConns(conf.MaxOpenConns)
 		engine.SetMaxIdleConns(conf.MaxIdleConns)
+		engine.SetLogger(logger)
 		access.List[conf.Name] = engine
 		if AppConfig.DefaultDB == conf.Name {
 			access.Default = engine
