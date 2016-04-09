@@ -10,9 +10,9 @@ import (
 )
 
 type ILogger struct {
-	*logs.BeeLogger
-	level   core.LogLevel
-	showSQL bool
+	BeeLogger *logs.BeeLogger
+	level     core.LogLevel
+	showSQL   bool
 }
 
 func NewILogger(channelLen int64, l int, filename string) *ILogger {
@@ -42,54 +42,46 @@ func level(l core.LogLevel) core.LogLevel {
 	return core.LOG_UNKNOWN
 }
 
-func (i *ILogger) Debug(v ...interface{}) (err error) {
+func (i *ILogger) Debug(v ...interface{}) {
 	i.BeeLogger.Debug(fmt.Sprintln(v...))
 	return
 }
 
-func (i *ILogger) Debugf(format string, v ...interface{}) (err error) {
+func (i *ILogger) Debugf(format string, v ...interface{}) {
 	i.BeeLogger.Debug(format, v...)
 	return
 }
 
-func (i *ILogger) Err(v ...interface{}) (err error) {
+func (i *ILogger) Error(v ...interface{}) {
 	i.BeeLogger.Error(fmt.Sprintln(v...))
-	return
 }
 
-func (i *ILogger) Errf(format string, v ...interface{}) (err error) {
+func (i *ILogger) Errorf(format string, v ...interface{}) {
 	i.BeeLogger.Error(format, v...)
-	return
 }
 
-func (i *ILogger) Info(v ...interface{}) (err error) {
+func (i *ILogger) Info(v ...interface{}) {
 	i.BeeLogger.Info(fmt.Sprintln(v...))
-	return
 }
 
-func (i *ILogger) Infof(format string, v ...interface{}) (err error) {
+func (i *ILogger) Infof(format string, v ...interface{}) {
 	i.BeeLogger.Info(format, v...)
-	return
 }
 
-func (i *ILogger) Warning(v ...interface{}) (err error) {
+func (i *ILogger) Warn(v ...interface{}) {
 	i.BeeLogger.Warn(fmt.Sprintln(v...))
-	return
 }
-
-func (i *ILogger) Warningf(format string, v ...interface{}) (err error) {
+func (i *ILogger) Warnf(format string, v ...interface{}) {
 	i.BeeLogger.Warn(format, v...)
-	return
 }
 
 func (i *ILogger) Level() core.LogLevel {
 	return i.level
 }
 
-func (i *ILogger) SetLevel(l core.LogLevel) (err error) {
+func (i *ILogger) SetLevel(l core.LogLevel) {
 	i.level = level(l)
 	i.BeeLogger.SetLevel(int(i.level))
-	return
 }
 
 func (i *ILogger) ShowSQL(show ...bool) {
