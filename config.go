@@ -222,6 +222,7 @@ func defaultDBConfig(iniconf *config.IniConfigContainer) {
 
 func trySetDBConfig(iniconf *config.IniConfigContainer) {
 	defDB := BConfig.DBList["preset"]
+	delete(AppConfig.DBList, "preset") // 移除预设数据库
 	for _, s := range iniconf.Sections() {
 		dbconfig := DBConfig{
 			Name:         iniconf.String(s + "::name"),
