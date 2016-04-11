@@ -459,6 +459,7 @@ func (c *context) Reset(rq engine.Request, rs engine.Response) {
 	c.request = rq
 	c.response = rs
 	c.query = nil
-	c.store = nil
+	c.store = make(store)
 	c.handler = notFoundHandler
+	c.pvalues = make([]string, *c.echo.maxParam)
 }

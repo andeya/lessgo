@@ -413,7 +413,8 @@ func (e *Echo) Match(methods []string, path string, handler HandlerFunc, middlew
 	}
 }
 
-// Static serves static files from provided root directory with URL path prefix.
+// Static registers a new route with path prefix to serve static files from the
+// provided root directory.
 func (e *Echo) Static(prefix, root string, middleware ...MiddlewareFunc) {
 	e.addwithlog(false, GET, prefix+"*", func(c Context) error {
 		return c.File(path.Join(root, c.P(0))) // Param `_`
@@ -421,7 +422,7 @@ func (e *Echo) Static(prefix, root string, middleware ...MiddlewareFunc) {
 	e.logger.Sys("| %-7s | %-30s | %v", GET, prefix+"*", root)
 }
 
-// File serves provided file for `/<path>` HTTP path.
+// File registers a new route with path to serve a static file.
 func (e *Echo) File(path, file string, middleware ...MiddlewareFunc) {
 	e.addwithlog(false, GET, path, HandlerFunc(func(c Context) error {
 		return c.File(file)
@@ -464,10 +465,13 @@ func (e *Echo) addwithlog(logprint bool, method, path string, handler HandlerFun
 func (e *Echo) Group(prefix string, m ...MiddlewareFunc) (g *Group) {
 	g = &Group{prefix: prefix, echo: e}
 	g.Use(m...)
-	// Dummy handler so group can be used with static middleware.
-	g.Get("", func(c Context) error {
-		return c.NoContent(http.StatusNotFound)
-	})
+	// Allow all requests to reach the group as they might get dropped if router
+	// doesn't find a match, making none of the group middleware process.
+	for _, method := range methods {
+		e.addwithlog(false, method, prefix+"*", func(c Context) error {
+			return c.NoContent(http.StatusNotFound)
+		}, g.middleware...)
+	}
 	return
 }
 
@@ -532,7 +536,6 @@ func (e *Echo) ServeHTTP(rq engine.Request, rs engine.Response) {
 	if err := e.head(c); err != nil {
 		e.httpErrorHandler(err, c)
 	}
-
 	e.pool.Put(c)
 }
 

@@ -78,15 +78,11 @@ func (g *Group) Match(methods []string, path string, handler HandlerFunc, middle
 // Group creates a new sub-group with prefix and optional sub-group-level middleware.
 func (g *Group) Group(prefix string, m ...MiddlewareFunc) *Group {
 	m = append(g.middleware, m...)
-	return g.echo.Group(g.prefix+prefix, m...)
+	return g.echo.Group(joinpath(g.prefix, prefix), m...)
 }
 
 func (g *Group) add(method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
-	ishandle := path != ""
 	path = joinpath(g.prefix, path)
 	middleware = append(g.middleware, middleware...)
-	g.echo.addwithlog(ishandle, method, path, handler, middleware...)
-	if !ishandle {
-		g.echo.logger.Sys("| %-7s | %-30s | %v", method, path, "can be used with static middleware")
-	}
+	g.echo.add(method, path, handler, middleware...)
 }
