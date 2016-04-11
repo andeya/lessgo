@@ -413,7 +413,7 @@ func (e *Echo) Match(methods []string, path string, handler HandlerFunc, middlew
 	}
 }
 
-// Static serves files from provided `root` directory for `/<prefix>*` HTTP path.
+// Static serves static files from provided root directory with URL path prefix.
 func (e *Echo) Static(prefix, root string, middleware ...MiddlewareFunc) {
 	e.addwithlog(false, GET, prefix+"*", func(c Context) error {
 		return c.File(path.Join(root, c.P(0))) // Param `_`
