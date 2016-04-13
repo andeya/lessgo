@@ -612,9 +612,10 @@ func wrapMiddlewares(middleware []interface{}) []MiddlewareFunc {
 }
 
 func handlerName(h HandlerFunc) string {
-	t := reflect.ValueOf(h).Type()
+	v := reflect.ValueOf(h)
+	t := v.Type()
 	if t.Kind() == reflect.Func {
-		return runtime.FuncForPC(reflect.ValueOf(h).Pointer()).Name()
+		return runtime.FuncForPC(v.Pointer()).Name()
 	}
 	return t.String()
 }

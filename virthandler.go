@@ -132,9 +132,10 @@ func handleWareUri(hw interface{}, methods []string, prefix string) string {
 	for _, m := range methods {
 		add += "[" + m + "]"
 	}
-	t := reflect.ValueOf(hw).Type()
+	v := reflect.ValueOf(hw)
+	t := v.Type()
 	if t.Kind() == reflect.Func {
-		return runtime.FuncForPC(reflect.ValueOf(hw).Pointer()).Name() + add
+		return runtime.FuncForPC(v.Pointer()).Name() + add
 	}
 	return t.String() + add
 }
