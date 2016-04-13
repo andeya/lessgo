@@ -428,14 +428,14 @@ func (n *node) findHandler(method string) HandlerFunc {
 // 	return
 // }
 
-func (n *node) findPClosestByKind(t kind) (x *node) {
+func (n *node) findClosestByKind(t kind) (x *node) {
 	if x = n.findChildByKind(t); x != nil {
 		return
 	}
 	if n.parent == nil {
 		return nil
 	}
-	return n.parent.findPClosestByKind(t)
+	return n.parent.findClosestByKind(t)
 }
 
 func (n *node) checkMethodNotAllowed() HandlerFunc {
@@ -584,7 +584,7 @@ End:
 		}()
 		// Dig further for any, might have an empty value for *, e.g.
 		// serving a directory. Issue #207.
-		if cn = cn.findPClosestByKind(akind); cn == nil {
+		if cn = cn.findClosestByKind(akind); cn == nil {
 			return
 		}
 		if ctx.handler = cn.findHandler(method); ctx.handler == nil {
