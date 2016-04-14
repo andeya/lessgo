@@ -10,13 +10,14 @@ import (
 
 // 虚拟操作
 type VirtHandler struct {
-	id          string            // 操作的唯一标识符
-	methods     []string          // 方法列表
-	prefix      string            // 路由节点的url前缀(或含参数)
-	prefixPath  string            // 路由节点的url前缀的固定路径部分
-	prefixParam string            // 路由节点的url前缀的参数部分
-	description string            // 描述
-	param       map[string]string // 参数描述
+	id          string   // 操作的唯一标识符
+	methods     []string // 方法列表
+	prefix      string   // 路由节点的url前缀(或含参数)
+	prefixPath  string   // 路由节点的url前缀的固定路径部分
+	prefixParam string   // 路由节点的url前缀的参数部分
+	description string   // 描述
+	produces    []string // 支持的响应内容类型，如["application/xml", "application/json"]
+	params      []Param  // 参数说明列表
 	lock        sync.Mutex
 }
 
@@ -38,8 +39,9 @@ func NewVirtHandler(
 	handlerfunc HandlerFunc,
 	prefix string,
 	methods []string,
-	description, success, failure string,
-	param map[string]string,
+	description string,
+	produces []string,
+	params []Param,
 
 ) *VirtHandler {
 	prefix, prefixPath, prefixParam := creatPrefix(prefix)
@@ -51,7 +53,8 @@ func NewVirtHandler(
 		prefixPath:  prefixPath,
 		prefixParam: prefixParam,
 		description: description,
-		param:       param,
+		produces:    produces,
+		params:      params,
 	}
 	if hasVirtHandler(id) {
 		return virtHandlerMap[id]
@@ -93,13 +96,18 @@ func (v *VirtHandler) Description() string {
 	return v.description
 }
 
-// 操作的参数描述的副本
-func (v *VirtHandler) Param() map[string]string {
-	p := make(map[string]string, len(v.param))
-	for key, val := range v.param {
+// 操作的参数说明列表的副本
+func (v *VirtHandler) Params() []Param {
+	p := make([]Param, len(v.params))
+	for key, val := range v.params {
 		p[key] = val
 	}
 	return p
+}
+
+// 操作接受的响应内容类型
+func (v *VirtHandler) Produces() []string {
+	return v.produces
 }
 
 func setVirtHandler(vh *VirtHandler) {

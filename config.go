@@ -13,15 +13,26 @@ type (
 	// Config is the main struct for BConfig
 	Config struct {
 		AppName             string // Application name
+		Info                Info   // Application info
 		Debug               bool   // enable/disable debug mode.
-		RouterCaseSensitive bool   // 是否路由忽略大小写匹配，默认是 true，区分大小写
-		MaxMemoryMB         int64  // 文件上传默认内存缓存大小，单位MB
+		CrossDomain         bool
+		RouterCaseSensitive bool  // 是否路由忽略大小写匹配，默认是 true，区分大小写
+		MaxMemoryMB         int64 // 文件上传默认内存缓存大小，单位MB
 		Listen              Listen
 		Session             SessionConfig
 		Log                 LogConfig
 		FileCache           FileCacheConfig
 		DefaultDB           string
 		DBList              map[string]DBConfig
+	}
+	Info struct {
+		Version           string
+		Description       string
+		Host              string
+		Email             string
+		TermsOfServiceUrl string
+		License           string
+		LicenseUrl        string
 	}
 	// Listen holds for http and https related config
 	Listen struct {
@@ -114,8 +125,18 @@ var (
 
 func initConfig() *Config {
 	return &Config{
-		AppName:             "lessgo",
+		AppName: "lessgo",
+		Info: Info{
+			Version:           "0.4.0",
+			Description:       "A simple, stable, efficient and flexible web framework.",
+			Host:              "127.0.0.1:8080",
+			Email:             "henrylee_cn@foxmail.com",
+			TermsOfServiceUrl: "https://github.com/lessgo/lessgo",
+			License:           "MIT",
+			LicenseUrl:        "https://github.com/lessgo/lessgo/raw/master/doc/LICENSE",
+		},
 		Debug:               true,
+		CrossDomain:         false,
 		RouterCaseSensitive: false,
 		MaxMemoryMB:         64, // 64MB
 		Listen: Listen{
@@ -171,11 +192,22 @@ func initConfig() *Config {
 func defaultAppConfig(iniconf *config.IniConfigContainer) {
 	iniconf.Set("system::appname", BConfig.AppName)
 	iniconf.Set("system::debug", fmt.Sprint(BConfig.Debug))
+	iniconf.Set("system::crossdomain", fmt.Sprint(BConfig.CrossDomain))
 	iniconf.Set("system::casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
 	iniconf.Set("system::maxmemorymb", fmt.Sprint(BConfig.MaxMemoryMB))
+
+	iniconf.Set("info::version", BConfig.Info.Version)
+	iniconf.Set("info::description", BConfig.Info.Description)
+	iniconf.Set("info::host", BConfig.Info.Host)
+	iniconf.Set("info::email", BConfig.Info.Email)
+	iniconf.Set("info::termsofserviceurl", BConfig.Info.TermsOfServiceUrl)
+	iniconf.Set("info::license", BConfig.Info.License)
+	iniconf.Set("info::licenseurl", BConfig.Info.LicenseUrl)
+
 	iniconf.Set("filecache::cachesecond", fmt.Sprint(BConfig.FileCache.CacheSecond))
 	iniconf.Set("filecache::singlefileallowmb", fmt.Sprint(BConfig.FileCache.SingleFileAllowMB))
 	iniconf.Set("filecache::maxcapmb", fmt.Sprint(BConfig.FileCache.MaxCapMB))
+
 	iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
 	iniconf.Set("listen::address", fmt.Sprint(BConfig.Listen.Address))
 	iniconf.Set("listen::readtimeout", fmt.Sprint(BConfig.Listen.ReadTimeout))
@@ -183,6 +215,7 @@ func defaultAppConfig(iniconf *config.IniConfigContainer) {
 	iniconf.Set("listen::enablehttps", fmt.Sprint(BConfig.Listen.EnableHTTPS))
 	iniconf.Set("listen::httpscertfile", fmt.Sprint(BConfig.Listen.HTTPSCertFile))
 	iniconf.Set("listen::httpskeyfile", fmt.Sprint(BConfig.Listen.HTTPSKeyFile))
+
 	iniconf.Set("session::enable", fmt.Sprint(BConfig.Session.Enable))
 	iniconf.Set("session::cookiename", fmt.Sprint(BConfig.Session.CookieName))
 	iniconf.Set("session::provider", fmt.Sprint(BConfig.Session.Provider))
@@ -191,6 +224,7 @@ func defaultAppConfig(iniconf *config.IniConfigContainer) {
 	iniconf.Set("session::cookielifetime", fmt.Sprint(BConfig.Session.CookieLifeTime))
 	iniconf.Set("session::enablesetcookie", fmt.Sprint(BConfig.Session.EnableSetCookie))
 	iniconf.Set("session::domain", fmt.Sprint(BConfig.Session.Domain))
+
 	iniconf.Set("log::level", logLevelString(BConfig.Log.Level))
 	iniconf.Set("log::asyncchan", fmt.Sprint(BConfig.Log.AsyncChan))
 }
@@ -257,6 +291,10 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 		iniconf.Set("system::debug", fmt.Sprint(BConfig.Debug))
 		AppConfig.Debug = BConfig.Debug
 	}
+	if AppConfig.CrossDomain, err = iniconf.Bool("system::crossdomain"); err != nil {
+		iniconf.Set("system::crossdomain", fmt.Sprint(BConfig.CrossDomain))
+		AppConfig.CrossDomain = BConfig.CrossDomain
+	}
 	if AppConfig.RouterCaseSensitive, err = iniconf.Bool("system::casesensitive"); err != nil {
 		iniconf.Set("system::casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
 		AppConfig.RouterCaseSensitive = BConfig.RouterCaseSensitive
@@ -265,6 +303,36 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 		iniconf.Set("system::maxmemorymb", fmt.Sprint(BConfig.MaxMemoryMB))
 		AppConfig.MaxMemoryMB = BConfig.MaxMemoryMB
 	}
+
+	if AppConfig.Info.Version = iniconf.String("info::version"); AppConfig.Info.Version == "" {
+		iniconf.Set("info::version", BConfig.Info.Version)
+		AppConfig.Info.Version = BConfig.Info.Version
+	}
+	if AppConfig.Info.Description = iniconf.String("info::description"); AppConfig.Info.Description == "" {
+		iniconf.Set("info::description", BConfig.Info.Description)
+		AppConfig.Info.Description = BConfig.Info.Description
+	}
+	if AppConfig.Info.Host = iniconf.String("info::host"); AppConfig.Info.Host == "" {
+		iniconf.Set("info::host", BConfig.Info.Host)
+		AppConfig.Info.Host = BConfig.Info.Host
+	}
+	if AppConfig.Info.Email = iniconf.String("info::email"); AppConfig.Info.Email == "" {
+		iniconf.Set("info::email", BConfig.Info.Email)
+		AppConfig.Info.Email = BConfig.Info.Email
+	}
+	if AppConfig.Info.TermsOfServiceUrl = iniconf.String("info::termsofserviceurl"); AppConfig.Info.TermsOfServiceUrl == "" {
+		iniconf.Set("info::termsofserviceurl", BConfig.Info.TermsOfServiceUrl)
+		AppConfig.Info.TermsOfServiceUrl = BConfig.Info.TermsOfServiceUrl
+	}
+	if AppConfig.Info.License = iniconf.String("info::license"); AppConfig.Info.License == "" {
+		iniconf.Set("info::license", BConfig.Info.License)
+		AppConfig.Info.License = BConfig.Info.License
+	}
+	if AppConfig.Info.LicenseUrl = iniconf.String("info::licenseurl"); AppConfig.Info.LicenseUrl == "" {
+		iniconf.Set("info::licenseurl", BConfig.Info.LicenseUrl)
+		AppConfig.Info.LicenseUrl = BConfig.Info.LicenseUrl
+	}
+
 	if AppConfig.FileCache.CacheSecond, err = iniconf.Int64("filecache::cachesecond"); AppConfig.FileCache.CacheSecond <= 0 || err != nil {
 		iniconf.Set("filecache::cachesecond", fmt.Sprint(BConfig.FileCache.CacheSecond))
 		AppConfig.FileCache.CacheSecond = BConfig.FileCache.CacheSecond
@@ -277,6 +345,7 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 		iniconf.Set("filecache::maxcapmb", fmt.Sprint(BConfig.FileCache.MaxCapMB))
 		AppConfig.FileCache.MaxCapMB = BConfig.FileCache.MaxCapMB
 	}
+
 	if AppConfig.Listen.Graceful, err = iniconf.Bool("listen::graceful"); err != nil {
 		iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
 		AppConfig.Listen.Graceful = BConfig.Listen.Graceful
@@ -305,6 +374,7 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 		iniconf.Set("listen::httpskeyfile", fmt.Sprint(BConfig.Listen.HTTPSKeyFile))
 		AppConfig.Listen.HTTPSKeyFile = BConfig.Listen.HTTPSKeyFile
 	}
+
 	if AppConfig.Session.Enable, err = iniconf.Bool("session::enable"); err != nil {
 		iniconf.Set("session::enable", fmt.Sprint(BConfig.Session.Enable))
 		AppConfig.Session.Enable = BConfig.Session.Enable
@@ -337,6 +407,7 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 		iniconf.Set("session::domain", fmt.Sprint(BConfig.Session.Domain))
 		AppConfig.Session.Domain = BConfig.Session.Domain
 	}
+
 	if AppConfig.Log.Level = logLevelInt(iniconf.String("log::level")); AppConfig.Log.Level == -10 {
 		iniconf.Set("log::level", logLevelString(BConfig.Log.Level))
 		AppConfig.Log.Level = BConfig.Log.Level

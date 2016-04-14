@@ -218,6 +218,8 @@ func ResetRealRoute() {
 	defer func() {
 		// 创建静态路由
 		staticRoute()
+		// 强制注册路由
+		registerMustRouter()
 	}()
 
 	// 创建动态路由
@@ -227,12 +229,19 @@ func ResetRealRoute() {
 	DefLessgo.Echo.BeforeUse(getMiddlewares(beforeMiddlewares)...)
 	DefLessgo.Echo.AfterUse(getMiddlewares(afterMiddlewares)...)
 	group := DefLessgo.Echo.Group(
-		DefLessgo.VirtRouter.VirtHandler().Prefix(),
+		DefLessgo.VirtRouter.Prefix(),
 		getMiddlewares(DefLessgo.VirtRouter.Middleware())...,
 	)
 	for _, child := range DefLessgo.VirtRouter.Children() {
 		child.route(group)
 	}
+}
+
+/*
+ * 虚拟路由列表
+ */
+func VirtRouterList() []*VirtRouter {
+	return DefLessgo.VirtRouter.Progeny()
 }
 
 /*
@@ -246,6 +255,7 @@ var (
 		"自动匹配home页面",
 		"运行时请求日志",
 		"异常恢复",
+		"跨域",
 	}
 	afterMiddlewares = []string{}
 )
@@ -304,4 +314,39 @@ func Match(methods []string, prefix, name string, descHandlerOrhandler interface
 		DefLessgo.logger.Error("The method can not be empty: %v", name)
 	}
 	return route(methods, prefix, name, descHandlerOrhandler, middleware)
+}
+
+/*
+ * 强制注册真实路由
+ */
+
+var (
+	mustRealRouterMap  = map[string]*MustRealRouter{}
+	mustRealRouterLock sync.Mutex
+)
+
+type MustRealRouter struct {
+	Path       string
+	Methods    []string
+	Handler    HandlerFunc
+	Middleware []MiddlewareFunc
+}
+
+func MustRouter(path string, methods []string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	mustRealRouterLock.Lock()
+	mustRealRouterMap[path] = &MustRealRouter{
+		Path:       path,
+		Methods:    methods,
+		Handler:    handler,
+		Middleware: middleware,
+	}
+	mustRealRouterLock.Unlock()
+}
+
+func registerMustRouter() {
+	mustRealRouterLock.Lock()
+	for _, rr := range mustRealRouterMap {
+		DefLessgo.Echo.Match(rr.Methods, rr.Path, rr.Handler, rr.Middleware...)
+	}
+	mustRealRouterLock.Unlock()
 }

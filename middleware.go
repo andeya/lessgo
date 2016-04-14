@@ -71,6 +71,7 @@ func init() {
 	RegMiddleware("自动匹配home页面", "", CheckHome())
 	RegMiddleware("运行时请求日志", "", RequestLogger())
 	RegMiddleware("异常恢复", "", Recover())
+	RegMiddleware("跨域", "是否允许跨域访问", CrossDomain)
 }
 
 // 检查服务器是否启用
@@ -205,4 +206,11 @@ func RecoverWithConfig(config RecoverConfig) MiddlewareFunc {
 			return next(c)
 		}
 	}
+}
+
+func CrossDomain(c Context) error {
+	if AppConfig.CrossDomain {
+		c.Response().Header().Set("Access-Control-Allow-Origin", "*")
+	}
+	return nil
 }

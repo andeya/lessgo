@@ -74,7 +74,7 @@ func (s *SerialRouter) virtRouterTree() (*VirtRouter, error) {
 		children:    []*VirtRouter{},
 		enable:      s.Enable,
 		middleware:  s.Middleware,
-		virtHandler: vh,
+		VirtHandler: vh,
 	}
 	for _, id := range s.Children {
 		child, ok := getSerialRouterMap(id)
@@ -87,6 +87,7 @@ func (s *SerialRouter) virtRouterTree() (*VirtRouter, error) {
 		}
 		cvr.SetParent(vr)
 	}
+	vr.reset()
 	return vr, nil
 }
 
