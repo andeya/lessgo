@@ -50,6 +50,7 @@ var DefLessgo = func() *lessgo {
 	registerAppConfig()
 	registerDBConfig()
 	registerMime()
+	registerStaticRoute()
 	l := &lessgo{
 		Echo:         New(),
 		AppConfig:    AppConfig,

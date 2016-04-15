@@ -13,13 +13,9 @@ import (
 )
 
 // 注册固定的静态文件与目录
-func staticRoute() {
+func registerStaticRoute() {
 	StaticBaseRouter("/uploads", UPLOADS_DIR, autoHTMLSuffix())
 	StaticBaseRouter("/static", STATIC_DIR, filterTemplate(), autoHTMLSuffix())
-	StaticBaseRouter("/static/img", IMG_DIR)
-	StaticBaseRouter("/static/js", JS_DIR)
-	StaticBaseRouter("/static/css", CSS_DIR)
-	StaticBaseRouter("/static/plugin", PLUGIN_DIR)
 	StaticBaseRouter("/bus", BUSINESS_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
 	StaticBaseRouter("/sys", SYSTEM_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
 
