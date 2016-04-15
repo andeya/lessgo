@@ -22,7 +22,7 @@ import (
 )
 
 type (
-	Lessgo struct {
+	lessgo struct {
 		*Echo
 		AppConfig    *Config
 		home         string // 根路径"/"对应的url
@@ -45,12 +45,12 @@ const (
 )
 
 // 初始化全局Lessgo实例
-var DefLessgo = func() *Lessgo {
+var DefLessgo = func() *lessgo {
 	printInfo()
 	registerAppConfig()
 	registerDBConfig()
 	registerMime()
-	l := &Lessgo{
+	l := &lessgo{
 		Echo:         New(),
 		AppConfig:    AppConfig,
 		home:         "/",
@@ -79,6 +79,13 @@ var DefLessgo = func() *Lessgo {
 	l.DBAccess = newDBAccess()
 	return l
 }()
+
+/*
+ * 获取lessgo全局实例
+ */
+func Lessgo() *lessgo {
+	return DefLessgo
+}
 
 /*
  * 设置主页
@@ -196,48 +203,6 @@ func Logger() logs.Logger {
 }
 
 /*
- * 重建真实路由
- */
-func ResetRealRoute() {
-	if err := middlewareCheck(beforeMiddlewares); err != nil {
-		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
-		return
-	}
-	if err := middlewareCheck(afterMiddlewares); err != nil {
-		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
-		return
-	}
-	if err := middlewareCheck(DefLessgo.VirtRouter.AllMiddleware()); err != nil {
-		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
-		return
-	}
-
-	DefLessgo.Echo.lock.Lock()
-	defer DefLessgo.Echo.lock.Unlock()
-
-	defer func() {
-		// 创建静态路由
-		staticRoute()
-		// 强制注册路由
-		registerMustRouter()
-	}()
-
-	// 创建动态路由
-	DefLessgo.Echo.router = NewRouter(DefLessgo.Echo)
-	DefLessgo.Echo.middleware = []MiddlewareFunc{DefLessgo.Echo.router.Process}
-	DefLessgo.Echo.head = DefLessgo.Echo.pristineHead
-	DefLessgo.Echo.BeforeUse(getMiddlewares(beforeMiddlewares)...)
-	DefLessgo.Echo.AfterUse(getMiddlewares(afterMiddlewares)...)
-	group := DefLessgo.Echo.Group(
-		DefLessgo.VirtRouter.Prefix(),
-		getMiddlewares(DefLessgo.VirtRouter.Middleware())...,
-	)
-	for _, child := range DefLessgo.VirtRouter.Children() {
-		child.route(group)
-	}
-}
-
-/*
  * 虚拟路由列表
  */
 func VirtRouterList() []*VirtRouter {
@@ -317,36 +282,76 @@ func Match(methods []string, prefix, name string, descHandlerOrhandler interface
 }
 
 /*
- * 强制注册真实路由
+ * 强制注册基础路由
  */
 
-var (
-	mustRealRouterMap  = map[string]*MustRealRouter{}
-	mustRealRouterLock sync.Mutex
-)
-
-type MustRealRouter struct {
-	Path       string
-	Methods    []string
-	Handler    HandlerFunc
-	Middleware []MiddlewareFunc
-}
-
-func MustRouter(path string, methods []string, handler HandlerFunc, middleware ...MiddlewareFunc) {
-	mustRealRouterLock.Lock()
-	mustRealRouterMap[path] = &MustRealRouter{
+func BaseRouter(path string, methods []string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	baseRouterLock.Lock()
+	baseRouterMap[path] = &baseRouter{
 		Path:       path,
 		Methods:    methods,
 		Handler:    handler,
 		Middleware: middleware,
 	}
-	mustRealRouterLock.Unlock()
+	baseRouterLock.Unlock()
 }
 
-func registerMustRouter() {
-	mustRealRouterLock.Lock()
-	for _, rr := range mustRealRouterMap {
-		DefLessgo.Echo.Match(rr.Methods, rr.Path, rr.Handler, rr.Middleware...)
+func StaticBaseRouter(prefix, root string, middleware ...MiddlewareFunc) {
+	baseRouterLock.Lock()
+	staticBaseRouterMap[prefix] = &staticBaseRouter{
+		Prefix:     prefix,
+		Root:       root,
+		Middleware: middleware,
 	}
-	mustRealRouterLock.Unlock()
+	baseRouterLock.Unlock()
+}
+
+func FileBaseRouter(path, file string, middleware ...MiddlewareFunc) {
+	baseRouterLock.Lock()
+	fileBaseRouterMap[path] = &fileBaseRouter{
+		Path:       path,
+		File:       file,
+		Middleware: middleware,
+	}
+	baseRouterLock.Unlock()
+}
+
+/*
+ * 重建真实路由
+ */
+func ResetRealRoute() {
+	if err := middlewareCheck(beforeMiddlewares); err != nil {
+		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
+		return
+	}
+	if err := middlewareCheck(afterMiddlewares); err != nil {
+		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
+		return
+	}
+	if err := middlewareCheck(DefLessgo.VirtRouter.AllMiddleware()); err != nil {
+		DefLessgo.Logger().Error("Create/Recreate the router is faulty: %v", err)
+		return
+	}
+
+	DefLessgo.Echo.lock.Lock()
+	defer DefLessgo.Echo.lock.Unlock()
+
+	defer func() {
+		// 强制注册基础路由
+		registerBaseRouter()
+	}()
+
+	// 创建动态路由
+	DefLessgo.Echo.router = NewRouter(DefLessgo.Echo)
+	DefLessgo.Echo.middleware = []MiddlewareFunc{DefLessgo.Echo.router.Process}
+	DefLessgo.Echo.head = DefLessgo.Echo.pristineHead
+	DefLessgo.Echo.BeforeUse(getMiddlewares(beforeMiddlewares)...)
+	DefLessgo.Echo.AfterUse(getMiddlewares(afterMiddlewares)...)
+	group := DefLessgo.Echo.Group(
+		DefLessgo.VirtRouter.Prefix(),
+		getMiddlewares(DefLessgo.VirtRouter.Middleware())...,
+	)
+	for _, child := range DefLessgo.VirtRouter.Children() {
+		child.route(group)
+	}
 }

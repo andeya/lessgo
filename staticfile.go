@@ -14,15 +14,16 @@ import (
 
 // 注册固定的静态文件与目录
 func staticRoute() {
-	DefLessgo.Echo.File("/favicon.ico", IMG_DIR+"/favicon.ico")
-	DefLessgo.Echo.Static("/uploads", UPLOADS_DIR, autoHTMLSuffix())
-	DefLessgo.Echo.Static("/static", STATIC_DIR, filterTemplate(), autoHTMLSuffix())
-	DefLessgo.Echo.Static("/static/img", IMG_DIR)
-	DefLessgo.Echo.Static("/static/js", JS_DIR)
-	DefLessgo.Echo.Static("/static/css", CSS_DIR)
-	DefLessgo.Echo.Static("/static/plugin", PLUGIN_DIR)
-	DefLessgo.Echo.Static("/business", BUSINESS_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
-	DefLessgo.Echo.Static("/system", SYSTEM_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
+	StaticBaseRouter("/uploads", UPLOADS_DIR, autoHTMLSuffix())
+	StaticBaseRouter("/static", STATIC_DIR, filterTemplate(), autoHTMLSuffix())
+	StaticBaseRouter("/static/img", IMG_DIR)
+	StaticBaseRouter("/static/js", JS_DIR)
+	StaticBaseRouter("/static/css", CSS_DIR)
+	StaticBaseRouter("/static/plugin", PLUGIN_DIR)
+	StaticBaseRouter("/bus", BUSINESS_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
+	StaticBaseRouter("/sys", SYSTEM_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
+
+	FileBaseRouter("/favicon.ico", IMG_DIR+"/favicon.ico")
 }
 
 func filterTemplate() MiddlewareFunc {
