@@ -4,13 +4,12 @@
 Regester(name, description handlePattern string, method []string, handleOrMiddleware ...Handler):
 
 说明：
-注册一个原子操作，
-可以任意指定中间件，
-name @操作名称
-description @操作描述
-method @方法列表
-handlePattern @操作名+匹配参数
-handleOrMiddleware @操作和中间件均实现Handler接口，根据传入顺序不同，执行顺序也不同
+注册一个原子操作，可以任意指定中间件：
+* name @操作名称
+* description @操作描述
+* method @方法列表
+* handlePattern @操作名+匹配参数
+* handleOrMiddleware @操作和中间件均实现Handler接口，根据传入顺序不同，执行顺序也不同
 
 实现：
 通过Caller()获取函数所在路径 p，
