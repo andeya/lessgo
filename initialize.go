@@ -54,7 +54,7 @@ func newLessgo() *lessgo {
 	// 设置上传文件允许的最大尺寸
 	engine.MaxMemory = AppConfig.MaxMemoryMB * MB
 	// 配置数据库
-	l.dbService = newDBService()
+	l.dbService = registerDBService()
 	return l
 }
 
@@ -156,7 +156,8 @@ func registerPreUse() {
 // 注册固定的路由后缀中间件
 func registerSufUse() {}
 
-func newDBService() *dbservice.DBService {
+// 注册数据库服务
+func registerDBService() *dbservice.DBService {
 	dbService := &dbservice.DBService{
 		List: map[string]*xorm.Engine{},
 	}
