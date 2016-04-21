@@ -599,6 +599,8 @@ func WrapMiddleware(h interface{}) MiddlewareFunc {
 	switch t := h.(type) {
 	case MiddlewareFunc:
 		return t
+	case func(HandlerFunc) HandlerFunc:
+		return MiddlewareFunc(t)
 	case HandlerFunc:
 		x = t
 	case func(Context) error:
