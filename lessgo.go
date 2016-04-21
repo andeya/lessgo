@@ -145,35 +145,31 @@ func Run(server NewServer, listener ...net.Listener) {
 }
 
 /*
- * 获取默认数据库引擎
+ * 数据库引擎
  */
+
+// 获取默认数据库引擎
 func DefaultDB() *xorm.Engine {
 	return DefLessgo.DBAccess.DefaultDB()
 }
 
-/*
- * 获取全部数据库引擎列表
- */
+// 获取全部数据库引擎列表
 func DBList() map[string]*xorm.Engine {
 	return DefLessgo.DBAccess.DBList()
 }
 
-/*
- * 设置默认数据库引擎
- */
+// 设置默认数据库引擎
 func SetDefaultDB(name string) error {
 	return DefLessgo.DBAccess.SetDefaultDB(name)
 }
 
-/*
- * 获取指定数据库引擎
- */
+// 获取指定数据库引擎
 func GetDB(name string) (*xorm.Engine, bool) {
 	return DefLessgo.DBAccess.GetDB(name)
 }
 
 /*
- * 返回打印实例
+ * 打印实例
  */
 func Logger() logs.Logger {
 	return DefLessgo.app.Logger()
