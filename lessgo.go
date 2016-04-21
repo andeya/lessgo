@@ -26,7 +26,7 @@ type (
 	lessgo struct {
 		app       *Echo
 		AppConfig *Config
-		DBAccess  *dbservice.DBAccess
+		dbService *dbservice.DBService
 
 		VirtRouter      *VirtRouter              //虚拟路由
 		virtMiddlewares map[string]MiddlewareObj //登记虚拟中间件
@@ -150,22 +150,12 @@ func Run(server NewServer, listener ...net.Listener) {
 
 // 获取默认数据库引擎
 func DefaultDB() *xorm.Engine {
-	return DefLessgo.DBAccess.DefaultDB()
-}
-
-// 获取全部数据库引擎列表
-func DBList() map[string]*xorm.Engine {
-	return DefLessgo.DBAccess.DBList()
-}
-
-// 设置默认数据库引擎
-func SetDefaultDB(name string) error {
-	return DefLessgo.DBAccess.SetDefaultDB(name)
+	return DefLessgo.dbService.DefaultDB()
 }
 
 // 获取指定数据库引擎
 func GetDB(name string) (*xorm.Engine, bool) {
-	return DefLessgo.DBAccess.GetDB(name)
+	return DefLessgo.dbService.GetDB(name)
 }
 
 /*
@@ -246,7 +236,7 @@ func ReregisterRouter() {
 	registerVirtRouter()
 	registerPreUse()
 	registerSufUse()
-	registerStaticRoute()
+	registerStaticRouter()
 }
 
 /*

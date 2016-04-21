@@ -1,5 +1,5 @@
 /**
- * 使用xorm数据库访问单元
+ * 使用xorm数据库服务
  */
 package dbservice
 
@@ -15,10 +15,10 @@ import (
 )
 
 /**
- * DBAccess 数据库访问管理
+ * DBService 数据库服务
  */
 type (
-	DBAccess struct {
+	DBService struct {
 		Default *xorm.Engine
 		List    map[string]*xorm.Engine
 	}
@@ -27,21 +27,21 @@ type (
 /**
  * 获取默认数据库引擎
  */
-func (d *DBAccess) DefaultDB() *xorm.Engine {
+func (d *DBService) DefaultDB() *xorm.Engine {
 	return d.Default
 }
 
 /**
  * 获取全部数据库引擎列表
  */
-func (d *DBAccess) DBList() map[string]*xorm.Engine {
+func (d *DBService) DBList() map[string]*xorm.Engine {
 	return d.List
 }
 
 /**
  * 设置默认数据库引擎
  */
-func (d *DBAccess) SetDefaultDB(name string) error {
+func (d *DBService) SetDefaultDB(name string) error {
 	engine, ok := d.List[name]
 	if !ok {
 		return fmt.Errorf("Specified database does not exist: %v.", name)
@@ -53,7 +53,7 @@ func (d *DBAccess) SetDefaultDB(name string) error {
 /**
  * 获取指定数据库引擎
  */
-func (d *DBAccess) GetDB(name string) (*xorm.Engine, bool) {
+func (d *DBService) GetDB(name string) (*xorm.Engine, bool) {
 	engine, ok := d.List[name]
 	return engine, ok
 }

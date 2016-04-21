@@ -54,7 +54,7 @@ func newLessgo() *lessgo {
 	// 设置上传文件允许的最大尺寸
 	engine.MaxMemory = AppConfig.MaxMemoryMB * MB
 	// 配置数据库
-	l.DBAccess = newDBAccess()
+	l.dbService = newDBService()
 	return l
 }
 
@@ -133,7 +133,7 @@ func registerSession() (err error) {
 }
 
 // 注册固定的静态文件与目录
-func registerStaticRoute() {
+func registerStaticRouter() {
 	DefLessgo.app.Static("/uploads", UPLOADS_DIR, autoHTMLSuffix())
 	DefLessgo.app.Static("/static", STATIC_DIR, filterTemplate(), autoHTMLSuffix())
 	DefLessgo.app.Static("/bus", BUSINESS_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
@@ -156,8 +156,8 @@ func registerPreUse() {
 // 注册固定的路由后缀中间件
 func registerSufUse() {}
 
-func newDBAccess() *dbservice.DBAccess {
-	access := &dbservice.DBAccess{
+func newDBService() *dbservice.DBService {
+	dbService := &dbservice.DBService{
 		List: map[string]*xorm.Engine{},
 	}
 	for _, conf := range AppConfig.DBList {
@@ -200,12 +200,12 @@ func newDBAccess() *dbservice.DBAccess {
 			}
 		}
 
-		access.List[conf.Name] = engine
+		dbService.List[conf.Name] = engine
 		if AppConfig.DefaultDB == conf.Name {
-			access.Default = engine
+			dbService.Default = engine
 		}
 	}
-	return access
+	return dbService
 }
 
 func checkHooks(err error) {
