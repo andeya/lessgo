@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/lessgo/lessgo/logs"
@@ -18,32 +20,10 @@ type MiddlewareObj struct {
 	MiddlewareFunc
 }
 
-// 登记全局中间件
-var middlewareMap = map[string]MiddlewareObj{}
-
-// 必须在init()中调用
-func RegMiddleware(name, description string, middleware interface{}) error {
-	if _, ok := middlewareMap[name]; ok {
-		err := fmt.Errorf("RegisterMiddlewareFunc called twice for middleware %v.", name)
-		DefLessgo.Logger().Error("%v", err)
-		return err
-	}
-	middlewareMap[name] = MiddlewareObj{
-		Name:           name,
-		Description:    description,
-		MiddlewareFunc: WrapMiddleware(middleware),
-	}
-	return nil
-}
-
-func MiddlewareMap() map[string]MiddlewareObj {
-	return middlewareMap
-}
-
 func middlewareCheck(middlewareNames []string) error {
 	var errstring string
 	for _, m := range middlewareNames {
-		_, ok := middlewareMap[m]
+		_, ok := DefLessgo.virtMiddlewares[m]
 		if !ok {
 			errstring += " \"" + m + "\""
 		}
@@ -57,7 +37,7 @@ func middlewareCheck(middlewareNames []string) error {
 func getMiddlewares(names []string) []MiddlewareFunc {
 	mws := make([]MiddlewareFunc, len(names))
 	for i, mw := range names {
-		mws[i] = middlewareMap[mw].MiddlewareFunc
+		mws[i] = DefLessgo.virtMiddlewares[mw].MiddlewareFunc
 	}
 	return mws
 }
@@ -65,14 +45,6 @@ func getMiddlewares(names []string) []MiddlewareFunc {
 /*
  * system middleware
  */
-
-func init() {
-	RegMiddleware("检查网站是否开启", "", CheckServer())
-	RegMiddleware("自动匹配home页面", "", CheckHome())
-	RegMiddleware("运行时请求日志", "", RequestLogger())
-	RegMiddleware("异常恢复", "", Recover())
-	RegMiddleware("跨域", "是否允许跨域访问", CrossDomain)
-}
 
 // 检查服务器是否启用
 func CheckServer() MiddlewareFunc {
@@ -213,4 +185,32 @@ func CrossDomain(c Context) error {
 		c.Response().Header().Set("Access-Control-Allow-Origin", "*")
 	}
 	return nil
+}
+
+func filterTemplate() MiddlewareFunc {
+	return func(next HandlerFunc) HandlerFunc {
+		return func(c Context) (err error) {
+			ext := path.Ext(c.Request().URL().Path())
+			if len(ext) >= 4 && ext[:4] == TPL_EXT {
+				return c.NoContent(http.StatusForbidden)
+			}
+			return next(c)
+		}
+	}
+}
+
+func autoHTMLSuffix() MiddlewareFunc {
+	return func(next HandlerFunc) HandlerFunc {
+		return func(c Context) (err error) {
+			p := c.Request().URL().Path()
+			if p[len(p)-1] != '/' {
+				ext := path.Ext(p)
+				if ext == "" || ext[0] != '.' {
+					c.Request().URL().SetPath(strings.TrimSuffix(p, ext) + STATIC_HTML_EXT + ext)
+					c.ParamValues()[0] += STATIC_HTML_EXT
+				}
+			}
+			return next(c)
+		}
+	}
 }

@@ -8,7 +8,6 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -25,10 +24,10 @@ type (
 	Context interface {
 		netContext.Context
 
-		// NetContext returns `http://blogs.golang.org/context.Context` interface.
+		// NetContext returns `http://blog.golang.org/context.Context` interface.
 		NetContext() netContext.Context
 
-		// SetNetContext sets `http://blogs.golang.org/context.Context` interface.
+		// SetNetContext sets `http://blog.golang.org/context.Context` interface.
 		SetNetContext(netContext.Context)
 
 		// Request returns `engine.Request` interface.
@@ -40,6 +39,9 @@ type (
 		// Path returns the registered path for the handler.
 		Path() string
 
+		// SetPath sets the registered path for the handler.
+		SetPath(string)
+
 		// P returns path parameter by index.
 		P(int) string
 
@@ -49,11 +51,20 @@ type (
 		// ParamNames returns path parameter names.
 		ParamNames() []string
 
+		// SetParamNames sets path parameter names.
+		SetParamNames(...string)
+
+		// ParamValues returns path parameter values.
+		ParamValues() []string
+
+		// SetParamValues sets path parameter values.
+		SetParamValues(...string)
+
 		// QueryParam returns the query param for the provided name. It is an alias
 		// for `engine.URL#QueryParam()`.
 		QueryParam(string) string
 
-		// QueryParam returns the query parameters as map. It is an alias for `engine.URL#QueryParams()`.
+		// QueryParams returns the query parameters as map. It is an alias for `engine.URL#QueryParams()`.
 		QueryParams() map[string][]string
 
 		// FormValue returns the form field value for the provided name. It is an
@@ -76,8 +87,11 @@ type (
 		// Set saves data in the context.
 		Set(string, interface{})
 
-		// Bind binds the request body into provided type `i`. The default binder does
-		// it based on Content-Type header.
+		// Del data from the context
+		Del(string)
+
+		// Bind binds the request body into provided type `i`. The default binder
+		// does it based on Content-Type header.
 		Bind(interface{}) error
 
 		// Render renders a template with data and sends a text/html response with status
@@ -122,8 +136,11 @@ type (
 		// Error invokes the registered HTTP error handler. Generally used by middleware.
 		Error(err error)
 
-		// Handler implements `Handler` interface.
-		Handle(Context) error
+		// Handler returns the matched handler by router.
+		Handler() HandlerFunc
+
+		// SetHandler sets the matched handler by router.
+		SetHandler(HandlerFunc)
 
 		// Logger returns the `Logger` instance.
 		Logger() logs.Logger
@@ -135,9 +152,6 @@ type (
 		// via `If-Modified-Since` request header. It automatically sets `Content-Type`
 		// and `Last-Modified` response headers.
 		ServeContent(io.ReadSeeker, string, time.Time) error
-
-		// Object returns the `context` instance.
-		Object() *context
 
 		// Reset resets the context after request completes. It must be called along
 		// with `Echo#GetContext()` and `Echo#PutContext()`. See `Echo#ServeHTTP()`
@@ -151,7 +165,6 @@ type (
 		path       string
 		pnames     []string
 		pvalues    []string
-		query      url.Values
 		store      store
 		handler    HandlerFunc
 		echo       *Echo
@@ -164,17 +177,7 @@ const (
 	indexPage = "index.html"
 )
 
-// NewContext creates a Context object.
-func NewContext(rq engine.Request, rs engine.Response, e *Echo) Context {
-	return &context{
-		request:  rq,
-		response: rs,
-		echo:     e,
-		pvalues:  make([]string, *e.maxParam),
-		store:    make(store),
-		handler:  notFoundHandler,
-	}
-}
+var _ Context = new(context)
 
 func (c *context) NetContext() netContext.Context {
 	return c.netContext
@@ -200,10 +203,6 @@ func (c *context) Value(key interface{}) interface{} {
 	return c.netContext.Value(key)
 }
 
-func (c *context) Handle(ctx Context) error {
-	return c.handler(ctx)
-}
-
 func (c *context) Request() engine.Request {
 	return c.request
 }
@@ -214,6 +213,10 @@ func (c *context) Response() engine.Response {
 
 func (c *context) Path() string {
 	return c.path
+}
+
+func (c *context) SetPath(p string) {
+	c.path = p
 }
 
 func (c *context) P(i int) (value string) {
@@ -237,6 +240,18 @@ func (c *context) Param(name string) (value string) {
 
 func (c *context) ParamNames() []string {
 	return c.pnames
+}
+
+func (c *context) SetParamNames(names ...string) {
+	c.pnames = names
+}
+
+func (c *context) ParamValues() []string {
+	return c.pvalues
+}
+
+func (c *context) SetParamValues(values ...string) {
+	c.pvalues = values
 }
 
 func (c *context) QueryParam(name string) string {
@@ -272,6 +287,10 @@ func (c *context) Set(key string, val interface{}) {
 
 func (c *context) Get(key string) interface{} {
 	return c.store[key]
+}
+
+func (c *context) Del(key string) {
+	delete(c.store, key)
 }
 
 func (c *context) Bind(i interface{}) error {
@@ -390,7 +409,7 @@ func (c *context) File(file string) error {
 }
 
 func (c *context) Attachment(r io.ReadSeeker, name string) (err error) {
-	c.response.Header().Set(HeaderContentType, HeaderContentTypeByExtension(name))
+	c.response.Header().Set(HeaderContentType, ContentTypeByExtension(name))
 	c.response.Header().Set(HeaderContentDisposition, "attachment; filename="+name)
 	c.response.WriteHeader(http.StatusOK)
 	_, err = io.Copy(c.response, r)
@@ -419,12 +438,16 @@ func (c *context) Echo() *Echo {
 	return c.echo
 }
 
-func (c *context) Logger() logs.Logger {
-	return c.echo.logger
+func (c *context) Handler() HandlerFunc {
+	return c.handler
 }
 
-func (c *context) Object() *context {
-	return c
+func (c *context) SetHandler(h HandlerFunc) {
+	c.handler = h
+}
+
+func (c *context) Logger() logs.Logger {
+	return c.echo.logger
 }
 
 func (c *context) ServeContent(content io.ReadSeeker, name string, modtime time.Time) error {
@@ -437,17 +460,17 @@ func (c *context) ServeContent(content io.ReadSeeker, name string, modtime time.
 		return c.NoContent(http.StatusNotModified)
 	}
 
-	rs.Header().Set(HeaderContentType, HeaderContentTypeByExtension(name))
+	rs.Header().Set(HeaderContentType, ContentTypeByExtension(name))
 	rs.Header().Set(HeaderLastModified, modtime.UTC().Format(http.TimeFormat))
 	rs.WriteHeader(http.StatusOK)
 	_, err := io.Copy(rs, content)
 	return err
 }
 
-// HeaderContentTypeByExtension returns the MIME type associated with the file based on
+// ContentTypeByExtension returns the MIME type associated with the file based on
 // its extension. It returns `application/octet-stream` incase MIME type is not
 // found.
-func HeaderContentTypeByExtension(name string) (t string) {
+func ContentTypeByExtension(name string) (t string) {
 	if t = mime.TypeByExtension(filepath.Ext(name)); t == "" {
 		t = MIMEOctetStream
 	}
@@ -458,7 +481,6 @@ func (c *context) Reset(rq engine.Request, rs engine.Response) {
 	c.netContext = nil
 	c.request = rq
 	c.response = rs
-	c.query = nil
 	c.store = make(store)
 	c.handler = notFoundHandler
 	c.pvalues = make([]string, *c.echo.maxParam)

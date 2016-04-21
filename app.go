@@ -197,7 +197,7 @@ func New() (e *Echo) {
 		caseSensitive: true,
 	}
 	e.pool.New = func() interface{} {
-		return NewContext(nil, nil, e)
+		return e.NewContext(nil, nil)
 	}
 	e.router = NewRouter(e)
 	e.middleware = []MiddlewareFunc{e.router.Process}
@@ -209,6 +209,18 @@ func New() (e *Echo) {
 	e.logger.AddAdapter("file", `{"filename":"Logger/lessgo.log"}`)
 	e.SetDebug(true)
 	return
+}
+
+// NewContext returns a Context instance.
+func (e *Echo) NewContext(rq engine.Request, rs engine.Response) Context {
+	return &context{
+		request:  rq,
+		response: rs,
+		echo:     e,
+		pvalues:  make([]string, *e.maxParam),
+		store:    make(store),
+		handler:  notFoundHandler,
+	}
 }
 
 // Router returns router.

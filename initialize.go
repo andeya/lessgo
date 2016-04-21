@@ -6,25 +6,66 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-xorm/core"
 	"github.com/go-xorm/xorm"
 
 	"github.com/lessgo/lessgo/config"
 	"github.com/lessgo/lessgo/dbservice"
+	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
 )
+
+func newLessgo() *lessgo {
+	printInfo()
+	registerAppConfig()
+	registerDBConfig()
+	registerMime()
+
+	l := &lessgo{
+		app:             New(),
+		AppConfig:       AppConfig,
+		home:            "/",
+		serverEnable:    true,
+		virtMiddlewares: map[string]MiddlewareObj{},
+		virtBefore:      []string{},
+		virtAfter:       []string{},
+	}
+
+	// 初始化全局虚拟路由
+	l.VirtRouter, _ = NewVirtRouterRoot()
+	// 初始化日志
+	l.app.Logger().SetMsgChan(AppConfig.Log.AsyncChan)
+	l.app.SetLogLevel(AppConfig.Log.Level)
+	// 设置运行模式
+	l.app.SetDebug(AppConfig.Debug)
+	// 设置静态资源缓存
+	l.app.SetMemoryCache(NewMemoryCache(
+		AppConfig.FileCache.SingleFileAllowMB*MB,
+		AppConfig.FileCache.MaxCapMB*MB,
+		time.Duration(AppConfig.FileCache.CacheSecond)*time.Second),
+	)
+	// 设置渲染接口
+	l.app.SetRenderer(NewPongo2Render(AppConfig.Debug))
+	// 设置大小写敏感
+	l.app.SetCaseSensitive(AppConfig.RouterCaseSensitive)
+	// 设置上传文件允许的最大尺寸
+	engine.MaxMemory = AppConfig.MaxMemoryMB * MB
+	// 配置数据库
+	l.DBAccess = newDBAccess()
+	return l
+}
 
 func printInfo() {
 	fmt.Printf(">%s %s (%s)\n", NAME, VERSION, ADDRESS)
 }
 
-func registerMime() error {
+func registerMime() {
 	for k, v := range mimemaps {
 		mime.AddExtensionType(k, v)
 	}
-	return nil
 }
 
 func registerAppConfig() (err error) {
@@ -65,17 +106,6 @@ func registerDBConfig() (err error) {
 	return appconf.SaveConfigFile(fname)
 }
 
-func registerRouter() error {
-	// 从数据读取动态配置
-
-	// 与源码配置进行同步
-
-	// 创建真实路由
-	ResetRealRoute()
-
-	return nil
-}
-
 func registerSession() (err error) {
 	if !AppConfig.Session.Enable {
 		return
@@ -102,12 +132,29 @@ func registerSession() (err error) {
 	return
 }
 
-func checkHooks(err error) {
-	if err == nil {
-		return
-	}
-	DefLessgo.Echo.Logger().Fatal("%v", err)
+// 注册固定的静态文件与目录
+func registerStaticRoute() {
+	DefLessgo.app.Static("/uploads", UPLOADS_DIR, autoHTMLSuffix())
+	DefLessgo.app.Static("/static", STATIC_DIR, filterTemplate(), autoHTMLSuffix())
+	DefLessgo.app.Static("/bus", BUSINESS_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
+	DefLessgo.app.Static("/sys", SYSTEM_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
+
+	DefLessgo.app.File("/favicon.ico", IMG_DIR+"/favicon.ico")
 }
+
+// 注册固定的路由前缀中间件
+func registerPreUse() {
+	DefLessgo.app.PreUse(
+		CheckServer(),
+		CheckHome(),
+		RequestLogger(),
+		Recover(),
+		WrapMiddleware(CrossDomain),
+	)
+}
+
+// 注册固定的路由后缀中间件
+func registerSufUse() {}
 
 func newDBAccess() *dbservice.DBAccess {
 	access := &dbservice.DBAccess{
@@ -159,4 +206,11 @@ func newDBAccess() *dbservice.DBAccess {
 		}
 	}
 	return access
+}
+
+func checkHooks(err error) {
+	if err == nil {
+		return
+	}
+	DefLessgo.app.Logger().Fatal("%v", err)
 }

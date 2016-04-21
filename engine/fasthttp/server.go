@@ -36,7 +36,7 @@ func New(addr string) engine.Server {
 	return WithConfig(c)
 }
 
-// WithTLS returns an instance of `fasthttp.Server` from TLS config.
+// WithTLS returns `Server` instance with provided TLS config.
 func WithTLS(addr, certfile, keyfile string) engine.Server {
 	c := engine.Config{
 		Address:     addr,
@@ -46,7 +46,7 @@ func WithTLS(addr, certfile, keyfile string) engine.Server {
 	return WithConfig(c)
 }
 
-// WithConfig returns an instance of `standard.Server` from config.
+// WithConfig returns `Server` instance with provided config.
 func WithConfig(c engine.Config) engine.Server {
 	var s *Server
 	s = &Server{

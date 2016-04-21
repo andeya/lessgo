@@ -391,3 +391,38 @@ func route(methods []string, prefix, name string, descHandlerOrhandler interface
 	// 生成虚拟路由操作
 	return NewVirtRouterHandler(name, virtHandler).ResetUse(middleware)
 }
+
+// 从数据库同步虚拟路由
+func syncVirtRouter() error {
+
+	return nil
+}
+
+func registerVirtRouter() {
+	if err := middlewareCheck(DefLessgo.virtBefore); err != nil {
+		Logger().Error("Create/Recreate the router is faulty: %v", err)
+		return
+	}
+	if err := middlewareCheck(DefLessgo.virtAfter); err != nil {
+		Logger().Error("Create/Recreate the router is faulty: %v", err)
+		return
+	}
+	if err := middlewareCheck(DefLessgo.VirtRouter.AllMiddleware()); err != nil {
+		Logger().Error("Create/Recreate the router is faulty: %v", err)
+		return
+	}
+
+	// 从虚拟路由创建真实路由
+	DefLessgo.app.router = NewRouter(DefLessgo.app)
+	DefLessgo.app.middleware = []MiddlewareFunc{DefLessgo.app.router.Process}
+	DefLessgo.app.head = DefLessgo.app.pristineHead
+	DefLessgo.app.BeforeUse(getMiddlewares(DefLessgo.virtBefore)...)
+	DefLessgo.app.AfterUse(getMiddlewares(DefLessgo.virtAfter)...)
+	group := DefLessgo.app.Group(
+		DefLessgo.VirtRouter.Prefix(),
+		getMiddlewares(DefLessgo.VirtRouter.Middleware())...,
+	)
+	for _, child := range DefLessgo.VirtRouter.Children() {
+		child.route(group)
+	}
+}

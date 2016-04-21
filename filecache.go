@@ -3,50 +3,10 @@ package lessgo
 import (
 	"bytes"
 	"io"
-	"net/http"
 	"os"
-	"path"
-	"strings"
 	"sync"
 	"time"
-	// "github.com/lessgo/lessgo/utils"
 )
-
-// 注册固定的静态文件与目录
-func registerStaticRoute() {
-	StaticBaseRouter("/uploads", UPLOADS_DIR, autoHTMLSuffix())
-	StaticBaseRouter("/static", STATIC_DIR, filterTemplate(), autoHTMLSuffix())
-	StaticBaseRouter("/bus", BUSINESS_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
-	StaticBaseRouter("/sys", SYSTEM_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
-
-	FileBaseRouter("/favicon.ico", IMG_DIR+"/favicon.ico")
-}
-
-func filterTemplate() MiddlewareFunc {
-	return func(next HandlerFunc) HandlerFunc {
-		return func(c Context) (err error) {
-			ext := path.Ext(c.Request().URL().Path())
-			if len(ext) >= 4 && ext[:4] == TPL_EXT {
-				return c.NoContent(http.StatusForbidden)
-			}
-			return next(c)
-		}
-	}
-}
-
-func autoHTMLSuffix() MiddlewareFunc {
-	return func(next HandlerFunc) HandlerFunc {
-		return func(c Context) (err error) {
-			p := c.Request().URL().Path()
-			ext := path.Ext(p)
-			if ext == "" || ext[0] != '.' {
-				c.Request().URL().SetPath(strings.TrimSuffix(p, ext) + STATIC_HTML_EXT + ext)
-				c.Object().pvalues[0] += STATIC_HTML_EXT
-			}
-			return next(c)
-		}
-	}
-}
 
 type (
 	MemoryCache struct {
