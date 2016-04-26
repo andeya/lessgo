@@ -167,10 +167,10 @@ func initConfig() *Config {
 			Level:     logs.DEBUG,
 			AsyncChan: 1000,
 		},
-		DefaultDB: "preset",
+		DefaultDB: "lessgo",
 		DBList: map[string]DBConfig{
-			"preset": {
-				Name:         "preset",
+			"lessgo": {
+				Name:         "lessgo",
 				Driver:       "sqlite3",
 				ConnString:   DB_DIR + "/sqlite.db",
 				MaxOpenConns: 1,
@@ -255,8 +255,8 @@ func defaultDBConfig(iniconf *config.IniConfigContainer) {
 }
 
 func trySetDBConfig(iniconf *config.IniConfigContainer) {
-	defDB := BConfig.DBList["preset"]
-	delete(AppConfig.DBList, "preset") // 移除预设数据库
+	defDB := BConfig.DBList["lessgo"]
+	delete(AppConfig.DBList, "lessgo") // 移除预设数据库
 	for _, s := range iniconf.Sections() {
 		dbconfig := DBConfig{
 			Name:         iniconf.String(s + "::name"),

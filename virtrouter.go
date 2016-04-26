@@ -6,19 +6,27 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/go-xorm/xorm"
+
+	"github.com/lessgo/lessgo/utils/uuid"
 )
 
 // 虚拟路由
 type VirtRouter struct {
-	id           string // parent.id+VirtHandler.prefix+[METHOD1]+[METHOD...]
-	path         string
-	typ          int           // 操作类型: 根目录/路由分组/操作
-	name         string        // 名称(建议唯一)
-	parent       *VirtRouter   // 父节点
-	children     []*VirtRouter // 子节点列表
-	enable       bool          // 是否启用当前路由节点
-	middleware   []string      // 中间件 (允许运行时修改)
-	*VirtHandler               // 虚拟操作
+	Id         string   `json:"id" xorm:"not null pk VARCHAR(36)"` // UUID
+	Pid        string   `json:"pid" xorm:"VARCHAR(36)"`            // 父节点id
+	Type       int      `json:"type" xorm:"not null TINYINT(1)"`   // 操作类型: 根目录/路由分组/操作
+	Name       string   `json:"name" xorm:"not null VARCHAR(500)"` // 名称(建议唯一)
+	Enable     bool     `json:"enable" xorm:"not null TINYINT(1)"` // 是否启用当前路由节点
+	Middleware []string `json:"middleware" xorm:"TEXT json"`       // 中间件 (允许运行时修改)
+	Hid        string   `json:"hid" xorm:"not null VARCHAR(500)"`  // 虚拟操作VirtHandler.Id
+
+	path     string        `xorm:"-"` // 路由匹配模式
+	parent   *VirtRouter   `xorm:"-"` // 父节点
+	children []*VirtRouter `xorm:"-"` // 子节点
+
+	*VirtHandler `json:"virt_handler" xorm:"-"` // 虚拟操作
 }
 
 // 虚拟路由节点类型
@@ -28,11 +36,104 @@ const (
 	HANDLER
 )
 
-// 虚拟路由记录表，便于快速查找路由节点
 var (
+	// 数据库引擎
+	lessgodb *xorm.Engine
+	// 虚拟路由记录表，便于快速查找路由节点
 	virtRouterMap  = map[string]*VirtRouter{}
 	virtRouterLock sync.RWMutex
 )
+
+// 从数据库初始化虚拟路由
+func initVirtRouterFromDB() (err error) {
+	lessgodb, _ = GetDB("lessgo")
+	if lessgodb == nil {
+		return
+	}
+	err = lessgodb.Sync2(new(VirtRouter))
+	if err != nil {
+		return err
+	}
+
+	var dbInfo []*VirtRouter
+	err = lessgodb.Find(&dbInfo)
+	if err != nil {
+		return fmt.Errorf("Failed to read virtRouter config: %v", err)
+	}
+
+	if len(dbInfo) == 0 {
+		nodes := DefLessgo.VirtRouter.Progeny()
+		_, err = lessgodb.Insert(&nodes)
+		return
+	}
+
+	virtRouterLock.Lock()
+	defer virtRouterLock.Unlock()
+	virtRouterMap = map[string]*VirtRouter{}
+
+	for _, info := range dbInfo {
+		info.VirtHandler = virtHandlerMap[info.Hid]
+		virtRouterMap[info.Id] = info
+	}
+	for _, vr := range virtRouterMap {
+		if vr.Type == ROOT {
+			DefLessgo.VirtRouter = vr
+		}
+		parent := virtRouterMap[vr.Pid]
+		if parent == nil {
+			continue
+		}
+		vr.parent = parent
+		parent.children = append(parent.children, vr)
+	}
+	return
+}
+
+// 创建虚拟路由根节点
+func newRootVirtRouter() *VirtRouter {
+	virtHandler := NewVirtHandler(nil, "/", nil, "", nil, nil)
+	root := &VirtRouter{
+		Id:          uuid.New().String(),
+		Type:        ROOT,
+		Name:        "根路径",
+		Enable:      true,
+		VirtHandler: virtHandler,
+		Middleware:  []string{},
+		Hid:         virtHandler.Id(),
+	}
+	root.reset()
+	return root
+}
+
+// 创建虚拟路由分组
+func NewGroupVirtRouter(prefix, name string) *VirtRouter {
+	virtHandler := NewVirtHandler(nil, prefix, nil, "", nil, nil)
+	return &VirtRouter{
+		Id:          uuid.New().String(),
+		Type:        GROUP,
+		Name:        name,
+		Enable:      true,
+		VirtHandler: virtHandler,
+		Middleware:  []string{},
+		Hid:         virtHandler.Id(),
+	}
+}
+
+// 创建虚拟路由操作
+func NewHandlerVirtRouter(name string, virtHandler *VirtHandler) *VirtRouter {
+	if virtHandler == nil {
+		virtHandler = &VirtHandler{}
+	}
+	return &VirtRouter{
+		Id:          uuid.New().String(),
+		Type:        HANDLER,
+		Name:        name,
+		Enable:      true,
+		VirtHandler: virtHandler,
+		Middleware:  []string{},
+		Hid:         virtHandler.Id(),
+	}
+}
 
 // 快速返回指定id对于的虚拟路由节点
 func GetVirtRouter(id string) (*VirtRouter, bool) {
@@ -40,88 +141,6 @@ func GetVirtRouter(id string) (*VirtRouter, bool) {
 	defer virtRouterLock.RUnlock()
 	vr, ok := virtRouterMap[id]
 	return vr, ok
-}
-
-// 返回虚拟路由记录表的副本
-func VirtRouterMap() map[string]*VirtRouter {
-	virtRouterLock.RLock()
-	defer virtRouterLock.RUnlock()
-	vrs := make(map[string]*VirtRouter, len(virtRouterMap))
-	for k, v := range virtRouterMap {
-		vrs[k] = v
-	}
-	return vrs
-}
-
-// 序列化虚拟路由并返回副本
-func ToSerialRouter() map[string]*SerialRouter {
-	virtRouterLock.RLock()
-	defer virtRouterLock.RUnlock()
-	// 清空serialRouterMap
-	cleanSerialRouterMap()
-	// 执行序列化到serialRouterMap
-	for _, v := range virtRouterMap {
-		children := make([]string, len(v.children))
-		for i, c := range v.children {
-			children[i] = c.id
-		}
-		RegSerialRouter(&SerialRouter{
-			Id:            v.id,
-			Type:          v.typ,
-			Name:          v.name,
-			Children:      children,
-			Enable:        v.enable,
-			Middleware:    v.middleware,
-			VirtHandlerId: v.VirtHandler.id,
-		})
-	}
-	return SerialRouterMap()
-}
-
-// 创建虚拟路由根节点
-func NewVirtRouterRoot() (*VirtRouter, error) {
-	root := &VirtRouter{
-		typ:         ROOT,
-		name:        "根路径",
-		enable:      true,
-		VirtHandler: &VirtHandler{prefix: "/"},
-		children:    []*VirtRouter{},
-	}
-	if !addVirtRouter(root) {
-		return nil, fmt.Errorf("不可重复创建根节点")
-	}
-	root.reset()
-	return root, nil
-}
-
-// 创建虚拟路由分组
-func NewVirtRouterGroup(prefix, name string) *VirtRouter {
-	prefix, prefixPath, prefixParam := creatPrefix(prefix)
-	return &VirtRouter{
-		typ:    GROUP,
-		name:   name,
-		enable: true,
-		VirtHandler: &VirtHandler{
-			prefix:      prefix,
-			prefixPath:  prefixPath,
-			prefixParam: prefixParam,
-		},
-		children: []*VirtRouter{},
-	}
-}
-
-// 创建虚拟路由操作
-func NewVirtRouterHandler(name string, virtHandler *VirtHandler) *VirtRouter {
-	if virtHandler == nil {
-		virtHandler = &VirtHandler{}
-	}
-	return &VirtRouter{
-		typ:         HANDLER,
-		name:        name,
-		enable:      true,
-		VirtHandler: virtHandler,
-		children:    []*VirtRouter{},
-	}
 }
 
 // 子孙虚拟路由节点列表
@@ -133,42 +152,15 @@ func (vr *VirtRouter) Progeny() []*VirtRouter {
 	return vrs
 }
 
-// 虚拟路由节点类型值
-func (vr *VirtRouter) Type() int {
-	return vr.typ
-}
-
-// 虚拟路由节点名称
-func (vr *VirtRouter) Name() string {
-	return vr.name
-}
-
-// 设置虚拟路由节点名称
-func (vr *VirtRouter) SetName(name string) {
-	vr.name = name
-}
-
-// 虚拟路由节点id
-func (vr *VirtRouter) Id() string {
-	return vr.id
-}
-
 // 虚拟路由节点path
 func (vr *VirtRouter) Path() string {
 	return vr.path
 }
 
-// 返回中间件的副本
-func (vr *VirtRouter) Middleware() []string {
-	m := make([]string, len(vr.middleware))
-	copy(m, vr.middleware)
-	return m
-}
-
 // 返回改节点树上所有中间件的副本
 func (vr *VirtRouter) AllMiddleware() []string {
 	all := []string{}
-	for _, m := range vr.middleware {
+	for _, m := range vr.Middleware {
 		all = append(all, m)
 	}
 	for _, child := range vr.children {
@@ -182,29 +174,26 @@ func (vr *VirtRouter) AllMiddleware() []string {
 // 配置中间件
 func (vr *VirtRouter) Use(middleware ...string) *VirtRouter {
 	for _, m := range middleware {
-		vr.middleware = append(vr.middleware, m)
+		vr.Middleware = append(vr.Middleware, m)
 	}
 	return vr
 }
 
 // 重置中间件
-func (vr *VirtRouter) ResetUse(middleware []string) *VirtRouter {
-	vr.middleware = middleware
-	return vr
-}
-
-// 虚拟路由节点的启用状态
-func (vr *VirtRouter) Enable() bool {
-	return vr.enable
-}
-
-// 配置启用状态，默认为启用
-func (vr *VirtRouter) SetEnable(enable bool) *VirtRouter {
-	vr.enable = enable
-	for _, child := range vr.children {
-		child.SetEnable(enable)
+func (vr *VirtRouter) ResetUse(middleware []string) (err error) {
+	if middleware == nil {
+		middleware = []string{}
 	}
-	return vr
+	if lessgodb == nil {
+		goto label
+	}
+	_, err = lessgodb.Where("id=?", vr.Id).Cols("middleware").Update(&VirtRouter{Middleware: middleware})
+	if err != nil {
+		return
+	}
+label:
+	vr.Middleware = middleware
+	return
 }
 
 // 所有子节点的列表副本
@@ -215,56 +204,77 @@ func (vr *VirtRouter) Children() []*VirtRouter {
 }
 
 // 添加子节点
-func (vr *VirtRouter) AddChild(virtRouter *VirtRouter) error {
+func (vr *VirtRouter) AddChild(virtRouter *VirtRouter) (err error) {
 	if virtRouter == nil {
-		return fmt.Errorf("不可添加空的子节点")
+		return fmt.Errorf("Can not add an empty node.")
 	}
+	if virtRouter.Type == ROOT {
+		return fmt.Errorf("Can not add an root node.")
+	}
+	virtRouter.Pid = vr.Id
 	virtRouter.parent = vr
+	if lessgodb == nil {
+		goto label
+	}
+	_, err = lessgodb.Insert(virtRouter)
+	if err != nil {
+		return
+	}
+label:
 	vr.children = append(vr.children, virtRouter)
 	virtRouter.reset()
+	addVirtRouter(virtRouter)
 	return nil
 }
 
-// 添加多个子节点
-func (vr *VirtRouter) AddChildren(virtRouters []*VirtRouter) *VirtRouter {
-	for _, child := range virtRouters {
-		if err := vr.AddChild(child); err != nil {
-			fmt.Println(err)
+// 删除子节点
+func (vr *VirtRouter) DelChild(virtRouter *VirtRouter) (err error) {
+	if virtRouter == nil {
+		return fmt.Errorf("Can not delete an empty node.")
+	}
+	var session *xorm.Session
+	nodes := virtRouter.Progeny()
+	if lessgodb == nil {
+		goto label
+	}
+	session = lessgodb.NewSession()
+	defer session.Close()
+	err = session.Begin()
+	if err != nil {
+		return err
+	}
+	for _, v := range nodes {
+		_, err = session.Delete(v)
+		if err != nil {
+			session.Rollback()
+			return
 		}
 	}
-	return vr
-}
-
-// 删除子节点
-func (vr *VirtRouter) DelChild(virtRouter *VirtRouter) error {
-	if virtRouter == nil {
-		return fmt.Errorf("欲删除的虚拟路由节点不能为nil")
+	err = session.Commit()
+	if err != nil {
+		return
 	}
+label:
+	var exist bool
 	for i, child := range vr.children {
 		if child == virtRouter {
 			vr.children = append(vr.children[:i], vr.children[i+1:]...)
-			delVirtRouter(virtRouter)
-			return nil
+			exist = true
+			break
 		}
 	}
-	return fmt.Errorf("当前虚拟路由节点不存在子节点 %v", virtRouter.id)
+	if exist {
+		for _, node := range nodes {
+			delVirtRouter(node)
+		}
+		return nil
+	}
+	return fmt.Errorf("node %v does not have child node: %v.", vr.Name, virtRouter.Name)
 }
 
 // 虚拟路由节点的父节点
 func (vr *VirtRouter) Parent() *VirtRouter {
 	return vr.parent
-}
-
-// 设置虚拟路由节点的父节点
-func (vr *VirtRouter) SetParent(virtRouter *VirtRouter) error {
-	if virtRouter == nil {
-		return fmt.Errorf("不可将空节点设置为父节点")
-	}
-	vr.Delete()
-	vr.parent = virtRouter
-	virtRouter.children = append(virtRouter.children, vr)
-	vr.reset()
-	return nil
 }
 
 // 删除自身
@@ -273,28 +283,20 @@ func (vr *VirtRouter) Delete() error {
 		vr.parent.DelChild(vr)
 		return nil
 	}
-	return fmt.Errorf("不能删除虚拟路由根节点")
+	return fmt.Errorf("Can not delete the root node.")
 }
 
-// 根据父节点重置虚拟路由节点自身及其子节点id/path
+// 根据父节点重置虚拟路由节点自身及其子节点path
 func (vr *VirtRouter) reset() {
-	oldId := vr.id
-	var parentId = "/"
 	var parentPath = "/"
 	if vr.parent != nil {
-		parentId = vr.parent.id
 		parentPath = vr.parent.path
 	}
 	var prefix string
 	if vr.VirtHandler != nil {
 		prefix = vr.VirtHandler.prefix
 	}
-	vr.id = pathpkg.Clean(pathpkg.Join("/", parentId, prefix))
 	vr.path = pathpkg.Clean(pathpkg.Join("/", parentPath, prefix))
-	for _, m := range vr.VirtHandler.methods {
-		vr.id += "[" + m + "]"
-	}
-	resetVirtRouter(oldId, vr)
 	for _, child := range vr.children {
 		child.reset()
 	}
@@ -303,10 +305,10 @@ func (vr *VirtRouter) reset() {
 func addVirtRouter(vr *VirtRouter) bool {
 	virtRouterLock.RLock()
 	defer virtRouterLock.RUnlock()
-	if _, ok := virtRouterMap[vr.id]; ok {
+	if _, ok := virtRouterMap[vr.Id]; ok {
 		return false
 	}
-	virtRouterMap[vr.id] = vr
+	virtRouterMap[vr.Id] = vr
 	return true
 }
 
@@ -314,13 +316,13 @@ func resetVirtRouter(oldId string, vr *VirtRouter) {
 	virtRouterLock.Lock()
 	defer virtRouterLock.Unlock()
 	delete(virtRouterMap, oldId)
-	virtRouterMap[vr.id] = vr
+	virtRouterMap[vr.Id] = vr
 }
 
 func delVirtRouter(vr *VirtRouter) {
 	virtRouterLock.Lock()
 	defer virtRouterLock.Unlock()
-	delete(virtRouterMap, vr.id)
+	delete(virtRouterMap, vr.Id)
 }
 
 func cleanVirtRouterMap() {
@@ -333,14 +335,14 @@ func cleanVirtRouterMap() {
  * 注册真实路由
  */
 func (vr *VirtRouter) route(group *Group) {
-	if !vr.Enable() {
+	if !vr.Enable {
 		return
 	}
-	mws := getMiddlewares(vr.Middleware())
+	mws := getMiddlewares(vr.Middleware)
 	prefix := vr.VirtHandler.Prefix()
 	prefix2 := pathpkg.Join("/", strings.TrimSuffix(vr.VirtHandler.PrefixPath(), "/index"), vr.VirtHandler.PrefixParam())
 	hasIndex := prefix2 != prefix
-	switch vr.Type() {
+	switch vr.Type {
 	case GROUP:
 		var childGroup *Group
 		if hasIndex {
@@ -389,13 +391,12 @@ func route(methods []string, prefix, name string, descHandlerOrhandler interface
 	// 生成VirtHandler
 	virtHandler := NewVirtHandler(handler, prefix, methods, description, produces, params)
 	// 生成虚拟路由操作
-	return NewVirtRouterHandler(name, virtHandler).ResetUse(middleware)
-}
-
-// 从数据库同步虚拟路由
-func syncVirtRouter() error {
-
-	return nil
+	vth := NewHandlerVirtRouter(name, virtHandler)
+	err := vth.ResetUse(middleware)
+	if err != nil {
+		Logger().Error("%v", err)
+	}
+	return vth
 }
 
 func registerVirtRouter() {
@@ -420,7 +421,7 @@ func registerVirtRouter() {
 	DefLessgo.app.AfterUse(getMiddlewares(DefLessgo.virtAfter)...)
 	group := DefLessgo.app.Group(
 		DefLessgo.VirtRouter.Prefix(),
-		getMiddlewares(DefLessgo.VirtRouter.Middleware())...,
+		getMiddlewares(DefLessgo.VirtRouter.Middleware)...,
 	)
 	for _, child := range DefLessgo.VirtRouter.Children() {
 		child.route(group)

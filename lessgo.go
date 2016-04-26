@@ -111,8 +111,8 @@ func ServerEnable() bool {
 func Run(server NewServer, listener ...net.Listener) {
 	// 初始化全局session
 	checkHooks(registerSession())
-	// 从数据库同步虚拟路由
-	syncVirtRouter()
+	// 从数据库初始化虚拟路由
+	checkHooks(initVirtRouterFromDB())
 	// 重建路由
 	ReregisterRouter()
 
@@ -185,14 +185,28 @@ func AfterUser(middleware ...string) {
 }
 
 // 从根路由开始配置路由(必须在init()中调用)
-func RootRouter(node ...*VirtRouter) *VirtRouter {
-	DefLessgo.VirtRouter.AddChildren(node)
+func RootRouter(nodes ...*VirtRouter) *VirtRouter {
+	var err error
+	for _, node := range nodes {
+		err = DefLessgo.VirtRouter.AddChild(node)
+		if err != nil {
+			Logger().Error("%v", err)
+		}
+	}
 	return DefLessgo.VirtRouter
 }
 
 // 配置路由分组(必须在init()中调用)
-func SubRouter(prefix, name string, node ...*VirtRouter) *VirtRouter {
-	return NewVirtRouterGroup(prefix, name).AddChildren(node)
+func SubRouter(prefix, name string, nodes ...*VirtRouter) *VirtRouter {
+	parent := NewGroupVirtRouter(prefix, name)
+	var err error
+	for _, node := range nodes {
+		err = parent.AddChild(node)
+		if err != nil {
+			Logger().Error("%v", err)
+		}
+	}
+	return parent
 }
 
 // 配置操作(必须在init()中调用)

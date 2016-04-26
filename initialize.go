@@ -35,7 +35,7 @@ func newLessgo() *lessgo {
 	}
 
 	// 初始化全局虚拟路由
-	l.VirtRouter, _ = NewVirtRouterRoot()
+	l.VirtRouter = newRootVirtRouter()
 	// 初始化日志
 	l.app.Logger().SetMsgChan(AppConfig.Log.AsyncChan)
 	l.app.SetLogLevel(AppConfig.Log.Level)
