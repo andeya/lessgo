@@ -262,3 +262,9 @@ func RegMiddleware(name, description string, middleware interface{}) error {
 	}
 	return nil
 }
+
+// 跨域白名单
+func AllowCrossDomain(path string) {
+	allowCrossDomain[path] = true
+	Logger().Info("AllowCrossDomain: %v", path)
+}
