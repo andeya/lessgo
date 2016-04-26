@@ -180,10 +180,8 @@ func RecoverWithConfig(config RecoverConfig) MiddlewareFunc {
 	}
 }
 
-var allowCrossDomain = map[string]bool{}
-
 func CrossDomain(c Context) error {
-	if AppConfig.CrossDomain || allowCrossDomain[c.Path()] {
+	if AppConfig.CrossDomain {
 		c.Response().Header().Set("Access-Control-Allow-Origin", "*")
 	}
 	return nil
