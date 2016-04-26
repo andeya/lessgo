@@ -157,6 +157,20 @@ func (vr *VirtRouter) Path() string {
 	return vr.path
 }
 
+// 虚拟路由节点启用/禁用
+func (vr *VirtRouter) SetEnable(able bool) (err error) {
+	if lessgodb == nil {
+		goto label
+	}
+	_, err = lessgodb.Where("id=?", vr.Id).Cols("enable").Update(&VirtRouter{Enable: able})
+	if err != nil {
+		return
+	}
+label:
+	vr.Enable = able
+	return
+}
+
 // 返回改节点树上所有中间件的副本
 func (vr *VirtRouter) AllMiddleware() []string {
 	all := []string{}
@@ -173,9 +187,26 @@ func (vr *VirtRouter) AllMiddleware() []string {
 
 // 配置中间件
 func (vr *VirtRouter) Use(middleware ...string) *VirtRouter {
-	for _, m := range middleware {
-		vr.Middleware = append(vr.Middleware, m)
+	l := len(middleware)
+	if l == 0 {
+		return vr
 	}
+	_l := len(vr.Middleware)
+	ms := make([]string, _l+l)
+	copy(ms, vr.Middleware)
+	copy(ms[_l:], middleware)
+
+	var err error
+	if lessgodb == nil {
+		goto label
+	}
+	_, err = lessgodb.Where("id=?", vr.Id).Cols("middleware").Update(&VirtRouter{Middleware: ms})
+	if err != nil {
+		Logger().Error("Failed to add middleware: %v", err)
+		return vr
+	}
+label:
+	vr.Middleware = ms
 	return vr
 }
 
@@ -323,12 +354,6 @@ func delVirtRouter(vr *VirtRouter) {
 	virtRouterLock.Lock()
 	defer virtRouterLock.Unlock()
 	delete(virtRouterMap, vr.Id)
-}
-
-func cleanVirtRouterMap() {
-	virtRouterLock.Lock()
-	defer virtRouterLock.Unlock()
-	virtRouterMap = map[string]*VirtRouter{}
 }
 
 /*
