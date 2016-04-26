@@ -95,7 +95,7 @@ func newRootVirtRouter() *VirtRouter {
 	root := &VirtRouter{
 		Id:          uuid.New().String(),
 		Type:        ROOT,
-		Name:        "根路径",
+		Name:        "Service Root",
 		Enable:      true,
 		VirtHandler: virtHandler,
 		Middleware:  []string{},
