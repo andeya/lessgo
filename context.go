@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
+	"github.com/lessgo/lessgo/session"
 )
 
 type (
@@ -145,6 +147,10 @@ type (
 
 		// Logger returns the `Logger` instance.
 		Logger() logs.Logger
+
+		// SessionStart generate or read the session id from Request.
+		// if session id exists, return SessionStore with this id.
+		SessionStart() (session.Store, error)
 
 		// Echo returns the `Echo` instance.
 		App() *Echo
@@ -448,6 +454,13 @@ func (c *context) SetHandler(h HandlerFunc) {
 
 func (c *context) Logger() logs.Logger {
 	return c.echo.logger
+}
+
+func (c *context) SessionStart() (session.Store, error) {
+	if c.echo.sessions == nil {
+		return nil, fmt.Errorf("Sessions is unset.")
+	}
+	return c.echo.sessions.SessionStart(c.Response(), c.Request())
 }
 
 func (c *context) ServeContent(content io.ReadSeeker, name string, modtime time.Time) error {

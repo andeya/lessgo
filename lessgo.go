@@ -20,6 +20,7 @@ import (
 	"github.com/lessgo/lessgo/dbservice"
 	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
+	"github.com/lessgo/lessgo/session"
 )
 
 type (
@@ -109,8 +110,6 @@ func ServerEnable() bool {
  * 运行服务
  */
 func Run(server NewServer, listener ...net.Listener) {
-	// 初始化全局session
-	checkHooks(registerSession())
 	// 从数据库初始化虚拟路由
 	checkHooks(initVirtRouterFromDB())
 	// 重建路由
@@ -163,6 +162,13 @@ func GetDB(name string) (*xorm.Engine, bool) {
  */
 func Logger() logs.Logger {
 	return DefLessgo.app.Logger()
+}
+
+/*
+ * Session管理平台实例
+ */
+func Sessions() *session.Manager {
+	return DefLessgo.app.sessions
 }
 
 /*

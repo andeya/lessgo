@@ -16,6 +16,7 @@ import (
 
 	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
+	"github.com/lessgo/lessgo/session"
 )
 
 type (
@@ -38,6 +39,7 @@ type (
 		routerIndex      int
 		caseSensitive    bool
 		memoryCache      *MemoryCache
+		sessions         *session.Manager
 	}
 
 	// Route contains a handler and information for matching against requests.
@@ -255,6 +257,14 @@ func (e *Echo) SetCaseSensitive(sensitive bool) {
 
 func (e *Echo) CaseSensitive() bool {
 	return e.caseSensitive
+}
+
+func (e *Echo) Sessions() *session.Manager {
+	return e.sessions
+}
+
+func (e *Echo) SetSessions(sessions *session.Manager) {
+	e.sessions = sessions
 }
 
 // DefaultHTTPErrorHandler invokes the default HTTP error handler.

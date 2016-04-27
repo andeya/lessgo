@@ -37,25 +37,40 @@ func newLessgo() *lessgo {
 
 	// 初始化全局虚拟路由
 	l.VirtRouter = newRootVirtRouter()
+
 	// 初始化日志
 	l.app.Logger().SetMsgChan(AppConfig.Log.AsyncChan)
 	l.app.SetLogLevel(AppConfig.Log.Level)
+
 	// 设置运行模式
 	l.app.SetDebug(AppConfig.Debug)
+
 	// 设置静态资源缓存
 	l.app.SetMemoryCache(NewMemoryCache(
 		AppConfig.FileCache.SingleFileAllowMB*MB,
 		AppConfig.FileCache.MaxCapMB*MB,
 		time.Duration(AppConfig.FileCache.CacheSecond)*time.Second),
 	)
+
 	// 设置渲染接口
 	l.app.SetRenderer(NewPongo2Render(AppConfig.Debug))
+
 	// 设置大小写敏感
 	l.app.SetCaseSensitive(AppConfig.RouterCaseSensitive)
+
 	// 设置上传文件允许的最大尺寸
 	engine.MaxMemory = AppConfig.MaxMemoryMB * MB
+
 	// 配置数据库
 	l.dbService = registerDBService()
+
+	// 初始化全局session
+	err := registerSession()
+	if err != nil {
+		l.app.Logger().Error("Failed to create GlobalSessions: %v.", err)
+	}
+	l.app.SetSessions(GlobalSessions)
+
 	return l
 }
 
@@ -120,12 +135,8 @@ func registerSession() (err error) {
 		"domain":          AppConfig.Session.Domain,
 		"cookieLifeTime":  AppConfig.Session.CookieLifeTime,
 	}
-	confBytes, err := json.Marshal(conf)
-	if err != nil {
-		return err
-	}
-	sessionConfig := string(confBytes)
-	GlobalSessions, err = session.NewManager(AppConfig.Session.Provider, sessionConfig)
+	confBytes, _ := json.Marshal(conf)
+	GlobalSessions, err = session.NewManager(AppConfig.Session.Provider, string(confBytes))
 	if err != nil {
 		return
 	}
