@@ -33,13 +33,13 @@
 package redis
 
 import (
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/garyburd/redigo/redis"
 
+	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/session"
 )
 
@@ -97,7 +97,7 @@ func (rs *SessionStore) SessionID() string {
 }
 
 // SessionRelease save session values to redis
-func (rs *SessionStore) SessionRelease(w http.ResponseWriter) {
+func (rs *SessionStore) SessionRelease(w engine.Response) {
 	b, err := session.EncodeGob(rs.values)
 	if err != nil {
 		return

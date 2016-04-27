@@ -2,7 +2,11 @@
 
 package fasthttp
 
-import "github.com/valyala/fasthttp"
+import (
+	"github.com/valyala/fasthttp"
+
+	"github.com/lessgo/lessgo/engine"
+)
 
 type (
 	// RequestHeader holds `fasthttp.RequestHeader`.
@@ -14,6 +18,11 @@ type (
 	ResponseHeader struct {
 		*fasthttp.ResponseHeader
 	}
+)
+
+var (
+	_ engine.Header = new(RequestHeader)
+	_ engine.Header = new(ResponseHeader)
 )
 
 // Add implements `engine.Header#Add` function.

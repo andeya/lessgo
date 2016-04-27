@@ -2,7 +2,6 @@
 package ledis
 
 import (
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -10,6 +9,7 @@ import (
 	"github.com/siddontang/ledisdb/config"
 	"github.com/siddontang/ledisdb/ledis"
 
+	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/session"
 )
 
@@ -64,7 +64,7 @@ func (ls *SessionStore) SessionID() string {
 }
 
 // SessionRelease save session values to ledis
-func (ls *SessionStore) SessionRelease(w http.ResponseWriter) {
+func (ls *SessionStore) SessionRelease(w engine.Response) {
 	b, err := session.EncodeGob(ls.values)
 	if err != nil {
 		return

@@ -2,7 +2,11 @@
 
 package fasthttp
 
-import "github.com/valyala/fasthttp"
+import (
+	"github.com/valyala/fasthttp"
+
+	"github.com/lessgo/lessgo/engine"
+)
 
 type (
 	// URL implements `engine.URL`.
@@ -10,6 +14,8 @@ type (
 		*fasthttp.URI
 	}
 )
+
+var _ engine.URL = new(URL)
 
 // Path implements `engine.URL#Path` function.
 func (u *URL) Path() string {

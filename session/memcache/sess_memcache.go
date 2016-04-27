@@ -33,12 +33,12 @@
 package memcache
 
 import (
-	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/bradfitz/gomemcache/memcache"
 
+	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/session"
 )
 
@@ -93,7 +93,7 @@ func (rs *SessionStore) SessionID() string {
 }
 
 // SessionRelease save session values to memcache
-func (rs *SessionStore) SessionRelease(w http.ResponseWriter) {
+func (rs *SessionStore) SessionRelease(w engine.Response) {
 	b, err := session.EncodeGob(rs.values)
 	if err != nil {
 		return

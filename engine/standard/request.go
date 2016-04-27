@@ -19,6 +19,8 @@ type (
 	}
 )
 
+var _ engine.Request = new(Request)
+
 // IsTLS implements `engine.Request#TLS` function.
 func (r *Request) IsTLS() bool {
 	return r.Request.TLS != nil
@@ -45,6 +47,25 @@ func (r *Request) URL() engine.URL {
 // Header implements `engine.Request#URL` function.
 func (r *Request) Header() engine.Header {
 	return r.header
+}
+
+// Cookies parses and returns the HTTP cookies sent with the request.
+func (r *Request) Cookies() []*http.Cookie {
+	return r.Request.Cookies()
+}
+
+// Cookie returns the named cookie provided in the request or
+// ErrNoCookie if not found.
+func (r *Request) Cookie(name string) (*http.Cookie, error) {
+	return r.Request.Cookie(name)
+}
+
+// AddCookie adds a cookie to the request.  Per RFC 6265 section 5.4,
+// AddCookie does not attach more than one Cookie header field.  That
+// means all cookies, if any, are written into the same line,
+// separated by semicolon.
+func (r *Request) AddCookie(c *http.Cookie) {
+	r.Request.AddCookie(c)
 }
 
 // func Proto() string {

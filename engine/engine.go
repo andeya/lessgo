@@ -4,6 +4,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/lessgo/lessgo/logs"
@@ -46,6 +47,19 @@ type (
 		// Header returns `engine.Header`.
 		Header() Header
 
+		// Cookies parses and returns the HTTP cookies sent with the request.
+		Cookies() []*http.Cookie
+
+		// Cookie returns the named cookie provided in the request or
+		// ErrNoCookie if not found.
+		Cookie(name string) (*http.Cookie, error)
+
+		// AddCookie adds a cookie to the request.  Per RFC 6265 section 5.4,
+		// AddCookie does not attach more than one Cookie header field.  That
+		// means all cookies, if any, are written into the same line,
+		// separated by semicolon.
+		AddCookie(c *http.Cookie)
+
 		// Proto() string
 		// ProtoMajor() int
 		// ProtoMinor() int
@@ -85,6 +99,11 @@ type (
 	Response interface {
 		// Header returns `engine.Header`
 		Header() Header
+
+		// SetCookie adds a Set-Cookie header.
+		// The provided cookie must have a valid Name. Invalid cookies may be
+		// silently dropped.
+		SetCookie(cookie *http.Cookie)
 
 		// WriteHeader sends an HTTP response header with status code.
 		WriteHeader(int)

@@ -52,13 +52,13 @@ package postgres
 
 import (
 	"database/sql"
-	"net/http"
 	"sync"
 	"time"
 
 	// import postgresql Driver
 	_ "github.com/lib/pq"
 
+	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/session"
 )
 
@@ -114,7 +114,7 @@ func (st *SessionStore) SessionID() string {
 
 // SessionRelease save postgresql session values to database.
 // must call this method to save values to database.
-func (st *SessionStore) SessionRelease(w http.ResponseWriter) {
+func (st *SessionStore) SessionRelease(w engine.Response) {
 	defer st.c.Close()
 	b, err := session.EncodeGob(st.values)
 	if err != nil {

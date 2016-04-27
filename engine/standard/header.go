@@ -1,6 +1,10 @@
 package standard
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/lessgo/lessgo/engine"
+)
 
 type (
 	// Header implements `engine.Header`.
@@ -8,6 +12,8 @@ type (
 		http.Header
 	}
 )
+
+var _ engine.Header = new(Header)
 
 // Add implements `engine.Header#Add` function.
 func (h *Header) Add(key, val string) {

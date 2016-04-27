@@ -16,9 +16,10 @@ package session
 
 import (
 	"container/list"
-	"net/http"
 	"sync"
 	"time"
+
+	"github.com/lessgo/lessgo/engine"
 )
 
 var mempder = &MemProvider{list: list.New(), sessions: make(map[string]*list.Element)}
@@ -72,7 +73,7 @@ func (st *MemSessionStore) SessionID() string {
 }
 
 // SessionRelease Implement method, no used.
-func (st *MemSessionStore) SessionRelease(w http.ResponseWriter) {
+func (st *MemSessionStore) SessionRelease(w engine.Response) {
 }
 
 // MemProvider Implement the provider interface

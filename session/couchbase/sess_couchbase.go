@@ -33,12 +33,12 @@
 package couchbase
 
 import (
-	"net/http"
 	"strings"
 	"sync"
 
 	couchbase "github.com/couchbase/go-couchbase"
 
+	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/session"
 )
 
@@ -102,7 +102,7 @@ func (cs *SessionStore) SessionID() string {
 }
 
 // SessionRelease Write couchbase session with Gob string
-func (cs *SessionStore) SessionRelease(w http.ResponseWriter) {
+func (cs *SessionStore) SessionRelease(w engine.Response) {
 	defer cs.b.Close()
 
 	bo, err := session.EncodeGob(cs.values)

@@ -33,7 +33,8 @@ type (
 		// Request returns `engine.Request` interface.
 		Request() engine.Request
 
-		// Request returns `engine.Response` interface.
+		// Response returns `engine.Response` interface,
+		// implement http.ResponseWriter.
 		Response() engine.Response
 
 		// Path returns the registered path for the handler.

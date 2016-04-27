@@ -1,6 +1,10 @@
 package standard
 
-import "net/url"
+import (
+	"net/url"
+
+	"github.com/lessgo/lessgo/engine"
+)
 
 type (
 	// URL implements `engine.URL`.
@@ -9,6 +13,8 @@ type (
 		query url.Values
 	}
 )
+
+var _ engine.URL = new(URL)
 
 // Path implements `engine.URL#Path` function.
 func (u *URL) Path() string {
