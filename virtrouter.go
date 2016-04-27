@@ -22,11 +22,10 @@ type VirtRouter struct {
 	Middleware []string `json:"middleware" xorm:"TEXT json"`       // 中间件 (允许运行时修改)
 	Hid        string   `json:"hid" xorm:"not null VARCHAR(500)"`  // 虚拟操作VirtHandler.Id
 
-	path     string        `xorm:"-"` // 路由匹配模式
-	parent   *VirtRouter   `xorm:"-"` // 父节点
-	children []*VirtRouter `xorm:"-"` // 子节点
-
-	*VirtHandler `json:"virt_handler" xorm:"-"` // 虚拟操作
+	path        string        `xorm:"-"` // 路由匹配模式
+	parent      *VirtRouter   `xorm:"-"` // 父节点
+	children    []*VirtRouter `xorm:"-"` // 子节点
+	virtHandler *VirtHandler  `xorm:"-"` // 虚拟操作
 }
 
 // 虚拟路由节点类型
@@ -72,7 +71,7 @@ func initVirtRouterFromDB() (err error) {
 	virtRouterMap = map[string]*VirtRouter{}
 
 	for _, info := range dbInfo {
-		info.VirtHandler = virtHandlerMap[info.Hid]
+		info.virtHandler = virtHandlerMap[info.Hid]
 		virtRouterMap[info.Id] = info
 	}
 	for _, vr := range virtRouterMap {
@@ -97,7 +96,7 @@ func newRootVirtRouter() *VirtRouter {
 		Type:        ROOT,
 		Name:        "Service Root",
 		Enable:      true,
-		VirtHandler: virtHandler,
+		virtHandler: virtHandler,
 		Middleware:  []string{},
 		Hid:         virtHandler.Id(),
 	}
@@ -113,7 +112,7 @@ func NewGroupVirtRouter(prefix, name string) *VirtRouter {
 		Type:        GROUP,
 		Name:        name,
 		Enable:      true,
-		VirtHandler: virtHandler,
+		virtHandler: virtHandler,
 		Middleware:  []string{},
 		Hid:         virtHandler.Id(),
 	}
@@ -129,7 +128,7 @@ func NewHandlerVirtRouter(name string, virtHandler *VirtHandler) *VirtRouter {
 		Type:        HANDLER,
 		Name:        name,
 		Enable:      true,
-		VirtHandler: virtHandler,
+		virtHandler: virtHandler,
 		Middleware:  []string{},
 		Hid:         virtHandler.Id(),
 	}
@@ -157,7 +156,21 @@ func (vr *VirtRouter) Path() string {
 	return vr.path
 }
 
-// 虚拟路由节点启用/禁用
+// 设置虚拟路由节点Name
+func (vr *VirtRouter) SetName(name string) (err error) {
+	if lessgodb == nil {
+		goto label
+	}
+	_, err = lessgodb.Where("id=?", vr.Id).Cols("name").Update(&VirtRouter{Name: name})
+	if err != nil {
+		return
+	}
+label:
+	vr.Name = name
+	return
+}
+
+// 启用/禁用虚拟路由节点
 func (vr *VirtRouter) SetEnable(able bool) (err error) {
 	if lessgodb == nil {
 		goto label
@@ -324,8 +337,8 @@ func (vr *VirtRouter) reset() {
 		parentPath = vr.parent.path
 	}
 	var prefix string
-	if vr.VirtHandler != nil {
-		prefix = vr.VirtHandler.prefix
+	if vr.virtHandler != nil {
+		prefix = vr.virtHandler.prefix
 	}
 	vr.path = pathpkg.Clean(pathpkg.Join("/", parentPath, prefix))
 	for _, child := range vr.children {
@@ -333,27 +346,39 @@ func (vr *VirtRouter) reset() {
 	}
 }
 
-func addVirtRouter(vr *VirtRouter) bool {
-	virtRouterLock.RLock()
-	defer virtRouterLock.RUnlock()
-	if _, ok := virtRouterMap[vr.Id]; ok {
-		return false
-	}
-	virtRouterMap[vr.Id] = vr
-	return true
+// 返回虚拟操作列表的副本
+func (vr *VirtRouter) Methods() []string {
+	return vr.virtHandler.Methods()
 }
 
-func resetVirtRouter(oldId string, vr *VirtRouter) {
-	virtRouterLock.Lock()
-	defer virtRouterLock.Unlock()
-	delete(virtRouterMap, oldId)
-	virtRouterMap[vr.Id] = vr
+// 操作的url前缀
+func (vr *VirtRouter) Prefix() string {
+	return vr.virtHandler.Prefix()
 }
 
-func delVirtRouter(vr *VirtRouter) {
-	virtRouterLock.Lock()
-	defer virtRouterLock.Unlock()
-	delete(virtRouterMap, vr.Id)
+// 操作的url前缀的固定路径部分
+func (vr *VirtRouter) PrefixPath() string {
+	return vr.virtHandler.PrefixPath()
+}
+
+// 操作的url前缀的参数部分
+func (vr *VirtRouter) PrefixParam() string {
+	return vr.virtHandler.PrefixParam()
+}
+
+// 操作的描述
+func (vr *VirtRouter) Description() string {
+	return vr.virtHandler.Description()
+}
+
+// 操作的参数说明列表的副本
+func (vr *VirtRouter) Params() []Param {
+	return vr.virtHandler.Params()
+}
+
+// 操作接受的响应内容类型
+func (vr *VirtRouter) Produces() []string {
+	return vr.virtHandler.Produces()
 }
 
 /*
@@ -364,8 +389,8 @@ func (vr *VirtRouter) route(group *Group) {
 		return
 	}
 	mws := getMiddlewares(vr.Middleware)
-	prefix := vr.VirtHandler.Prefix()
-	prefix2 := pathpkg.Join("/", strings.TrimSuffix(vr.VirtHandler.PrefixPath(), "/index"), vr.VirtHandler.PrefixParam())
+	prefix := vr.virtHandler.Prefix()
+	prefix2 := pathpkg.Join("/", strings.TrimSuffix(vr.virtHandler.PrefixPath(), "/index"), vr.virtHandler.PrefixParam())
 	hasIndex := prefix2 != prefix
 	switch vr.Type {
 	case GROUP:
@@ -380,8 +405,8 @@ func (vr *VirtRouter) route(group *Group) {
 			child.route(childGroup)
 		}
 	case HANDLER:
-		methods := vr.VirtHandler.Methods()
-		handler := getHandlerMap(vr.VirtHandler.Id())
+		methods := vr.virtHandler.Methods()
+		handler := getHandlerMap(vr.virtHandler.Id())
 		if hasIndex {
 			group.Match(methods, prefix2, handler, mws...)
 		}
@@ -451,4 +476,27 @@ func registerVirtRouter() {
 	for _, child := range DefLessgo.VirtRouter.Children() {
 		child.route(group)
 	}
+}
+
+func resetVirtRouter(oldId string, vr *VirtRouter) {
+	virtRouterLock.Lock()
+	defer virtRouterLock.Unlock()
+	delete(virtRouterMap, oldId)
+	virtRouterMap[vr.Id] = vr
+}
+
+func addVirtRouter(vr *VirtRouter) bool {
+	virtRouterLock.RLock()
+	defer virtRouterLock.RUnlock()
+	if _, ok := virtRouterMap[vr.Id]; ok {
+		return false
+	}
+	virtRouterMap[vr.Id] = vr
+	return true
+}
+
+func delVirtRouter(vr *VirtRouter) {
+	virtRouterLock.Lock()
+	defer virtRouterLock.Unlock()
+	delete(virtRouterMap, vr.Id)
 }

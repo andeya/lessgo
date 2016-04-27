@@ -192,7 +192,7 @@ func New() (e *Echo) {
 		pristineHead:  headHandlerFunc,
 		head:          headHandlerFunc,
 		maxParam:      new(int),
-		logger:        logs.GlobalLogger,
+		logger:        logs.Global,
 		binder:        &binder{},
 		caseSensitive: true,
 	}
@@ -543,7 +543,7 @@ func (e *Echo) ServeHTTP(rq engine.Request, rs engine.Response) {
 	}
 
 	c := e.pool.Get().(*context)
-	c.Reset(rq, rs)
+	c.reset(rq, rs)
 
 	// Execute chain
 	if err := e.head(c); err != nil {

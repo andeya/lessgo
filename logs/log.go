@@ -42,7 +42,7 @@ const (
 )
 
 var (
-	GlobalLogger = NewLogger(1000)
+	Global = NewLogger(1000)
 )
 
 func NewLogger(channelLen int64) Logger {
@@ -56,25 +56,25 @@ func (t *TgLogger) SetLevel(l int) {
 }
 
 func Write(p []byte) (n int, err error) {
-	return GlobalLogger.Write(p)
+	return Global.Write(p)
 }
 func Sys(format string, v ...interface{}) {
-	GlobalLogger.Sys(format, v...)
+	Global.Sys(format, v...)
 }
 func Fatal(format string, v ...interface{}) {
-	GlobalLogger.Fatal(format, v...)
+	Global.Fatal(format, v...)
 }
 func Error(format string, v ...interface{}) {
-	GlobalLogger.Error(format, v...)
+	Global.Error(format, v...)
 }
 func Warn(format string, v ...interface{}) {
-	GlobalLogger.Warn(format, v...)
+	Global.Warn(format, v...)
 }
 func Info(format string, v ...interface{}) {
-	GlobalLogger.Info(format, v...)
+	Global.Info(format, v...)
 }
 func Debug(format string, v ...interface{}) {
-	GlobalLogger.Debug(format, v...)
+	Global.Debug(format, v...)
 }
 
 func level(l int) int {

@@ -16,6 +16,7 @@ import (
 	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
+	"github.com/lessgo/lessgo/utils"
 )
 
 func newLessgo() *lessgo {
@@ -198,6 +199,16 @@ func registerDBService() *dbservice.DBService {
 				engine.SetTableMapper(core.NewPrefixMapper(impr, conf.ColumnSpace))
 			} else {
 				engine.SetTableMapper(core.NewSuffixMapper(impr, conf.ColumnSpace))
+			}
+		}
+
+		if conf.Driver == "sqlite3" && !utils.FileExists(conf.ConnString) {
+			os.MkdirAll(filepath.Dir(conf.ConnString), 0777)
+			f, err := os.Create(conf.ConnString)
+			if err != nil {
+				logs.Global.Error("%v", err)
+			} else {
+				f.Close()
 			}
 		}
 

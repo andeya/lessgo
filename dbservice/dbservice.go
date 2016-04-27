@@ -8,10 +8,11 @@ import (
 
 	_ "github.com/denisenkom/go-mssqldb" //mssql
 	_ "github.com/go-sql-driver/mysql"   //mysql
+	_ "github.com/lib/pq"                //postgres
+	// _ "github.com/mattn/go-sqlite3"      //sqlite
+	// _ "github.com/mattn/go-oci8"    //oracle，需安装pkg-config工具
+
 	"github.com/go-xorm/xorm"
-	_ "github.com/lib/pq" //postgres
-	// _ "github.com/mattn/go-oci8"    // oracle，需安装pkg-config工具
-	// _ "github.com/mattn/go-sqlite3" // sqlite
 )
 
 /**

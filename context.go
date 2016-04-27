@@ -146,7 +146,7 @@ type (
 		Logger() logs.Logger
 
 		// Echo returns the `Echo` instance.
-		Echo() *Echo
+		App() *Echo
 
 		// ServeContent sends static content from `io.ReadSeeker` and handles caching
 		// via `If-Modified-Since` request header. It automatically sets `Content-Type`
@@ -155,7 +155,7 @@ type (
 
 		// Reset resets the context after request completes. It must be called along
 		// with `Echo#GetContext()` and `Echo#PutContext()`. See `Echo#ServeHTTP()`
-		Reset(engine.Request, engine.Response)
+		reset(engine.Request, engine.Response)
 	}
 
 	context struct {
@@ -382,9 +382,8 @@ func (c *context) XMLBlob(code int, b []byte) (err error) {
 }
 
 func (c *context) File(file string) error {
-	e := c.Echo()
-	if e.MemoryCacheEnable() {
-		f, fi, exist := e.memoryCache.GetCacheFile(file)
+	if c.echo.MemoryCacheEnable() {
+		f, fi, exist := c.echo.memoryCache.GetCacheFile(file)
 		if !exist {
 			return ErrNotFound
 		}
@@ -434,7 +433,7 @@ func (c *context) Error(err error) {
 	c.echo.httpErrorHandler(err, c)
 }
 
-func (c *context) Echo() *Echo {
+func (c *context) App() *Echo {
 	return c.echo
 }
 
@@ -477,7 +476,7 @@ func ContentTypeByExtension(name string) (t string) {
 	return
 }
 
-func (c *context) Reset(rq engine.Request, rs engine.Response) {
+func (c *context) reset(rq engine.Request, rs engine.Response) {
 	c.netContext = nil
 	c.request = rq
 	c.response = rs
