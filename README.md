@@ -47,7 +47,7 @@ go get -u github.com/lessgo/lessgoext
 - [综述](https://github.com/lessgo/doc/blob/master/Introduction.md)
 - [安装部署](https://github.com/lessgo/doc/blob/master/Install.md)
 - [开始lessgo之旅](https://github.com/lessgo/doc/blob/master/Develop01.md)
-- [更多(文档目录)](https://github.com/lessgo/doc/blob/master/Index.md)
+- [更多(文档目录)](https://github.com/lessgo/doc/blob/master/README.md)
 
 ##项目目录组织
 ─Project 项目开发目录  
