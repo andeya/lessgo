@@ -101,7 +101,7 @@ go get -u github.com/lessgo/lessgoext
 - [综述](doc/Introduction.md)
 - [安装部署](doc/Install.md)
 - [开始lessgo之旅](doc/Develop01.md)
-
+- [更多(文档目录)](doc/index.md)
 
 ##贡献者名单
 贡献者                          |贡献概要
