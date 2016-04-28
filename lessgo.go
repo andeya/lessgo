@@ -43,7 +43,7 @@ type (
 
 const (
 	NAME    = "Lessgo"
-	VERSION = "0.4.0"
+	VERSION = "0.5.0"
 	ADDRESS = "https://github.com/lessgo/lessgo"
 )
 
@@ -186,7 +186,7 @@ func BeforeUse(middleware ...string) {
 }
 
 // 在路由执行位置之后紧邻插入中间件队列
-func AfterUser(middleware ...string) {
+func AfterUse(middleware ...string) {
 	DefLessgo.virtAfter = append(middleware, DefLessgo.virtAfter...)
 }
 
