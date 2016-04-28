@@ -3,7 +3,7 @@
 ![Lessgo Favicon](https://github.com/lessgo/lessgo/raw/master/doc/favicon.png)
 
 ##概述
-Lessgo 是一款Go 语言开发的简单、稳定、高效、灵活的 web开发框架。它的项目组织形式经过精心设计，实现前后端分离、系统与业务分离，完美兼容MVC与MVVC等多种开发模式，非常利于企业级应用与API接口的开发。当然，最值得关注的是它突破性地支持了运行时路由重建，开发者可在Admin后台轻松实现启用/禁用模块与操作，添加/移除中间件等功能！同时，它推荐以HandlerFunc与MiddlewareFunc为基础的函数式编程，也令开发变得更加灵活富有趣味性。
+Lessgo 是一款Go语言开发的简单、稳定、高效、灵活的 web开发框架。它的项目组织形式经过精心设计，实现前后端分离、系统与业务分离，完美兼容MVC与MVVC等多种开发模式，非常利于企业级应用与API接口的开发。当然，最值得关注的是它突破性地支持了运行时路由重建，开发者可在Admin后台轻松实现启用/禁用模块与操作，添加/移除中间件等功能！同时，它推荐以HandlerFunc与MiddlewareFunc为基础的函数式编程，也令开发变得更加灵活富有趣味性。
 此外它也博采众长，核心架构基于[echo v2](https://github.com/labstack/echo)并增强优化，数据库引擎内置为[xorm](https://github.com/go-xorm/xorm)，模板引擎内置为[pongo2](https://github.com/flosch/pongo2)，其他某些功能模块改写自[beego](https://github.com/astaxie/beego)以及其他优秀开源项目。（在此感谢这些优秀的开源项目）
 
 ##适用场景
@@ -12,16 +12,20 @@ Lessgo 是一款Go 语言开发的简单、稳定、高效、灵活的 web开发
 - Restful API服务应用
 - 企业应用
 
-##主要特点:
+##当前版本
+- V0.5.0
+- 发布日期：2016.04.28
+
+##当前版本功能特性
 - 使用简单、运行稳定高效
 - 兼容流行系统模式如:MVC、MVVC、Restful...
-- 强大的运行时路由重建
+- 强大的运行时动态路由(动态路由保存在Common/DB/lessgo.db中)
 - 多异构数据库支持
 - 优化的项目目录组织最佳实践，满足复杂企业应用需要
+- 集成统一的系统日志(system、database独立完整的日志)
+- 提供Session管理
+- 多种Token生成方式
 - swagger集成智能API文档
-- 集成统一的日志
-- SQLMAP方式的动态SQL配置执行API(开发中)
-- 开箱即用的权限体系(计划)
 
 ##项目架构
 ![Lessgo Web Framework](https://github.com/lessgo/lessgo/raw/master/doc/LessgoWebFramework.jpg)
