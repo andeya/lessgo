@@ -34,6 +34,7 @@ Lessgo 是一款Go语言开发的简单、稳定、高效、灵活的 web开发�
 - 核心框架：[lessgo](https://github.com/lessgo/lessgo)
 - 框架扩展：[lessgoext](https://github.com/lessgo/lessgoext)
 - 项目Demo：[demo](https://github.com/lessgo/demo)
+- 框架文档  [document](https://github.com/lessgo/doc)
 
 ##框架下载
 
@@ -41,6 +42,12 @@ Lessgo 是一款Go语言开发的简单、稳定、高效、灵活的 web开发�
 go get -u github.com/lessgo/lessgo
 go get -u github.com/lessgo/lessgoext
 ```
+
+##系统文档
+- [综述](https://github.com/lessgo/doc/Introduction.md)
+- [安装部署](https://github.com/lessgo/doc/Install.md)
+- [开始lessgo之旅](https://github.com/lessgo/doc/Develop01.md)
+- [更多(文档目录)](https://github.com/lessgo/doc/Index.md)
 
 ##项目目录组织
 ─Project 项目开发目录  
@@ -97,12 +104,6 @@ go get -u github.com/lessgo/lessgoext
 ├─Logger 运行日志输出目录  
 └─Main.go 应用入口文件 
 
-##系统文档
-- [综述](doc/Introduction.md)
-- [安装部署](doc/Install.md)
-- [开始lessgo之旅](doc/Develop01.md)
-- [更多(文档目录)](doc/Index.md)
-
 ##贡献者名单
 贡献者                          |贡献概要
 --------------------------------|--------------------------------------------------
@@ -110,7 +111,7 @@ go get -u github.com/lessgo/lessgoext
 [changyu72](https://github.com/changyu72)|第二作者 (主要架构设计者) 
 
 ##开源协议
-Lessgo 项目采用商业应用友好的 [MIT](https://github.com/lessgo/lessgo/raw/master/doc/LICENSE) 协议发布。
+Lessgo 项目采用商业应用友好的 [MIT](https://github.com/lessgo/lessgo/raw/master/LICENSE) 协议发布。
  
 ##项目联系
 * 官方QQ群：Go-Web 编程 42730308    [![Go-Web 编程群](http://pub.idqqimg.com/wpa/images/group.png)](http://jq.qq.com/?_wv=1027&k=fzi4p1)
