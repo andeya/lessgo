@@ -8,7 +8,7 @@ go get -u github.com/lessgo/lessgoext
 
 #安装部署工具
 ```sh
-cd %GOPATH%/github.com/lessgo/lessgoext/lessgo
+cd %GOPATH%/src/github.com/lessgo/lessgoext/lessgo
 go install
 ```
 #创建项目
