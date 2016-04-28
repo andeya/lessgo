@@ -22,6 +22,8 @@ type VirtHandler struct {
 }
 
 var (
+	// 全局操作列表
+	virtHandlerList = []*VirtHandler{}
 	// 防止VirtHandler的id重复
 	virtHandlerMap  = map[string]*VirtHandler{}
 	virtHandlerLock sync.RWMutex
@@ -60,7 +62,7 @@ func NewVirtHandler(
 		return virtHandlerMap[id]
 	}
 	setVirtHandler(v)
-	setHandlerMap(id, handlerfunc)
+	setHandler(id, handlerfunc)
 	return v
 }
 
@@ -114,6 +116,17 @@ func setVirtHandler(vh *VirtHandler) {
 	virtHandlerLock.Lock()
 	defer virtHandlerLock.Unlock()
 	virtHandlerMap[vh.id] = vh
+	for i, vh2 := range virtHandlerList {
+		if vh.Id() < vh2.Id() {
+			list := make([]*VirtHandler, len(virtHandlerList)+1)
+			copy(list, virtHandlerList[:i])
+			list[i] = vh
+			copy(list[i+1:], virtHandlerList[i:])
+			virtHandlerList = list
+			return
+		}
+	}
+	virtHandlerList = append(virtHandlerList, vh)
 }
 
 func hasVirtHandler(id string) bool {
@@ -151,10 +164,10 @@ func handleWareUri(hw interface{}, methods []string, prefix string) string {
 // 全部handler及其id
 var handlerMap = map[string]HandlerFunc{}
 
-func getHandlerMap(id string) HandlerFunc {
+func getHandler(id string) HandlerFunc {
 	return handlerMap[id]
 }
 
-func setHandlerMap(id string, handler HandlerFunc) {
+func setHandler(id string, handler HandlerFunc) {
 	handlerMap[id] = handler
 }
