@@ -9,6 +9,8 @@ package lessgo
 import (
 	"fmt"
 	"net"
+	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"sync"
@@ -21,6 +23,7 @@ import (
 	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
+	"github.com/lessgo/lessgo/utils"
 )
 
 type (
@@ -180,6 +183,11 @@ func RouterList() []*VirtRouter {
 	return DefLessgo.VirtRouter.Progeny()
 }
 
+// 操作列表（不可修改）
+func VirtHandlerList() []*VirtHandler {
+	return virtHandlerList
+}
+
 // 在路由执行位置之前紧邻插入中间件队列
 func BeforeUse(middleware ...string) {
 	DefLessgo.virtBefore = append(DefLessgo.virtBefore, middleware...)
@@ -282,3 +290,12 @@ func RegMiddleware(name, description string, middleware interface{}) error {
 	}
 	return nil
 }
+
+/*
+ * 软件自身md5
+ */
+var Md5 = func() string {
+	file, _ := exec.LookPath(os.Args[0])
+	info, _ := os.Stat(file)
+	return utils.MakeUnique(info.ModTime())
+}()
