@@ -1,6 +1,6 @@
 #Lessgo Web Framework  [![GoDoc](https://godoc.org/github.com/lessgo/lessgo?status.svg)](https://godoc.org/github.com/lessgo/lessgo) [![GitHub release](https://img.shields.io/github/release/lessgo/lessgo.svg)](https://github.com/lessgo/lessgo/releases)
 
-![Lessgo Favicon](https://github.com/lessgo/doc/blob/master/favicon.png)
+![Lessgo Favicon](https://github.com/lessgo/doc/blob/master/img/favicon.png)
 
 ##概述
 Lessgo 是一款Go语言开发的简单、稳定、高效、灵活的 web开发框架。它的项目组织形式经过精心设计，实现前后端分离、系统与业务分离，完美兼容MVC与MVVC等多种开发模式，非常利于企业级应用与API接口的开发。当然，最值得关注的是它突破性地支持了运行时路由重建，开发者可在Admin后台轻松实现启用/禁用模块与操作，添加/移除中间件等功能！同时，它推荐以HandlerFunc与MiddlewareFunc为基础的函数式编程，也令开发变得更加灵活富有趣味性。
@@ -28,7 +28,7 @@ Lessgo 是一款Go语言开发的简单、稳定、高效、灵活的 web开发�
 - swagger集成智能API文档
 
 ##项目架构
-![Lessgo Web Framework](https://github.com/lessgo/doc/blob/master/LessgoWebFramework.jpg)
+![Lessgo Web Framework](https://github.com/lessgo/doc/blob/master/img/LessgoWebFramework.jpg)
 
 ##框架构成
 - 核心框架：[lessgo](https://github.com/lessgo/lessgo)
@@ -115,4 +115,4 @@ Lessgo 项目采用商业应用友好的 [MIT](https://github.com/lessgo/lessgo/
  
 ##项目联系
 * 官方QQ群：Go-Web 编程 42730308    [![Go-Web 编程群](http://pub.idqqimg.com/wpa/images/group.png)](http://jq.qq.com/?_wv=1027&k=fzi4p1)
-![Lessgo Server](https://github.com/lessgo/doc/blob/master/server.jpg)
+![Lessgo Server](https://github.com/lessgo/doc/blob/master/img/server.jpg)
