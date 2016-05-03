@@ -23,7 +23,7 @@ type (
 		Desc          string
 		DefaultConfig interface{} // 默认配置(JSON格式)
 		defaultConfig string      // 默认配置的JSON字符串
-		Middleware    func(config string) MiddlewareFunc
+		Middleware    func(configJSON string) MiddlewareFunc
 		inited        bool // 标记是否已经初始化过
 	}
 	// 虚拟路由中中间件配置信息
