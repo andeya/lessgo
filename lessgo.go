@@ -7,7 +7,6 @@ Author2: https://github.com/changyu72
 package lessgo
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -24,6 +23,7 @@ import (
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
 	"github.com/lessgo/lessgo/utils"
+	"github.com/lessgo/lessgo/utils/uuid"
 )
 
 type (
@@ -32,10 +32,26 @@ type (
 		AppConfig *Config
 		dbService *dbservice.DBService
 
-		VirtRouter      *VirtRouter              //虚拟路由
-		virtMiddlewares map[string]MiddlewareObj //登记虚拟中间件
-		virtBefore      []string                 //登记路由执行前虚拟中间件
-		virtAfter       []string                 //登记路由执行后虚拟中间件
+		//全局操作列表
+		apiHandlers []*ApiHandler
+
+		//全局中间件列表
+		apiMiddlewares []*ApiMiddleware
+
+		// 路由执行前后的中间件登记
+		before []MiddlewareConfig //路由执行前中间件
+		after  []MiddlewareConfig //路由执行后中间件
+		prefix []MiddlewareConfig //第一批执行的中间件
+		suffix []MiddlewareConfig //最后一批执行的中间件
+
+		// 用于构建最终真实路由的虚拟路由；
+		// 初始值为源码中定义的路由，之后追加配置中定义的路由；
+		// 配置路由为空时，复制源码中定义的路由到配置路由；
+		// 再次运行时，直接读取配置路由覆盖自身；
+		// 源码因修改产生冲突时，以源码路由为主；
+		// 修改配置路由时，不允许和源码路由冲突；
+		// 源码路由只允许在配置中增加子节点。
+		virtRouter *VirtRouter
 
 		home         string //根路径"/"对应的url
 		serverEnable bool   //服务是否启用
@@ -180,42 +196,64 @@ func Sessions() *session.Manager {
 
 // 虚拟路由列表
 func RouterList() []*VirtRouter {
-	return DefLessgo.VirtRouter.Progeny()
+	return DefLessgo.virtRouter.Progeny()
 }
 
-// 操作列表（不可修改）
-func VirtHandlerList() []*VirtHandler {
-	return virtHandlerList
+// 虚拟路由根节点
+func RootRouter() *VirtRouter {
+	return DefLessgo.virtRouter
+}
+
+// 操作列表（禁止修改）
+func ApiHandlerList() []*ApiHandler {
+	return DefLessgo.apiHandlers
 }
 
 // 在路由执行位置之前紧邻插入中间件队列
-func BeforeUse(middleware ...string) {
-	DefLessgo.virtBefore = append(DefLessgo.virtBefore, middleware...)
+func BeforeUse(middleware ...MiddlewareConfig) {
+	DefLessgo.before = append(DefLessgo.before, middleware...)
 }
 
 // 在路由执行位置之后紧邻插入中间件队列
-func AfterUse(middleware ...string) {
-	DefLessgo.virtAfter = append(middleware, DefLessgo.virtAfter...)
+func AfterUse(middleware ...MiddlewareConfig) {
+	DefLessgo.after = append(middleware, DefLessgo.after...)
+}
+
+// 第一批执行的中间件
+func PreUse(middleware ...MiddlewareConfig) {
+	DefLessgo.prefix = append(DefLessgo.prefix, middleware...)
+}
+
+// 最后一批执行的中间件
+func SufUse(middleware ...MiddlewareConfig) {
+	DefLessgo.suffix = append(middleware, DefLessgo.suffix...)
 }
 
 // 从根路由开始配置路由(必须在init()中调用)
-func RootRouter(nodes ...*VirtRouter) *VirtRouter {
+func Root(nodes ...*VirtRouter) *VirtRouter {
 	var err error
 	for _, node := range nodes {
-		err = DefLessgo.VirtRouter.AddChild(node)
+		if node == nil {
+			continue
+		}
+		err = DefLessgo.virtRouter.addChild(node)
 		if err != nil {
 			Logger().Error("%v", err)
 		}
 	}
-	return DefLessgo.VirtRouter
+	return DefLessgo.virtRouter
 }
 
 // 配置路由分组(必须在init()中调用)
-func SubRouter(prefix, name string, nodes ...*VirtRouter) *VirtRouter {
-	parent := NewGroupVirtRouter(prefix, name)
+func Branch(prefix, desc string, nodes ...*VirtRouter) *VirtRouter {
+	parent := NewGroupVirtRouter(prefix, desc)
+	parent.Dynamic = false
 	var err error
 	for _, node := range nodes {
-		err = parent.AddChild(node)
+		if node == nil {
+			continue
+		}
+		err = parent.addChild(node)
 		if err != nil {
 			Logger().Error("%v", err)
 		}
@@ -223,36 +261,28 @@ func SubRouter(prefix, name string, nodes ...*VirtRouter) *VirtRouter {
 	return parent
 }
 
-// 配置操作(必须在init()中调用)
-func Get(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
-	return route([]string{GET}, prefix, name, descHandlerOrhandler, middleware)
-}
-func Head(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
-	return route([]string{HEAD}, prefix, name, descHandlerOrhandler, middleware)
-}
-func Options(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
-	return route([]string{OPTIONS}, prefix, name, descHandlerOrhandler, middleware)
-}
-func Patch(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
-	return route([]string{PATCH}, prefix, name, descHandlerOrhandler, middleware)
-}
-func Post(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
-	return route([]string{POST}, prefix, name, descHandlerOrhandler, middleware)
-}
-func Put(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
-	return route([]string{PUT}, prefix, name, descHandlerOrhandler, middleware)
-}
-func Trace(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
-	return route([]string{TRACE}, prefix, name, descHandlerOrhandler, middleware)
-}
-func Any(prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
-	return route([]string{CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE}, prefix, name, descHandlerOrhandler, middleware)
-}
-func Match(methods []string, prefix, name string, descHandlerOrhandler interface{}, middleware ...string) *VirtRouter {
-	if len(methods) == 0 {
-		Logger().Error("The method can not be empty: %v", name)
+// 配置路由操作(必须在init()中调用)
+func Leaf(prefix string, apiHandler *ApiHandler, middlewares ...*ApiMiddleware) *VirtRouter {
+	prefix = cleanPrefix(prefix)
+	ms := make([]MiddlewareConfig, len(middlewares))
+	for i, m := range middlewares {
+		m.Init()
+		ms[i] = MiddlewareConfig{
+			Name:   m.Name,
+			Config: m.defaultConfig,
+		}
 	}
-	return route(methods, prefix, name, descHandlerOrhandler, middleware)
+	vr := &VirtRouter{
+		Id:          uuid.New().String(),
+		Type:        HANDLER,
+		Prefix:      prefix,
+		Enable:      true,
+		Dynamic:     false,
+		Middlewares: ms,
+		apiHandler:  apiHandler.Init(),
+		Hid:         apiHandler.id,
+	}
+	return vr
 }
 
 /*
@@ -262,8 +292,6 @@ func ReregisterRouter() {
 	DefLessgo.app.lock.Lock()
 	defer DefLessgo.app.lock.Unlock()
 	registerVirtRouter()
-	registerPreUse()
-	registerSufUse()
 	registerStaticRouter()
 }
 
@@ -272,23 +300,8 @@ func ReregisterRouter() {
  */
 
 // 获取已注册的中间件列表
-func Middlewares() map[string]MiddlewareObj {
-	return DefLessgo.virtMiddlewares
-}
-
-// 注册虚拟路由中使用的中间件，须在init()中调用
-func RegMiddleware(name, description string, middleware interface{}) error {
-	if _, ok := DefLessgo.virtMiddlewares[name]; ok {
-		err := fmt.Errorf("RegisterMiddlewareFunc called twice for middleware %v.", name)
-		Logger().Error("%v", err)
-		return err
-	}
-	DefLessgo.virtMiddlewares[name] = MiddlewareObj{
-		Name:           name,
-		Description:    description,
-		MiddlewareFunc: WrapMiddleware(middleware),
-	}
-	return nil
+func Middlewares() []*ApiMiddleware {
+	return DefLessgo.apiMiddlewares
 }
 
 /*

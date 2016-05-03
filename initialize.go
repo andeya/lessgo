@@ -26,17 +26,18 @@ func newLessgo() *lessgo {
 	registerMime()
 
 	l := &lessgo{
-		app:             New(),
-		AppConfig:       AppConfig,
-		home:            "/",
-		serverEnable:    true,
-		virtMiddlewares: map[string]MiddlewareObj{},
-		virtBefore:      []string{},
-		virtAfter:       []string{},
+		app:            New(),
+		AppConfig:      AppConfig,
+		home:           "/",
+		serverEnable:   true,
+		apiHandlers:    []*ApiHandler{},
+		apiMiddlewares: []*ApiMiddleware{},
+		before:         []MiddlewareConfig{},
+		after:          []MiddlewareConfig{},
+		prefix:         []MiddlewareConfig{},
+		suffix:         []MiddlewareConfig{},
+		virtRouter:     newRootVirtRouter(),
 	}
-
-	// 初始化全局虚拟路由
-	l.VirtRouter = newRootVirtRouter()
 
 	// 初始化日志
 	l.app.Logger().SetMsgChan(AppConfig.Log.AsyncChan)
@@ -153,20 +154,6 @@ func registerStaticRouter() {
 
 	DefLessgo.app.File("/favicon.ico", IMG_DIR+"/favicon.ico")
 }
-
-// 注册固定的路由前缀中间件
-func registerPreUse() {
-	DefLessgo.app.PreUse(
-		CheckServer(),
-		CheckHome(),
-		RequestLogger(),
-		Recover(),
-		WrapMiddleware(CrossDomain),
-	)
-}
-
-// 注册固定的路由后缀中间件
-func registerSufUse() {}
 
 // 注册数据库服务
 func registerDBService() *dbservice.DBService {

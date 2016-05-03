@@ -1,12 +1,15 @@
 package lessgo
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"path"
+	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lessgo/lessgo/logs"
@@ -14,18 +17,91 @@ import (
 )
 
 // 一旦注册，不可再更改
-type MiddlewareObj struct {
-	Name        string // 全局唯一
-	Description string
-	MiddlewareFunc
+type (
+	ApiMiddleware struct {
+		Name          string // 全局唯一
+		Desc          string
+		DefaultConfig interface{} // 默认配置(JSON格式)
+		defaultConfig string      // 默认配置的JSON字符串
+		Middleware    func(config string) MiddlewareFunc
+		inited        bool // 标记是否已经初始化过
+	}
+	// 虚拟路由中中间件配置信息
+	MiddlewareConfig struct {
+		Name   string `json:"name"`   // 全局唯一
+		Config string `json:"config"` // JSON格式的配置
+	}
+)
+
+func (a *ApiMiddleware) CreateMiddlewareFunc(config string) MiddlewareFunc {
+	if config == "" {
+		return a.Middleware(a.defaultConfig)
+	}
+	return a.Middleware(config)
 }
 
-func middlewareCheck(middlewareNames []string) error {
+// 设置id，并当Name为空时自动添加Name
+func (a *ApiMiddleware) Init() *ApiMiddleware {
+	if a.inited {
+		return a
+	}
+
+	if a.Name == "" {
+		v := reflect.ValueOf(a.Middleware)
+		a.Name = runtime.FuncForPC(v.Pointer()).Name()
+	}
+
+	if getApiMiddleware(a.Name) != nil {
+		return apiMiddlewareMap[a.Name]
+	}
+
+	if a.DefaultConfig != nil {
+		b, _ := json.Marshal(a.DefaultConfig)
+		a.defaultConfig = string(b)
+	}
+
+	a.inited = true
+
+	setApiMiddleware(a)
+
+	return a
+}
+
+var (
+	apiMiddlewareMap  = map[string]*ApiMiddleware{}
+	apiMiddlewareLock sync.RWMutex
+)
+
+func getApiMiddleware(name string) *ApiMiddleware {
+	apiMiddlewareLock.RLock()
+	defer apiMiddlewareLock.RUnlock()
+	return apiMiddlewareMap[name]
+}
+
+func setApiMiddleware(vh *ApiMiddleware) {
+	apiMiddlewareLock.Lock()
+	defer apiMiddlewareLock.Unlock()
+	apiMiddlewareMap[vh.Name] = vh
+	for i, vh2 := range DefLessgo.apiMiddlewares {
+		if vh.Name < vh2.Name {
+			list := make([]*ApiMiddleware, len(DefLessgo.apiMiddlewares)+1)
+			copy(list, DefLessgo.apiMiddlewares[:i])
+			list[i] = vh
+			copy(list[i+1:], DefLessgo.apiMiddlewares[i:])
+			DefLessgo.apiMiddlewares = list
+			return
+		}
+	}
+	DefLessgo.apiMiddlewares = append(DefLessgo.apiMiddlewares, vh)
+}
+
+// 检查中间件是否存在
+func isExistMiddlewares(middlewareConfigs ...MiddlewareConfig) error {
 	var errstring string
-	for _, m := range middlewareNames {
-		_, ok := DefLessgo.virtMiddlewares[m]
+	for _, m := range middlewareConfigs {
+		_, ok := apiMiddlewareMap[m.Name]
 		if !ok {
-			errstring += " \"" + m + "\""
+			errstring += " \"" + m.Name + "\""
 		}
 	}
 	if len(errstring) == 0 {
@@ -34,10 +110,11 @@ func middlewareCheck(middlewareNames []string) error {
 	return fmt.Errorf("Specified below middlewares does not exist: %v\n", errstring)
 }
 
-func getMiddlewares(names []string) []MiddlewareFunc {
-	mws := make([]MiddlewareFunc, len(names))
-	for i, mw := range names {
-		mws[i] = DefLessgo.virtMiddlewares[mw].MiddlewareFunc
+// 根据中间件配置生成中间件
+func createMiddlewareFuncs(configs []MiddlewareConfig) []MiddlewareFunc {
+	mws := make([]MiddlewareFunc, len(configs))
+	for i, mw := range configs {
+		mws[i] = apiMiddlewareMap[mw.Name].CreateMiddlewareFunc(mw.Config)
 	}
 	return mws
 }
@@ -45,9 +122,54 @@ func getMiddlewares(names []string) []MiddlewareFunc {
 /*
  * system middleware
  */
+func init() {
+	(&ApiMiddleware{
+		Name:       "检查服务器是否启用",
+		Desc:       "检查服务器是否启用",
+		Middleware: CheckServer,
+	}).Init()
+
+	(&ApiMiddleware{
+		Name:       "检查是否为访问主页",
+		Desc:       "检查是否为访问主页",
+		Middleware: CheckHome,
+	}).Init()
+
+	(&ApiMiddleware{
+		Name:       "系统运行日志打印",
+		Desc:       "RequestLogger returns a middleware that logs HTTP requests.",
+		Middleware: RequestLogger,
+	}).Init()
+
+	(&ApiMiddleware{
+		Name: "捕获运行时恐慌",
+		Desc: "Recover returns a middleware which recovers from panics anywhere in the chain and handles the control to the centralized HTTPErrorHandler.",
+		DefaultConfig: RecoverConfig{
+			StackSize:         4 << 10, // 4 KB
+			DisableStackAll:   false,
+			DisablePrintStack: false,
+		},
+		Middleware: Recover,
+	}).Init()
+
+	(&ApiMiddleware{
+		Name:       "设置允许跨域",
+		Desc:       "根据配置信息设置允许跨域",
+		Middleware: CrossDomain,
+	}).Init()
+
+	// 系统预设中间件
+	PreUse(
+		MiddlewareConfig{Name: "检查服务器是否启用"},
+		MiddlewareConfig{Name: "检查是否为访问主页"},
+		MiddlewareConfig{Name: "系统运行日志打印"},
+		MiddlewareConfig{Name: "捕获运行时恐慌"},
+		MiddlewareConfig{Name: "设置允许跨域"},
+	)
+}
 
 // 检查服务器是否启用
-func CheckServer() MiddlewareFunc {
+func CheckServer(config string) MiddlewareFunc {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c Context) error {
 			if !ServerEnable() {
@@ -59,7 +181,7 @@ func CheckServer() MiddlewareFunc {
 }
 
 // 检查是否为访问主页
-func CheckHome() MiddlewareFunc {
+func CheckHome(config string) MiddlewareFunc {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c Context) error {
 			if c.Request().URL().Path() == "/" {
@@ -71,7 +193,7 @@ func CheckHome() MiddlewareFunc {
 }
 
 // RequestLogger returns a middleware that logs HTTP requests.
-func RequestLogger() MiddlewareFunc {
+func RequestLogger(config string) MiddlewareFunc {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c Context) (err error) {
 			req := c.Request()
@@ -133,27 +255,15 @@ type (
 	}
 )
 
-var (
-	// DefaultRecoverConfig is the default recover middleware config.
-	DefaultRecoverConfig = RecoverConfig{
-		StackSize:         4 << 10, // 4 KB
-		DisableStackAll:   false,
-		DisablePrintStack: false,
-	}
-)
-
-// Recover returns a middleware which recovers from panics anywhere in the chain
-// and handles the control to the centralized HTTPErrorHandler.
-func Recover() MiddlewareFunc {
-	return RecoverWithConfig(DefaultRecoverConfig)
-}
-
 // RecoverWithConfig returns a recover middleware from config.
 // See `Recover()`.
-func RecoverWithConfig(config RecoverConfig) MiddlewareFunc {
+func Recover(configJSON string) MiddlewareFunc {
+	config := RecoverConfig{}
+	json.Unmarshal([]byte(configJSON), &config)
+
 	// Defaults
 	if config.StackSize == 0 {
-		config.StackSize = DefaultRecoverConfig.StackSize
+		config.StackSize = 4 << 10
 	}
 
 	return func(next HandlerFunc) HandlerFunc {
@@ -180,11 +290,14 @@ func RecoverWithConfig(config RecoverConfig) MiddlewareFunc {
 	}
 }
 
-func CrossDomain(c Context) error {
-	if AppConfig.CrossDomain {
-		c.Response().Header().Set("Access-Control-Allow-Origin", "*")
-	}
-	return nil
+// 设置允许跨域
+func CrossDomain(config string) MiddlewareFunc {
+	return WrapMiddleware(func(c Context) error {
+		if AppConfig.CrossDomain {
+			c.Response().Header().Set("Access-Control-Allow-Origin", "*")
+		}
+		return nil
+	})
 }
 
 func filterTemplate() MiddlewareFunc {
