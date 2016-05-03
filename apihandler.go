@@ -10,11 +10,11 @@ import (
 
 type (
 	ApiHandler struct {
-		Desc     string              // 本操作的描述
-		Methods  []string            // 方法列表，为空时默认为全部
-		Params   []Param             // 参数说明列表，path参数类型的先后顺序与url中保持一致
-		Produces []string            // 支持的响应内容类型，如["application/xml", "application/json"]
-		Handler  func(Context) error // 操作
+		Desc    string   // 本操作的描述
+		Methods []string // 方法列表，为空时默认为全部
+		Params  []Param  // 参数说明列表，path参数类型的先后顺序与url中保持一致
+		// Produces []string            // 支持的响应内容类型，如["application/xml", "application/json"]
+		Handler func(Context) error // 操作
 
 		id     string // 操作的唯一标识符
 		suffix string // 路由节点的url参数后缀
@@ -36,10 +36,18 @@ var (
 )
 
 func NilApiHandler(desc string) *ApiHandler {
-	return &ApiHandler{
-		Desc:   desc,
-		inited: true,
+	a := &ApiHandler{
+		Desc: desc,
 	}
+	a.initId()
+	a.inited = true
+	if getApiHandler(a.id) != nil {
+		return apiHandlerMap[a.id]
+	}
+	apiHandlerLock.Lock()
+	defer apiHandlerLock.Unlock()
+	apiHandlerMap[a.id] = a
+	return a
 }
 
 // 初始化并保存在全局唯一的操作列表中
@@ -128,7 +136,7 @@ func (a *ApiHandler) initMethods() {
 }
 
 func (a *ApiHandler) initId() {
-	add := "[" + a.suffix + "]"
+	add := "[" + a.suffix + "][" + a.Desc + "]"
 	for _, m := range a.Methods {
 		add += "[" + m + "]"
 	}

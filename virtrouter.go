@@ -18,9 +18,9 @@ type VirtRouter struct {
 	Type        int                `json:"type" xorm:"not null TINYINT(1)"`     // 操作类型: 根目录/路由分组/操作
 	Prefix      string             `json:"prefix" xorm:"not null VARCHAR(500)"` // 路由节点的url前缀(不含参数)
 	Middlewares []MiddlewareConfig `json:"middlewares" xorm:"TEXT json"`        // 中间件列表 (允许运行时修改)
-	Hid         string             `json:"hid" xorm:"not null VARCHAR(500)"`    // 操作ApiHandler.id
 	Enable      bool               `json:"enable" xorm:"not null TINYINT(1)"`   // 是否启用当前路由节点
 	Dynamic     bool               `json:"dynamic" xorm:"not null TINYINT(1)"`  // 是否动态追加的节点
+	Hid         string             `json:"hid" xorm:"not null VARCHAR(500)"`    // 操作ApiHandler.id
 
 	path       string        `xorm:"-"` // 路由匹配模式
 	prefixPath string        `xorm:"-"` // 路由节点的url前缀的固定路径部分
@@ -60,17 +60,27 @@ func initVirtRouterFromDB() (err error) {
 	vrlock := new(VirtRouterLock)
 	err = lessgodb.Sync2(vrlock)
 	if err != nil {
+		err = fmt.Errorf("Failed to sync table virt_router_lock: %v.", err)
+		return
+	}
+	vr := new(VirtRouter)
+	has, err := lessgodb.Get(vrlock)
+	if vrlock.Md5 != Md5 {
+		err = lessgodb.DropTables(vr)
+		if err != nil {
+			err = fmt.Errorf("Failed to drop table virt_router: %v.", err)
+			return
+		}
+	}
+	err = lessgodb.Sync2(vr)
+	if err != nil {
+		err = fmt.Errorf("Failed to sync table virt_router: %v.", err)
 		return
 	}
 	session := lessgodb.NewSession()
 	defer session.Close()
 	err = session.Begin()
 	if err != nil {
-		return
-	}
-	has, err := session.Get(vrlock)
-	if err != nil {
-		session.Rollback()
 		return
 	}
 
@@ -82,7 +92,7 @@ func initVirtRouterFromDB() (err error) {
 		if err != nil {
 			session.Rollback()
 			vrlock.Md5 = ""
-			err = fmt.Errorf("Failed to insert virtRouter md5: %v", err)
+			err = fmt.Errorf("Failed to insert table virt_router md5: %v.", err)
 			return
 		}
 
@@ -90,6 +100,7 @@ func initVirtRouterFromDB() (err error) {
 		if err != nil {
 			return
 		}
+
 	} else if vrlock.Md5 != Md5 {
 
 		// 软件重新编译后再次运行时
@@ -98,60 +109,63 @@ func initVirtRouterFromDB() (err error) {
 		if err != nil {
 			session.Rollback()
 			vrlock.Md5 = ""
-			err = fmt.Errorf("Failed to update virtRouter md5: %v", err)
+			err = fmt.Errorf("Failed to update table virt_router md5: %v.", err)
 			return
 		}
-
-	} else {
 
 		var dbInfo []*VirtRouter
 		err = session.Find(&dbInfo)
 		if err != nil {
 			session.Rollback()
-			err = fmt.Errorf("Failed to read virt_router: %v", err)
+			err = fmt.Errorf("Failed to read table virt_router: %v.", err)
 			return
 		}
-
-		// 构建历史版本的虚拟路由树
-		dbRootVirtRouter := buildVirtRouter(dbInfo)
-		merge(DefLessgo.virtRouter, dbRootVirtRouter)
-		virtRouterLock.Lock()
-		defer virtRouterLock.Unlock()
-		virtRouterMap = map[string]*VirtRouter{}
-		vrs := DefLessgo.virtRouter.Progeny()
-		for _, vr := range vrs {
-			virtRouterMap[vr.Id] = vr
+		if len(dbInfo) > 0 {
+			// 构建历史版本的虚拟路由树
+			dbRootVirtRouter := buildVirtRouter(dbInfo)
+			merge(DefLessgo.virtRouter, dbRootVirtRouter)
+			virtRouterLock.Lock()
+			defer virtRouterLock.Unlock()
+			virtRouterMap = map[string]*VirtRouter{}
+			vrs := DefLessgo.virtRouter.Progeny()
+			for _, vr := range vrs {
+				virtRouterMap[vr.Id] = vr
+			}
 		}
-
 		err = dbReset(session)
 		if err != nil {
 			return
 		}
+
+	} else {
+
+		// 软件重复运行时
+		var dbInfo []*VirtRouter
+		err = session.Find(&dbInfo)
+		if err != nil {
+			session.Rollback()
+			err = fmt.Errorf("Failed to read table virt_router: %v.", err)
+			return
+		}
+		if len(dbInfo) == 0 {
+			session.Rollback()
+			err = fmt.Errorf("Table virt_router does not exist.")
+			return
+		}
+		// 从配置信息构建虚拟路由树
+		DefLessgo.virtRouter = buildVirtRouter(dbInfo)
 	}
-	return session.Commit()
+	err = session.Commit()
+	return
 }
 
 // 重建数据库中虚拟路由配置信息
 func dbReset(session *xorm.Session) (err error) {
-	vr := new(VirtRouter)
-	err = lessgodb.DropTables(vr)
-	if err != nil {
-		session.Rollback()
-		err = fmt.Errorf("Failed to drop virt_router table: %v", err)
-		return
-	}
-	err = lessgodb.Sync2(vr)
-	if err != nil {
-		session.Rollback()
-		err = fmt.Errorf("Failed to sync virt_router table: %v", err)
-		return
-	}
 	nodes := DefLessgo.virtRouter.Progeny()
 	_, err = session.Insert(&nodes)
 	if err != nil {
 		session.Rollback()
-		err = fmt.Errorf("Failed to insert virt_router: %v", err)
-		return
+		err = fmt.Errorf("Failed to insert table virt_router: %v.", err)
 	}
 	return
 }
@@ -198,14 +212,16 @@ func buildVirtRouter(vrs []*VirtRouter) *VirtRouter {
 
 // 创建虚拟路由根节点
 func newRootVirtRouter() *VirtRouter {
+	ah := NilApiHandler("Service Root")
 	root := &VirtRouter{
 		Id:          uuid.New().String(),
 		Type:        ROOT,
 		Prefix:      "/",
 		Dynamic:     false,
 		Enable:      true,
-		apiHandler:  NilApiHandler("Service Root"),
+		apiHandler:  ah,
 		Middlewares: []MiddlewareConfig{},
+		Hid:         ah.id,
 	}
 	root.reset()
 	return root
@@ -214,14 +230,16 @@ func newRootVirtRouter() *VirtRouter {
 // 创建虚拟路由动态分组
 func NewGroupVirtRouter(prefix, desc string) *VirtRouter {
 	prefix = cleanPrefix(prefix)
+	ah := NilApiHandler(desc)
 	return &VirtRouter{
 		Id:          uuid.New().String(),
 		Type:        GROUP,
 		Prefix:      prefix,
 		Enable:      true,
 		Dynamic:     true,
-		apiHandler:  NilApiHandler(desc),
+		apiHandler:  ah,
 		Middlewares: []MiddlewareConfig{},
+		Hid:         ah.id,
 	}
 }
 
@@ -264,10 +282,10 @@ func (vr *VirtRouter) Params() []Param {
 	return vr.apiHandler.Params
 }
 
-// 操作接受的响应内容类型
-func (vr *VirtRouter) Produces() []string {
-	return vr.apiHandler.Produces
-}
+// // 操作接受的响应内容类型
+// func (vr *VirtRouter) Produces() []string {
+// 	return vr.apiHandler.Produces
+// }
 
 // 子孙虚拟路由节点列表
 func (vr *VirtRouter) Progeny() []*VirtRouter {
