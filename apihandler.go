@@ -50,19 +50,24 @@ func NilApiHandler(desc string) *ApiHandler {
 	return a
 }
 
+// 注册操作
+func (a ApiHandler) Reg() *ApiHandler {
+	return a.init()
+}
+
 // 初始化并保存在全局唯一的操作列表中
-func (a *ApiHandler) Init() *ApiHandler {
+func (a *ApiHandler) init() *ApiHandler {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 	if a.inited {
-		return a
+		return getApiHandler(a.id)
 	}
 	a.initMethods()
 	a.initParamsAndSuffix()
 	a.initId()
 	a.inited = true
-	if getApiHandler(a.id) != nil {
-		return apiHandlerMap[a.id]
+	if h := getApiHandler(a.id); h != nil {
+		return h
 	}
 	setApiHandler(a)
 	return a

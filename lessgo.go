@@ -191,6 +191,34 @@ func Sessions() *session.Manager {
 }
 
 /*
+ * 操作
+ */
+
+// 注册操作
+func RegHandler(a ApiHandler) *ApiHandler {
+	return a.init()
+}
+
+// 获取已注册的操作列表
+func Handlers() []*ApiHandler {
+	return DefLessgo.apiHandlers
+}
+
+/*
+ * 中间件
+ */
+
+// 注册中间件
+func RegMiddleware(a ApiMiddleware) *ApiMiddleware {
+	return a.init()
+}
+
+// 获取已注册的中间件列表
+func Middlewares() []*ApiMiddleware {
+	return DefLessgo.apiMiddlewares
+}
+
+/*
  * 虚拟路由
  */
 
@@ -266,7 +294,7 @@ func Leaf(prefix string, apiHandler *ApiHandler, middlewares ...*ApiMiddleware) 
 	prefix = cleanPrefix(prefix)
 	ms := make([]MiddlewareConfig, len(middlewares))
 	for i, m := range middlewares {
-		m.Init()
+		m.init()
 		ms[i] = MiddlewareConfig{
 			Name:   m.Name,
 			Config: m.defaultConfig,
@@ -279,7 +307,7 @@ func Leaf(prefix string, apiHandler *ApiHandler, middlewares ...*ApiMiddleware) 
 		Enable:      true,
 		Dynamic:     false,
 		Middlewares: ms,
-		apiHandler:  apiHandler.Init(),
+		apiHandler:  apiHandler.init(),
 		Hid:         apiHandler.id,
 	}
 	return vr
@@ -293,15 +321,6 @@ func ReregisterRouter() {
 	defer DefLessgo.app.lock.Unlock()
 	registerVirtRouter()
 	registerStaticRouter()
-}
-
-/*
- * 中间件
- */
-
-// 获取已注册的中间件列表
-func Middlewares() []*ApiMiddleware {
-	return DefLessgo.apiMiddlewares
 }
 
 /*

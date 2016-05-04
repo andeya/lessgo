@@ -40,10 +40,15 @@ func (a *ApiMiddleware) CreateMiddlewareFunc(config string) MiddlewareFunc {
 	return a.Middleware(config)
 }
 
-// 设置id，并当Name为空时自动添加Name
-func (a *ApiMiddleware) Init() *ApiMiddleware {
+// 注册中间件
+func (a ApiMiddleware) Reg() *ApiMiddleware {
+	return a.init()
+}
+
+// 初始化中间件，设置id并当Name为空时自动添加Name
+func (a *ApiMiddleware) init() *ApiMiddleware {
 	if a.inited {
-		return a
+		return getApiMiddleware(a.Name)
 	}
 
 	if a.Name == "" {
@@ -51,8 +56,8 @@ func (a *ApiMiddleware) Init() *ApiMiddleware {
 		a.Name = runtime.FuncForPC(v.Pointer()).Name()
 	}
 
-	if getApiMiddleware(a.Name) != nil {
-		return apiMiddlewareMap[a.Name]
+	if m := getApiMiddleware(a.Name); m != nil {
+		return m
 	}
 
 	if a.DefaultConfig != nil {
@@ -127,19 +132,19 @@ func init() {
 		Name:       "检查服务器是否启用",
 		Desc:       "检查服务器是否启用",
 		Middleware: CheckServer,
-	}).Init()
+	}).init()
 
 	(&ApiMiddleware{
 		Name:       "检查是否为访问主页",
 		Desc:       "检查是否为访问主页",
 		Middleware: CheckHome,
-	}).Init()
+	}).init()
 
 	(&ApiMiddleware{
 		Name:       "系统运行日志打印",
 		Desc:       "RequestLogger returns a middleware that logs HTTP requests.",
 		Middleware: RequestLogger,
-	}).Init()
+	}).init()
 
 	(&ApiMiddleware{
 		Name: "捕获运行时恐慌",
@@ -150,13 +155,13 @@ func init() {
 			DisablePrintStack: false,
 		},
 		Middleware: Recover,
-	}).Init()
+	}).init()
 
 	(&ApiMiddleware{
 		Name:       "设置允许跨域",
 		Desc:       "根据配置信息设置允许跨域",
 		Middleware: CrossDomain,
-	}).Init()
+	}).init()
 
 	// 系统预设中间件
 	PreUse(

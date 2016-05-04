@@ -55,7 +55,13 @@ var (
 func initVirtRouterFromDB() (err error) {
 	lessgodb, _ = GetDB("lessgo")
 	if lessgodb == nil {
+		Logger().Warn("The lessgo database can not be used, now only use source code routing.\n")
 		return
+	}
+	if err = lessgodb.Ping(); err != nil {
+		Logger().Error("%v", err)
+		Logger().Warn("The lessgo database connection failed, now only use source code routing.\n")
+		return nil
 	}
 	vrlock := new(VirtRouterLock)
 	err = lessgodb.Sync2(vrlock)
@@ -353,7 +359,7 @@ func (vr *VirtRouter) Use(middlewares ...*ApiMiddleware) *VirtRouter {
 	ms := make([]MiddlewareConfig, _l+l)
 	copy(ms, vr.Middlewares)
 	for i, m := range middlewares {
-		m.Init()
+		m.init()
 		ms[i+_l] = MiddlewareConfig{
 			Name:   m.Name,
 			Config: m.defaultConfig,
