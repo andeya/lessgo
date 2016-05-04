@@ -12,22 +12,34 @@ import (
 	"github.com/valyala/fasthttp"
 
 	"github.com/lessgo/lessgo/engine"
+	"github.com/lessgo/lessgo/logs"
 )
 
 type (
 	// Request implements `engine.Request`.
 	Request struct {
 		*fasthttp.RequestCtx
-		url    engine.URL
 		header engine.Header
+		url    engine.URL
+		logger logs.Logger
 	}
 )
 
 var _ engine.Request = new(Request)
 
+// NewRequest returns `Request` instance.
+func NewRequest(c *fasthttp.RequestCtx, l logs.Logger) *Request {
+	return &Request{
+		RequestCtx: c,
+		url:        &URL{URI: c.URI()},
+		header:     &RequestHeader{RequestHeader: &c.Request.Header},
+		logger:     l,
+	}
+}
+
 // IsTLS implements `engine.Request#TLS` function.
 func (r *Request) IsTLS() bool {
-	return r.IsTLS()
+	return r.RequestCtx.IsTLS()
 }
 
 // Scheme implements `engine.Request#Scheme` function.
@@ -48,35 +60,6 @@ func (r *Request) URL() engine.URL {
 // Header implements `engine.Request#Header` function.
 func (r *Request) Header() engine.Header {
 	return r.header
-}
-
-// Cookies parses and returns the HTTP cookies sent with the request.
-func (r *Request) Cookies() []*http.Cookie {
-	return []*http.Cookie{readCookie(r.header, "")}
-}
-
-// Cookie returns the named cookie provided in the request or
-// ErrNoCookie if not found.
-func (r *Request) Cookie(name string) (*http.Cookie, error) {
-	c := readCookie(r.header, name)
-	if c == nil {
-		return nil, http.ErrNoCookie
-	}
-	return c, nil
-}
-
-// AddCookie adds a cookie to the request.  Per RFC 6265 section 5.4,
-// AddCookie does not attach more than one Cookie header field.  That
-// means all cookies, if any, are written into the same line,
-// separated by semicolon.
-func (r *Request) AddCookie(c *http.Cookie) {
-	// r.header.(*RequestHeader).SetCookie(sanitizeCookieName(c.Name), sanitizeCookieValue(c.Value))
-	s := fmt.Sprintf("%s=%s", sanitizeCookieName(c.Name), sanitizeCookieValue(c.Value))
-	if c := r.header.Get("Cookie"); c != "" {
-		r.header.Set("Cookie", c+"; "+s)
-	} else {
-		r.header.Set("Cookie", s)
-	}
 }
 
 // ContentLength implements `engine.Request#ContentLength` function.
@@ -116,7 +99,12 @@ func (r *Request) SetURI(uri string) {
 
 // Body implements `engine.Request#Body` function.
 func (r *Request) Body() io.Reader {
-	return bytes.NewBuffer(r.PostBody())
+	return bytes.NewBuffer(r.Request.Body())
+}
+
+// SetBody implements `engine.Request#SetBody` function.
+func (r *Request) SetBody(reader io.Reader) {
+	r.Request.SetBodyStream(reader, 0)
 }
 
 // FormValue implements `engine.Request#FormValue` function.
@@ -142,6 +130,35 @@ func (r *Request) FormFile(name string) (*multipart.FileHeader, error) {
 // MultipartForm implements `engine.Request#MultipartForm` function.
 func (r *Request) MultipartForm() (*multipart.Form, error) {
 	return r.RequestCtx.MultipartForm()
+}
+
+// Cookies parses and returns the HTTP cookies sent with the request.
+func (r *Request) Cookies() []*http.Cookie {
+	return []*http.Cookie{readCookie(r.header, "")}
+}
+
+// Cookie returns the named cookie provided in the request or
+// ErrNoCookie if not found.
+func (r *Request) Cookie(name string) (*http.Cookie, error) {
+	c := readCookie(r.header, name)
+	if c == nil {
+		return nil, http.ErrNoCookie
+	}
+	return c, nil
+}
+
+// AddCookie adds a cookie to the request.  Per RFC 6265 section 5.4,
+// AddCookie does not attach more than one Cookie header field.  That
+// means all cookies, if any, are written into the same line,
+// separated by semicolon.
+func (r *Request) AddCookie(c *http.Cookie) {
+	// r.header.(*RequestHeader).SetCookie(sanitizeCookieName(c.Name), sanitizeCookieValue(c.Value))
+	s := fmt.Sprintf("%s=%s", sanitizeCookieName(c.Name), sanitizeCookieValue(c.Value))
+	if c := r.header.Get("Cookie"); c != "" {
+		r.header.Set("Cookie", c+"; "+s)
+	} else {
+		r.header.Set("Cookie", s)
+	}
 }
 
 func (r *Request) reset(c *fasthttp.RequestCtx, h engine.Header, u engine.URL) {

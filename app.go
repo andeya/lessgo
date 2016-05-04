@@ -2,8 +2,6 @@ package lessgo
 
 import (
 	"bytes"
-	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -64,14 +62,6 @@ type (
 	// HTTPErrorHandler is a centralized HTTP error handler.
 	HTTPErrorHandler func(error, Context)
 
-	// Binder is the interface that wraps the Bind function.
-	Binder interface {
-		Bind(interface{}, Context) error
-	}
-
-	binder struct {
-	}
-
 	// Validator is the interface that wraps the Validate function.
 	Validator interface {
 		Validate() error
@@ -127,12 +117,16 @@ const (
 	HeaderContentEncoding               = "Content-Encoding"
 	HeaderContentLength                 = "Content-Length"
 	HeaderContentType                   = "Content-Type"
+	HeaderCookie                        = "Cookie"
+	HeaderSetCookie                     = "Set-Cookie"
 	HeaderIfModifiedSince               = "If-Modified-Since"
 	HeaderLastModified                  = "Last-Modified"
 	HeaderLocation                      = "Location"
 	HeaderUpgrade                       = "Upgrade"
 	HeaderVary                          = "Vary"
 	HeaderWWWAuthenticate               = "WWW-Authenticate"
+	HeaderXForwardedProto               = "X-Forwarded-Proto"
+	HeaderXHTTPMethodOverride           = "X-HTTP-Method-Override"
 	HeaderXForwardedFor                 = "X-Forwarded-For"
 	HeaderXRealIP                       = "X-Real-IP"
 	HeaderServer                        = "Server"
@@ -145,6 +139,13 @@ const (
 	HeaderAccessControlAllowCredentials = "Access-Control-Allow-Credentials"
 	HeaderAccessControlExposeHeaders    = "Access-Control-Expose-Headers"
 	HeaderAccessControlMaxAge           = "Access-Control-Max-Age"
+
+	// Security
+	HeaderStrictTransportSecurity = "Strict-Transport-Security"
+	HeaderXContentTypeOptions     = "X-Content-Type-Options"
+	HeaderXXSSProtection          = "X-XSS-Protection"
+	HeaderXFrameOptions           = "X-Frame-Options"
+	HeaderContentSecurityPolicy   = "Content-Security-Policy"
 )
 
 var (
@@ -163,12 +164,14 @@ var (
 
 // Errors
 var (
-	ErrUnsupportedMediaType  = NewHTTPError(http.StatusUnsupportedMediaType)
-	ErrNotFound              = NewHTTPError(http.StatusNotFound)
-	ErrUnauthorized          = NewHTTPError(http.StatusUnauthorized)
-	ErrMethodNotAllowed      = NewHTTPError(http.StatusMethodNotAllowed)
-	ErrRendererNotRegistered = errors.New("renderer not registered")
-	ErrInvalidRedirectCode   = errors.New("invalid redirect status code")
+	ErrUnsupportedMediaType        = NewHTTPError(http.StatusUnsupportedMediaType)
+	ErrNotFound                    = NewHTTPError(http.StatusNotFound)
+	ErrUnauthorized                = NewHTTPError(http.StatusUnauthorized)
+	ErrMethodNotAllowed            = NewHTTPError(http.StatusMethodNotAllowed)
+	ErrStatusRequestEntityTooLarge = NewHTTPError(http.StatusRequestEntityTooLarge)
+	ErrRendererNotRegistered       = errors.New("renderer not registered")
+	ErrInvalidRedirectCode         = errors.New("invalid redirect status code")
+	ErrCookieNotFound              = errors.New("cookie not found")
 )
 
 // Error handlers
@@ -183,7 +186,6 @@ var (
 
 	// 请求最后被调用的空操作
 	headHandlerFunc = HandlerFunc(func(c Context) error {
-		// c.Logger().Warn("请求最后被调用的空操作")
 		return nil
 	})
 )
@@ -585,22 +587,6 @@ func NewHTTPError(code int, msg ...string) *HTTPError {
 // Error makes it compatible with `error` interface.
 func (e *HTTPError) Error() string {
 	return e.Message
-}
-
-func (binder) Bind(i interface{}, c Context) (err error) {
-	rq := c.Request()
-	ct := rq.Header().Get(HeaderContentType)
-	err = ErrUnsupportedMediaType
-	if strings.HasPrefix(ct, MIMEApplicationJSON) {
-		if err = json.NewDecoder(rq.Body()).Decode(i); err != nil {
-			err = NewHTTPError(http.StatusBadRequest, err.Error())
-		}
-	} else if strings.HasPrefix(ct, MIMEApplicationXML) {
-		if err = xml.NewDecoder(rq.Body()).Decode(i); err != nil {
-			err = NewHTTPError(http.StatusBadRequest, err.Error())
-		}
-	}
-	return
 }
 
 // WrapMiddleware wrap `echo.HandlerFunc` into `echo.MiddlewareFunc`.

@@ -2,9 +2,12 @@ package standard
 
 import (
 	"io"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"strings"
 
+	"github.com/lessgo/lessgo"
 	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
 )
@@ -13,13 +16,23 @@ type (
 	// Request implements `engine.Request`.
 	Request struct {
 		*http.Request
-		url    engine.URL
 		header engine.Header
+		url    engine.URL
 		logger logs.Logger
 	}
 )
 
 var _ engine.Request = new(Request)
+
+// NewRequest returns `Request` instance.
+func NewRequest(r *http.Request, l logs.Logger) *Request {
+	return &Request{
+		Request: r,
+		url:     &URL{URL: r.URL},
+		header:  &Header{Header: r.Header},
+		logger:  l,
+	}
+}
 
 // IsTLS implements `engine.Request#TLS` function.
 func (r *Request) IsTLS() bool {
@@ -47,25 +60,6 @@ func (r *Request) URL() engine.URL {
 // Header implements `engine.Request#URL` function.
 func (r *Request) Header() engine.Header {
 	return r.header
-}
-
-// Cookies parses and returns the HTTP cookies sent with the request.
-func (r *Request) Cookies() []*http.Cookie {
-	return r.Request.Cookies()
-}
-
-// Cookie returns the named cookie provided in the request or
-// ErrNoCookie if not found.
-func (r *Request) Cookie(name string) (*http.Cookie, error) {
-	return r.Request.Cookie(name)
-}
-
-// AddCookie adds a cookie to the request.  Per RFC 6265 section 5.4,
-// AddCookie does not attach more than one Cookie header field.  That
-// means all cookies, if any, are written into the same line,
-// separated by semicolon.
-func (r *Request) AddCookie(c *http.Cookie) {
-	r.Request.AddCookie(c)
 }
 
 // func Proto() string {
@@ -120,6 +114,11 @@ func (r *Request) Body() io.Reader {
 	return r.Request.Body
 }
 
+// SetBody implements `engine.Request#SetBody` function.
+func (r *Request) SetBody(reader io.Reader) {
+	r.Request.Body = ioutil.NopCloser(reader)
+}
+
 // FormValue implements `engine.Request#FormValue` function.
 func (r *Request) FormValue(name string) string {
 	return r.Request.FormValue(name)
@@ -127,10 +126,16 @@ func (r *Request) FormValue(name string) string {
 
 // FormParams implements `engine.Request#FormParams` function.
 func (r *Request) FormParams() map[string][]string {
-	if err := r.ParseForm(); err != nil {
-		r.logger.Error("%v", err)
+	if strings.HasPrefix(r.header.Get(lessgo.HeaderContentType), lessgo.MIMEMultipartForm) {
+		if err := r.ParseMultipartForm(engine.MaxMemory); err != nil {
+			r.logger.Error("%v", err)
+		}
+	} else {
+		if err := r.ParseForm(); err != nil {
+			r.logger.Error("%v", err)
+		}
 	}
-	return map[string][]string(r.Request.PostForm)
+	return map[string][]string(r.Request.Form)
 }
 
 // FormFile implements `engine.Request#FormFile` function.
@@ -145,8 +150,27 @@ func (r *Request) MultipartForm() (*multipart.Form, error) {
 	return r.Request.MultipartForm, err
 }
 
-func (r *Request) reset(rq *http.Request, h engine.Header, u engine.URL) {
-	r.Request = rq
+// Cookies parses and returns the HTTP cookies sent with the request.
+func (r *Request) Cookies() []*http.Cookie {
+	return r.Request.Cookies()
+}
+
+// Cookie returns the named cookie provided in the request or
+// ErrNoCookie if not found.
+func (r *Request) Cookie(name string) (*http.Cookie, error) {
+	return r.Request.Cookie(name)
+}
+
+// AddCookie adds a cookie to the request.  Per RFC 6265 section 5.4,
+// AddCookie does not attach more than one Cookie header field.  That
+// means all cookies, if any, are written into the same line,
+// separated by semicolon.
+func (r *Request) AddCookie(c *http.Cookie) {
+	r.Request.AddCookie(c)
+}
+
+func (r *Request) reset(req *http.Request, h engine.Header, u engine.URL) {
+	r.Request = req
 	r.header = h
 	r.url = u
 }

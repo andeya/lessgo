@@ -35,7 +35,7 @@ type (
 		// Request returns `engine.Request` interface.
 		Request() engine.Request
 
-		// Response returns `engine.Response` interface,
+		// Request returns `engine.Response` interface.
 		// implement http.ResponseWriter.
 		Response() engine.Response
 
@@ -55,34 +55,59 @@ type (
 		ParamNames() []string
 
 		// SetParamNames sets path parameter names.
-		SetParamNames(...string)
+		SetParamNames([]string)
+
+		// AddParamName adds path parameter names.
+		AddParamName(...string)
 
 		// ParamValues returns path parameter values.
 		ParamValues() []string
 
 		// SetParamValues sets path parameter values.
-		SetParamValues(...string)
+		SetParamValues([]string)
+
+		// AddParamValues adds path parameter values.
+		AddParamValue(...string)
 
 		// QueryParam returns the query param for the provided name. It is an alias
 		// for `engine.URL#QueryParam()`.
 		QueryParam(string) string
 
-		// QueryParams returns the query parameters as map. It is an alias for `engine.URL#QueryParams()`.
+		// QueryParams returns the query parameters as map.
+		// It is an alias for `engine.URL#QueryParams()`.
 		QueryParams() map[string][]string
 
 		// FormValue returns the form field value for the provided name. It is an
 		// alias for `engine.Request#FormValue()`.
 		FormValue(string) string
 
-		// FormParams returns the form parameters as map. It is an alias for `engine.Request#FormParams()`.
+		// FormParams returns the form parameters as map.
+		// It is an alias for `engine.Request#FormParams()`.
 		FormParams() map[string][]string
 
 		// FormFile returns the multipart form file for the provided name. It is an
 		// alias for `engine.Request#FormFile()`.
 		FormFile(string) (*multipart.FileHeader, error)
 
-		// MultipartForm returns the multipart form. It is an alias for `engine.Request#MultipartForm()`.
+		// MultipartForm returns the multipart form.
+		// It is an alias for `engine.Request#MultipartForm()`.
 		MultipartForm() (*multipart.Form, error)
+
+		// Cookie returns the named cookie provided in the request.
+		// It is an alias for `engine.Request#Cookie()`.
+		Cookie(string) (*http.Cookie, error)
+
+		// SetCookie adds a `Set-Cookie` header in HTTP response.
+		// It is an alias for `engine.Response#SetCookie()`.
+		SetCookie(*http.Cookie)
+
+		// Cookies returns the HTTP cookies sent with the request.
+		// It is an alias for `engine.Request#Cookies()`.
+		Cookies() []*http.Cookie
+
+		// Session generate or read the session id from Request.
+		// if session id exists, return SessionStore with this id.
+		Session() (session.Store, error)
 
 		// Get retrieves data from the context.
 		Get(string) interface{}
@@ -90,8 +115,11 @@ type (
 		// Set saves data in the context.
 		Set(string, interface{})
 
-		// Del data from the context
+		// Del deletes data from the context.
 		Del(string)
+
+		// Exists checks if that key exists in the context.
+		Exists(string) bool
 
 		// Bind binds the request body into provided type `i`. The default binder
 		// does it based on Content-Type header.
@@ -148,20 +176,17 @@ type (
 		// Logger returns the `Logger` instance.
 		Logger() logs.Logger
 
-		// SessionStart generate or read the session id from Request.
-		// if session id exists, return SessionStore with this id.
-		SessionStart() (session.Store, error)
-
-		// Echo returns the `Echo` instance.
+		// App returns the `Echo` instance.
 		App() *Echo
 
-		// ServeContent sends static content from `io.ReadSeeker` and handles caching
+		// ServeContent sends static content from `io.Reader` and handles caching
 		// via `If-Modified-Since` request header. It automatically sets `Content-Type`
 		// and `Last-Modified` response headers.
 		ServeContent(io.ReadSeeker, string, time.Time) error
 
 		// Reset resets the context after request completes. It must be called along
-		// with `Echo#GetContext()` and `Echo#PutContext()`. See `Echo#ServeHTTP()`
+		// with `Echo#AcquireContext()` and `Echo#ReleaseContext()`.
+		// See `Echo#ServeHTTP()`
 		reset(engine.Request, engine.Response)
 	}
 
@@ -249,16 +274,24 @@ func (c *context) ParamNames() []string {
 	return c.pnames
 }
 
-func (c *context) SetParamNames(names ...string) {
+func (c *context) SetParamNames(names []string) {
 	c.pnames = names
+}
+
+func (c *context) AddParamName(names ...string) {
+	c.pnames = append(c.pnames, names...)
 }
 
 func (c *context) ParamValues() []string {
 	return c.pvalues
 }
 
-func (c *context) SetParamValues(values ...string) {
+func (c *context) SetParamValues(values []string) {
 	c.pvalues = values
+}
+
+func (c *context) AddParamValue(values ...string) {
+	c.pvalues = append(c.pvalues, values...)
 }
 
 func (c *context) QueryParam(name string) string {
@@ -285,6 +318,25 @@ func (c *context) MultipartForm() (*multipart.Form, error) {
 	return c.request.MultipartForm()
 }
 
+func (c *context) Cookie(name string) (*http.Cookie, error) {
+	return c.request.Cookie(name)
+}
+
+func (c *context) SetCookie(cookie *http.Cookie) {
+	c.response.SetCookie(cookie)
+}
+
+func (c *context) Cookies() []*http.Cookie {
+	return c.request.Cookies()
+}
+
+func (c *context) Session() (session.Store, error) {
+	if c.echo.sessions == nil {
+		return nil, fmt.Errorf("Sessions is unset.")
+	}
+	return c.echo.sessions.SessionStart(c.Response(), c.Request())
+}
+
 func (c *context) Set(key string, val interface{}) {
 	if c.store == nil {
 		c.store = make(store)
@@ -298,6 +350,11 @@ func (c *context) Get(key string) interface{} {
 
 func (c *context) Del(key string) {
 	delete(c.store, key)
+}
+
+func (c *context) Exists(key string) bool {
+	_, ok := c.store[key]
+	return ok
 }
 
 func (c *context) Bind(i interface{}) error {
@@ -404,7 +461,7 @@ func (c *context) File(file string) error {
 
 	fi, _ := f.Stat()
 	if fi.IsDir() {
-		file = filepath.Join(file, "index.html")
+		file = filepath.Join(file, indexPage)
 		f, err = os.Open(file)
 		if err != nil {
 			return ErrNotFound
@@ -456,27 +513,20 @@ func (c *context) Logger() logs.Logger {
 	return c.echo.logger
 }
 
-func (c *context) SessionStart() (session.Store, error) {
-	if c.echo.sessions == nil {
-		return nil, fmt.Errorf("Sessions is unset.")
-	}
-	return c.echo.sessions.SessionStart(c.Response(), c.Request())
-}
-
 func (c *context) ServeContent(content io.ReadSeeker, name string, modtime time.Time) error {
-	rq := c.Request()
-	rs := c.Response()
+	req := c.Request()
+	res := c.Response()
 
-	if t, err := time.Parse(http.TimeFormat, rq.Header().Get(HeaderIfModifiedSince)); err == nil && modtime.Before(t.Add(1*time.Second)) {
-		rs.Header().Del(HeaderContentType)
-		rs.Header().Del(HeaderContentLength)
+	if t, err := time.Parse(http.TimeFormat, req.Header().Get(HeaderIfModifiedSince)); err == nil && modtime.Before(t.Add(1*time.Second)) {
+		res.Header().Del(HeaderContentType)
+		res.Header().Del(HeaderContentLength)
 		return c.NoContent(http.StatusNotModified)
 	}
 
-	rs.Header().Set(HeaderContentType, ContentTypeByExtension(name))
-	rs.Header().Set(HeaderLastModified, modtime.UTC().Format(http.TimeFormat))
-	rs.WriteHeader(http.StatusOK)
-	_, err := io.Copy(rs, content)
+	res.Header().Set(HeaderContentType, ContentTypeByExtension(name))
+	res.Header().Set(HeaderLastModified, modtime.UTC().Format(http.TimeFormat))
+	res.WriteHeader(http.StatusOK)
+	_, err := io.Copy(res, content)
 	return err
 }
 

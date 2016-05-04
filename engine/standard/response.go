@@ -23,23 +23,26 @@ type (
 	}
 
 	responseAdapter struct {
-		writer http.ResponseWriter
-		*Response
+		http.ResponseWriter
+		response *Response
 	}
 )
 
 var _ engine.Response = new(Response)
 
+// NewResponse returns `Response` instance.
+func NewResponse(w http.ResponseWriter, l logs.Logger) *Response {
+	return &Response{
+		ResponseWriter: w,
+		header:         &Header{Header: w.Header()},
+		writer:         w,
+		logger:         l,
+	}
+}
+
 // Header implements `engine.Response#Header` function.
 func (r *Response) Header() engine.Header {
 	return r.header
-}
-
-// SetCookie adds a Set-Cookie header.
-// The provided cookie must have a valid Name. Invalid cookies may be
-// silently dropped.
-func (r *Response) SetCookie(cookie *http.Cookie) {
-	r.header.Add("Set-Cookie", cookie.String())
 }
 
 // WriteHeader implements `engine.Response#WriteHeader` function.
@@ -58,6 +61,13 @@ func (r *Response) Write(b []byte) (n int, err error) {
 	n, err = r.writer.Write(b)
 	r.size += int64(n)
 	return
+}
+
+// SetCookie adds a Set-Cookie header.
+// The provided cookie must have a valid Name. Invalid cookies may be
+// silently dropped.
+func (r *Response) SetCookie(cookie *http.Cookie) {
+	r.header.Add("Set-Cookie", cookie.String())
 }
 
 // Status implements `engine.Response#Status` function.
@@ -117,15 +127,23 @@ func (r *Response) reset(w http.ResponseWriter, a *responseAdapter, h engine.Hea
 	r.writer = w
 }
 
-func (a *responseAdapter) Header() http.Header {
-	return a.writer.Header()
+func (a *responseAdapter) Write(b []byte) (n int, err error) {
+	return a.response.Write(b)
 }
 
-func (a *responseAdapter) WriteHeader(code int) {
-	a.writer.WriteHeader(code)
+func (a *responseAdapter) Flush() {
+	a.ResponseWriter.(http.Flusher).Flush()
+}
+
+func (a *responseAdapter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return a.ResponseWriter.(http.Hijacker).Hijack()
+}
+
+func (a *responseAdapter) CloseNotify() <-chan bool {
+	return a.ResponseWriter.(http.CloseNotifier).CloseNotify()
 }
 
 func (a *responseAdapter) reset(w http.ResponseWriter, r *Response) {
-	a.writer = w
-	a.Response = r
+	a.ResponseWriter = w
+	a.response = r
 }

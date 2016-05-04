@@ -27,16 +27,19 @@ type (
 
 var _ engine.Response = new(Response)
 
+// NewResponse returns `Response` instance.
+func NewResponse(c *fasthttp.RequestCtx, l logs.Logger) *Response {
+	return &Response{
+		RequestCtx: c,
+		header:     &ResponseHeader{ResponseHeader: &c.Response.Header},
+		writer:     c,
+		logger:     l,
+	}
+}
+
 // Header implements `engine.Response#Header` function.
 func (r *Response) Header() engine.Header {
 	return r.header
-}
-
-// SetCookie adds a Set-Cookie header.
-// The provided cookie must have a valid Name. Invalid cookies may be
-// silently dropped.
-func (r *Response) SetCookie(cookie *http.Cookie) {
-	r.header.Add("Set-Cookie", cookie.String())
 }
 
 // WriteHeader implements `engine.Response#WriteHeader` function.
@@ -55,6 +58,13 @@ func (r *Response) Write(b []byte) (n int, err error) {
 	n, err = r.writer.Write(b)
 	r.size += int64(n)
 	return
+}
+
+// SetCookie adds a Set-Cookie header.
+// The provided cookie must have a valid Name. Invalid cookies may be
+// silently dropped.
+func (r *Response) SetCookie(cookie *http.Cookie) {
+	r.header.Add("Set-Cookie", cookie.String())
 }
 
 // Status implements `engine.Response#Status` function.

@@ -3,9 +3,10 @@ package engine
 import (
 	"io"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"time"
+
+	"net"
 
 	"github.com/lessgo/lessgo/logs"
 )
@@ -47,19 +48,6 @@ type (
 		// Header returns `engine.Header`.
 		Header() Header
 
-		// Cookies parses and returns the HTTP cookies sent with the request.
-		Cookies() []*http.Cookie
-
-		// Cookie returns the named cookie provided in the request or
-		// ErrNoCookie if not found.
-		Cookie(name string) (*http.Cookie, error)
-
-		// AddCookie adds a cookie to the request.  Per RFC 6265 section 5.4,
-		// AddCookie does not attach more than one Cookie header field.  That
-		// means all cookies, if any, are written into the same line,
-		// separated by semicolon.
-		AddCookie(c *http.Cookie)
-
 		// Proto() string
 		// ProtoMajor() int
 		// ProtoMinor() int
@@ -82,6 +70,9 @@ type (
 		// Body returns request's body.
 		Body() io.Reader
 
+		// Body sets request's body.
+		SetBody(io.Reader)
+
 		// FormValue returns the form field value for the provided name.
 		FormValue(string) string
 
@@ -93,6 +84,17 @@ type (
 
 		// MultipartForm returns the multipart form.
 		MultipartForm() (*multipart.Form, error)
+
+		// Cookie returns the named cookie provided in the request.
+		Cookie(string) (*http.Cookie, error)
+
+		// Cookies returns the HTTP cookies sent with the request.
+		Cookies() []*http.Cookie
+
+		// AddCookie does not attach more than one Cookie header field.  That
+		// means all cookies, if any, are written into the same line,
+		// separated by semicolon.
+		AddCookie(*http.Cookie)
 	}
 
 	// Response defines the interface for HTTP response.
@@ -100,16 +102,14 @@ type (
 		// Header returns `engine.Header`
 		Header() Header
 
-		// SetCookie adds a Set-Cookie header.
-		// The provided cookie must have a valid Name. Invalid cookies may be
-		// silently dropped.
-		SetCookie(cookie *http.Cookie)
-
 		// WriteHeader sends an HTTP response header with status code.
 		WriteHeader(int)
 
 		// Write writes the data to the connection as part of an HTTP reply.
 		Write(b []byte) (int, error)
+
+		// SetCookie adds a `Set-Cookie` header in HTTP response.
+		SetCookie(*http.Cookie)
 
 		// Status returns the HTTP response status.
 		Status() int
@@ -188,6 +188,6 @@ type (
 )
 
 // ServeHTTP serves HTTP request.
-func (h HandlerFunc) ServeHTTP(rq Request, rs Response) {
-	h(rq, rs)
+func (h HandlerFunc) ServeHTTP(req Request, res Response) {
+	h(req, res)
 }
