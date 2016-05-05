@@ -51,23 +51,20 @@ type (
 		// Param returns path parameter by name.
 		Param(string) string
 
+		// SetParam adds path parameter.
+		SetParam(name, value string)
+
 		// ParamNames returns path parameter names.
 		ParamNames() []string
 
 		// SetParamNames sets path parameter names.
 		SetParamNames([]string)
 
-		// AddParamName adds path parameter names.
-		AddParamName(...string)
-
 		// ParamValues returns path parameter values.
 		ParamValues() []string
 
 		// SetParamValues sets path parameter values.
 		SetParamValues([]string)
-
-		// AddParamValues adds path parameter values.
-		AddParamValue(...string)
 
 		// QueryParam returns the query param for the provided name. It is an alias
 		// for `engine.URL#QueryParam()`.
@@ -270,6 +267,22 @@ func (c *context) Param(name string) (value string) {
 	return
 }
 
+func (c *context) SetParam(name, value string) {
+	l := len(c.pnames)
+	for i, n := range c.pnames {
+		if n == name && i < l {
+			c.pvalues[i] = value
+			return
+		}
+	}
+	c.pnames = append(c.pnames, name)
+	if len(c.pvalues) > l {
+		c.pvalues[l] = value
+	} else {
+		c.pvalues = append(c.pvalues, value)
+	}
+}
+
 func (c *context) ParamNames() []string {
 	return c.pnames
 }
@@ -278,20 +291,12 @@ func (c *context) SetParamNames(names []string) {
 	c.pnames = names
 }
 
-func (c *context) AddParamName(names ...string) {
-	c.pnames = append(c.pnames, names...)
-}
-
 func (c *context) ParamValues() []string {
 	return c.pvalues
 }
 
 func (c *context) SetParamValues(values []string) {
 	c.pvalues = values
-}
-
-func (c *context) AddParamValue(values ...string) {
-	c.pvalues = append(c.pvalues, values...)
 }
 
 func (c *context) QueryParam(name string) string {
