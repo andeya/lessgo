@@ -51,20 +51,20 @@ type (
 		// Param returns path parameter by name.
 		Param(string) string
 
-		// SetParam sets path parameter.
-		SetParam(name, value string)
-
 		// ParamNames returns path parameter names.
 		ParamNames() []string
-
-		// SetParamNames sets path parameter names.
-		SetParamNames([]string)
 
 		// ParamValues returns path parameter values.
 		ParamValues() []string
 
-		// SetParamValues sets path parameter values.
-		SetParamValues([]string)
+		// SetParam sets path parameter.
+		SetParam(name, value string)
+
+		// setParamNames sets path parameter names.
+		setParamNames([]string)
+
+		// setParamValues sets path parameter values.
+		setParamValues([]string)
 
 		// QueryParam returns the query param for the provided name. It is an alias
 		// for `engine.URL#QueryParam()`.
@@ -267,6 +267,10 @@ func (c *context) Param(name string) (value string) {
 	return
 }
 
+func (c *context) ParamNames() []string {
+	return c.pnames
+}
+
 func (c *context) SetParam(name, value string) {
 	l := len(c.pnames)
 	for i, n := range c.pnames {
@@ -283,19 +287,15 @@ func (c *context) SetParam(name, value string) {
 	}
 }
 
-func (c *context) ParamNames() []string {
-	return c.pnames
-}
-
-func (c *context) SetParamNames(names []string) {
-	c.pnames = names
-}
-
 func (c *context) ParamValues() []string {
 	return c.pvalues
 }
 
-func (c *context) SetParamValues(values []string) {
+func (c *context) setParamNames(names []string) {
+	c.pnames = names
+}
+
+func (c *context) setParamValues(values []string) {
 	c.pvalues = values
 }
 
@@ -551,5 +551,8 @@ func (c *context) reset(rq engine.Request, rs engine.Response) {
 	c.response = rs
 	c.store = make(store)
 	c.handler = notFoundHandler
-	c.pvalues = make([]string, *c.echo.maxParam)
+	for i := len(c.pnames) - 1; i >= 0; i-- {
+		c.pvalues[i] = ""
+	}
+	c.pnames = []string{}
 }

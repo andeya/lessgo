@@ -416,7 +416,7 @@ func (r *Router) Find(method, path string, context Context) {
 End:
 	context.SetHandler(cn.findHandler(method))
 	context.SetPath(cn.ppath)
-	context.SetParamNames(cn.pnames)
+	context.setParamNames(cn.pnames)
 
 	// NOTE: Slow zone...
 	if context.Handler() == nil {
@@ -440,7 +440,7 @@ End:
 			context.SetHandler(cn.checkMethodNotAllowed())
 		}
 		context.SetPath(cn.ppath)
-		context.SetParamNames(cn.pnames)
+		context.setParamNames(cn.pnames)
 	}
 
 	return
