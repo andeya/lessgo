@@ -16,7 +16,7 @@ Lessgo是一款Go语言开发的简单、稳定、高效、灵活的 web开发�
 - V0.5.0
 - 发布日期：2016.04.28
 
-##当前版本功能特性
+##最新功能特性
 - 使用简单、运行稳定高效
 - 兼容流行系统模式如:MVC、MVVC、Restful...
 - 强大的运行时动态路由(动态路由保存在Common/DB/lessgo.db中)
@@ -26,6 +26,8 @@ Lessgo是一款Go语言开发的简单、稳定、高效、灵活的 web开发�
 - 提供Session管理
 - 多种Token生成方式
 - swagger集成智能API文档
+- 支持热编译
+- 支持热升级
 
 ##项目架构
 ![Lessgo Web Framework](https://github.com/lessgo/doc/raw/master/img/LessgoWebFramework.jpg)
