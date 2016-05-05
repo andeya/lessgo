@@ -14,12 +14,14 @@ import (
 
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/logs/color"
+	"github.com/lessgo/lessgo/utils"
 )
 
 // 一旦注册，不可再更改
 type (
 	ApiMiddleware struct {
 		Name          string // 全局唯一
+		id            string
 		Desc          string
 		DefaultConfig interface{} // 默认配置(JSON格式)
 		defaultConfig string      // 默认配置的JSON字符串
@@ -51,18 +53,30 @@ func (a *ApiMiddleware) init() *ApiMiddleware {
 		return getApiMiddleware(a.Name)
 	}
 
-	if a.Name == "" {
-		v := reflect.ValueOf(a.Middleware)
-		a.Name = runtime.FuncForPC(v.Pointer()).Name()
-	}
-
-	if m := getApiMiddleware(a.Name); m != nil {
-		return m
+	v := reflect.ValueOf(a.Middleware)
+	funcName := runtime.FuncForPC(v.Pointer()).Name()
+	if len(a.Name) == 0 {
+		if len(a.Desc) > 0 {
+			a.Name = a.Desc
+		} else {
+			a.Name = funcName
+		}
 	}
 
 	if a.DefaultConfig != nil {
 		b, _ := json.Marshal(a.DefaultConfig)
 		a.defaultConfig = string(b)
+	}
+
+	a.id = utils.MakeHash(a.Name + funcName + a.defaultConfig)
+
+	if m := getApiMiddleware(a.Name); m != nil {
+		if m.id == a.id {
+			return m
+		} else {
+			a.Name += "(2)"
+			a.id = utils.MakeHash(a.Name + funcName + a.defaultConfig)
+		}
 	}
 
 	a.inited = true
