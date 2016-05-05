@@ -51,7 +51,7 @@ type (
 		// Param returns path parameter by name.
 		Param(string) string
 
-		// SetParam adds path parameter.
+		// SetParam sets path parameter.
 		SetParam(name, value string)
 
 		// ParamNames returns path parameter names.
