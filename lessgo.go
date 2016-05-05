@@ -136,6 +136,7 @@ func Run(server NewServer, listener ...net.Listener) {
 
 	// 配置服务器引擎
 	c := engine.Config{
+		Graceful:     AppConfig.Listen.Graceful,
 		Address:      AppConfig.Listen.Address,
 		ReadTimeout:  time.Duration(AppConfig.Listen.ReadTimeout),
 		WriteTimeout: time.Duration(AppConfig.Listen.WriteTimeout),
@@ -154,11 +155,18 @@ func Run(server NewServer, listener ...net.Listener) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	// 启动服务
-	mode := "release"
+	var mode, graceful string
 	if AppConfig.Debug {
 		mode = "debug"
+	} else {
+		mode = "release"
 	}
-	Logger().Sys("> %s listening and serving %s on %v (%s-mode)", AppConfig.AppName, h, c.Address, mode)
+	if AppConfig.Listen.Graceful {
+		graceful = "(enable-graceful-restart)"
+	} else {
+		graceful = "(disable-graceful-restart)"
+	}
+	Logger().Sys("> %s listening and serving %s on %v (%s-mode) %v", AppConfig.AppName, h, c.Address, mode, graceful)
 	DefLessgo.app.Run(server(c))
 }
 

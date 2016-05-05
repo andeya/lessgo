@@ -25,13 +25,13 @@
 //   "github.com/astaxie/beego/grace"
 // )
 //
-//  func handler(w http.ResponseWriter, r *http.Request) {
+//  func server(w http.ResponseWriter, r *http.Request) {
 //	  w.Write([]byte("WORLD!"))
 //  }
 //
 //  func main() {
 //      mux := http.NewServeMux()
-//      mux.HandleFunc("/hello", handler)
+//      mux.HandleFunc("/hello", server)
 //
 //	    err := grace.ListenAndServe("localhost:8080", mux)
 //      if err != nil {
@@ -98,7 +98,7 @@ func onceInit() {
 }
 
 // NewServer returns a new graceServer.
-func NewServer(addr string, handler http.Handler) (srv *Server) {
+func NewServer(addr string, server *http.Server) (srv *Server) {
 	once.Do(onceInit)
 	regLock.Lock()
 	defer regLock.Unlock()
@@ -114,6 +114,7 @@ func NewServer(addr string, handler http.Handler) (srv *Server) {
 	}
 
 	srv = &Server{
+		Server:  server,
 		wg:      sync.WaitGroup{},
 		sigChan: make(chan os.Signal),
 		isChild: isChild,
@@ -132,12 +133,6 @@ func NewServer(addr string, handler http.Handler) (srv *Server) {
 		state:   StateInit,
 		Network: "tcp",
 	}
-	srv.Server = &http.Server{}
-	srv.Server.Addr = addr
-	srv.Server.ReadTimeout = DefaultReadTimeOut
-	srv.Server.WriteTimeout = DefaultWriteTimeOut
-	srv.Server.MaxHeaderBytes = DefaultMaxHeaderBytes
-	srv.Server.Handler = handler
 
 	runningServersOrder = append(runningServersOrder, addr)
 	runningServers[addr] = srv
@@ -146,13 +141,11 @@ func NewServer(addr string, handler http.Handler) (srv *Server) {
 }
 
 // ListenAndServe refer http.ListenAndServe
-func ListenAndServe(addr string, handler http.Handler) error {
-	server := NewServer(addr, handler)
-	return server.ListenAndServe()
+func ListenAndServe(addr string, server *http.Server) error {
+	return NewServer(addr, server).ListenAndServe()
 }
 
 // ListenAndServeTLS refer http.ListenAndServeTLS
-func ListenAndServeTLS(addr string, certFile string, keyFile string, handler http.Handler) error {
-	server := NewServer(addr, handler)
-	return server.ListenAndServeTLS(certFile, keyFile)
+func ListenAndServeTLS(addr string, certFile string, keyFile string, server *http.Server) error {
+	return NewServer(addr, server).ListenAndServeTLS(certFile, keyFile)
 }

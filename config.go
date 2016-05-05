@@ -208,7 +208,7 @@ func defaultAppConfig(iniconf *config.IniConfigContainer) {
 	iniconf.Set("filecache::singlefileallowmb", fmt.Sprint(BConfig.FileCache.SingleFileAllowMB))
 	iniconf.Set("filecache::maxcapmb", fmt.Sprint(BConfig.FileCache.MaxCapMB))
 
-	// iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
+	iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
 	iniconf.Set("listen::address", fmt.Sprint(BConfig.Listen.Address))
 	iniconf.Set("listen::readtimeout", fmt.Sprint(BConfig.Listen.ReadTimeout))
 	iniconf.Set("listen::writetimeout", fmt.Sprint(BConfig.Listen.WriteTimeout))
@@ -346,10 +346,10 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 		AppConfig.FileCache.MaxCapMB = BConfig.FileCache.MaxCapMB
 	}
 
-	// if AppConfig.Listen.Graceful, err = iniconf.Bool("listen::graceful"); err != nil {
-	// 	iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
-	// 	AppConfig.Listen.Graceful = BConfig.Listen.Graceful
-	// }
+	if AppConfig.Listen.Graceful, err = iniconf.Bool("listen::graceful"); err != nil {
+		iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
+		AppConfig.Listen.Graceful = BConfig.Listen.Graceful
+	}
 	if AppConfig.Listen.Address = iniconf.String("listen::address"); AppConfig.Listen.Address == "" {
 		iniconf.Set("listen::address", fmt.Sprint(BConfig.Listen.Address))
 		AppConfig.Listen.Address = BConfig.Listen.Address

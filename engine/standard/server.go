@@ -1,11 +1,15 @@
 package standard
 
 import (
+	"fmt"
 	"net/http"
+	"os"
 	"sync"
+	"time"
 
 	"github.com/lessgo/lessgo"
 	"github.com/lessgo/lessgo/engine"
+	"github.com/lessgo/lessgo/engine/standard/grace"
 	"github.com/lessgo/lessgo/logs"
 )
 
@@ -82,8 +86,10 @@ func WithConfig(c engine.Config) engine.Server {
 		}),
 		logger: logs.Global,
 	}
-	s.Addr = c.Address
-	s.Handler = s
+	s.Server.Addr = c.Address
+	s.Server.Handler = s
+	s.Server.ReadTimeout = c.ReadTimeout
+	s.Server.WriteTimeout = c.WriteTimeout
 	return s
 }
 
@@ -98,11 +104,38 @@ func (s *Server) SetLogger(l logs.Logger) {
 }
 
 // Start implements `engine.Server#Start` function.
-func (s *Server) Start() error {
-	if s.config.Listener == nil {
-		return s.startDefaultListener()
+func (s *Server) Start() (err error) {
+	if !s.config.Graceful {
+		if s.config.Listener == nil {
+			return s.startDefaultListener()
+		}
+		return s.startCustomListener()
 	}
-	return s.startCustomListener()
+
+	endRunning := make(chan bool, 1)
+	c := s.config
+	server := grace.NewServer(c.Address, s.Server)
+	if c.TLSCertfile != "" && c.TLSKeyfile != "" {
+		go func() {
+			time.Sleep(20 * time.Microsecond)
+			if err = server.ListenAndServeTLS(c.TLSCertfile, c.TLSKeyfile); err != nil {
+				err = fmt.Errorf("ListenAndServeTLS: %v, %d", err, os.Getpid())
+				time.Sleep(100 * time.Microsecond)
+				endRunning <- true
+			}
+		}()
+	} else {
+		go func() {
+			// server.Network = "tcp4"
+			if err = server.ListenAndServe(); err != nil {
+				err = fmt.Errorf("ListenAndServe: %v, %d", err, os.Getpid())
+				time.Sleep(100 * time.Microsecond)
+				endRunning <- true
+			}
+		}()
+	}
+	<-endRunning
+	return
 }
 
 func (s *Server) startDefaultListener() error {

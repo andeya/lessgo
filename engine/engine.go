@@ -168,6 +168,7 @@ type (
 
 	// Config defines engine config.
 	Config struct {
+		Graceful     bool          // Graceful means use graceful module to start the server
 		Address      string        // TCP address to listen on.
 		Listener     net.Listener  // Custom `net.Listener`. If set, server accepts connections on it.
 		TLSCertfile  string        // TLS certificate file path.
