@@ -163,10 +163,12 @@ func registerDBService() *dbservice.DBService {
 	for _, conf := range AppConfig.DBList {
 		engine, err := xorm.NewEngine(conf.Driver, conf.ConnString)
 		if err != nil {
-			logs.Error("%v", err)
+			logs.Error("%v\n", err)
 			continue
 		}
 		logger := dbservice.NewILogger(AppConfig.Log.AsyncChan, AppConfig.Log.Level, conf.Name)
+		logger.BeeLogger.EnableFuncCallDepth(AppConfig.Debug)
+
 		engine.SetLogger(logger)
 		engine.SetMaxOpenConns(conf.MaxOpenConns)
 		engine.SetMaxIdleConns(conf.MaxIdleConns)
