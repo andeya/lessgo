@@ -105,15 +105,15 @@ func (s *Server) SetLogger(l logs.Logger) {
 
 // Start implements `engine.Server#Start` function.
 func (s *Server) Start() (err error) {
-	if !s.config.Graceful {
-		if s.config.Listener == nil {
+	c := s.config
+	if !c.Graceful {
+		if c.Listener == nil {
 			return s.startDefaultListener()
 		}
 		return s.startCustomListener()
 	}
 
 	endRunning := make(chan bool, 1)
-	c := s.config
 	server := grace.NewServer(c.Address, s.Server, s.logger)
 	if c.TLSCertfile != "" && c.TLSKeyfile != "" {
 		go func() {
