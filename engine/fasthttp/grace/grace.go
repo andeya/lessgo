@@ -51,6 +51,8 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
+
+	"github.com/lessgo/lessgo/logs"
 )
 
 const (
@@ -75,10 +77,6 @@ var (
 	socketPtrOffsetMap   map[string]uint
 	runningServersForked bool
 
-	// DefaultReadTimeOut is the HTTP read timeout
-	DefaultReadTimeOut time.Duration
-	// DefaultWriteTimeOut is the HTTP Write timeout
-	DefaultWriteTimeOut time.Duration
 	// DefaultMaxRequestBodySize is the Max HTTP Body size, default is 0, no limit
 	DefaultMaxRequestBodySize int
 	// DefaultTimeout is the shutdown server's timeout. default is 60s
@@ -99,7 +97,7 @@ func onceInit() {
 }
 
 // NewServer returns a new graceServer.
-func NewServer(addr string, fastServer *fasthttp.Server) (srv *Server) {
+func NewServer(addr string, fastServer *fasthttp.Server, logger logs.Logger) (srv *Server) {
 	once.Do(onceInit)
 	regLock.Lock()
 	defer regLock.Unlock()
@@ -116,6 +114,7 @@ func NewServer(addr string, fastServer *fasthttp.Server) (srv *Server) {
 
 	srv = &Server{
 		Server:  fastServer,
+		logger:  logger,
 		wg:      sync.WaitGroup{},
 		sigChan: make(chan os.Signal),
 		isChild: isChild,
@@ -144,13 +143,13 @@ func NewServer(addr string, fastServer *fasthttp.Server) (srv *Server) {
 }
 
 // ListenAndServe refer http.ListenAndServe
-func ListenAndServe(addr string, fastServer *fasthttp.Server) error {
-	server := NewServer(addr, fastServer)
+func ListenAndServe(addr string, fastServer *fasthttp.Server, logger logs.Logger) error {
+	server := NewServer(addr, fastServer, logger)
 	return server.ListenAndServe()
 }
 
 // ListenAndServeTLS refer http.ListenAndServeTLS
-func ListenAndServeTLS(addr string, certFile string, keyFile string, fastServer *fasthttp.Server) error {
-	server := NewServer(addr, fastServer)
+func ListenAndServeTLS(addr string, certFile string, keyFile string, fastServer *fasthttp.Server, logger logs.Logger) error {
+	server := NewServer(addr, fastServer, logger)
 	return server.ListenAndServeTLS(certFile, keyFile)
 }

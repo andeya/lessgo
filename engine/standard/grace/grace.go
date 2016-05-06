@@ -50,6 +50,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/lessgo/lessgo/logs"
 )
 
 const (
@@ -74,10 +76,6 @@ var (
 	socketPtrOffsetMap   map[string]uint
 	runningServersForked bool
 
-	// DefaultReadTimeOut is the HTTP read timeout
-	DefaultReadTimeOut time.Duration
-	// DefaultWriteTimeOut is the HTTP Write timeout
-	DefaultWriteTimeOut time.Duration
 	// DefaultMaxHeaderBytes is the Max HTTP Herder size, default is 0, no limit
 	DefaultMaxHeaderBytes int
 	// DefaultTimeout is the shutdown server's timeout. default is 60s
@@ -98,7 +96,7 @@ func onceInit() {
 }
 
 // NewServer returns a new graceServer.
-func NewServer(addr string, server *http.Server) (srv *Server) {
+func NewServer(addr string, server *http.Server, logger logs.Logger) (srv *Server) {
 	once.Do(onceInit)
 	regLock.Lock()
 	defer regLock.Unlock()
@@ -115,6 +113,7 @@ func NewServer(addr string, server *http.Server) (srv *Server) {
 
 	srv = &Server{
 		Server:  server,
+		logger:  logger,
 		wg:      sync.WaitGroup{},
 		sigChan: make(chan os.Signal),
 		isChild: isChild,
@@ -141,11 +140,11 @@ func NewServer(addr string, server *http.Server) (srv *Server) {
 }
 
 // ListenAndServe refer http.ListenAndServe
-func ListenAndServe(addr string, server *http.Server) error {
-	return NewServer(addr, server).ListenAndServe()
+func ListenAndServe(addr string, server *http.Server, logger logs.Logger) error {
+	return NewServer(addr, server, logger).ListenAndServe()
 }
 
 // ListenAndServeTLS refer http.ListenAndServeTLS
-func ListenAndServeTLS(addr string, certFile string, keyFile string, server *http.Server) error {
-	return NewServer(addr, server).ListenAndServeTLS(certFile, keyFile)
+func ListenAndServeTLS(addr string, certFile string, keyFile string, server *http.Server, logger logs.Logger) error {
+	return NewServer(addr, server, logger).ListenAndServeTLS(certFile, keyFile)
 }

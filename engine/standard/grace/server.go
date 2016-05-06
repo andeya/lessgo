@@ -3,7 +3,6 @@ package grace
 import (
 	"crypto/tls"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -13,11 +12,14 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/lessgo/lessgo/logs"
 )
 
 // Server embedded http.Server
 type Server struct {
 	*http.Server
+	logger           logs.Logger
 	GraceListener    net.Listener
 	SignalHooks      map[int]map[os.Signal][]func()
 	tlsInnerListener *graceListener
@@ -34,7 +36,7 @@ type Server struct {
 func (srv *Server) Serve() (err error) {
 	srv.state = StateRunning
 	err = srv.Server.Serve(srv.GraceListener)
-	log.Println(syscall.Getpid(), "Waiting for connections to finish...")
+	srv.logger.Sys("%v Waiting for connections to finish...", syscall.Getpid())
 	srv.wg.Wait()
 	srv.state = StateTerminate
 	return
@@ -53,7 +55,7 @@ func (srv *Server) ListenAndServe() (err error) {
 
 	l, err := srv.getListener(addr)
 	if err != nil {
-		log.Println(err)
+		srv.logger.Sys("%v", err)
 		return err
 	}
 
@@ -62,7 +64,7 @@ func (srv *Server) ListenAndServe() (err error) {
 	if srv.isChild {
 		process, err := os.FindProcess(os.Getppid())
 		if err != nil {
-			log.Println(err)
+			srv.logger.Sys("%v", err)
 			return err
 		}
 		err = process.Kill()
@@ -71,7 +73,7 @@ func (srv *Server) ListenAndServe() (err error) {
 		}
 	}
 
-	log.Println(os.Getpid(), srv.Addr)
+	srv.logger.Sys("%v %v", os.Getpid(), srv.Addr)
 	return srv.Serve()
 }
 
@@ -107,7 +109,7 @@ func (srv *Server) ListenAndServeTLS(certFile, keyFile string) (err error) {
 
 	l, err := srv.getListener(addr)
 	if err != nil {
-		log.Println(err)
+		srv.logger.Sys("%v", err)
 		return err
 	}
 
@@ -117,7 +119,7 @@ func (srv *Server) ListenAndServeTLS(certFile, keyFile string) (err error) {
 	if srv.isChild {
 		process, err := os.FindProcess(os.Getppid())
 		if err != nil {
-			log.Println(err)
+			srv.logger.Sys("%v", err)
 			return err
 		}
 		err = process.Kill()
@@ -125,7 +127,7 @@ func (srv *Server) ListenAndServeTLS(certFile, keyFile string) (err error) {
 			return err
 		}
 	}
-	log.Println(os.Getpid(), srv.Addr)
+	srv.logger.Sys("%v %v", os.Getpid(), srv.Addr)
 	return srv.Serve()
 }
 
@@ -136,7 +138,7 @@ func (srv *Server) getListener(laddr string) (l net.Listener, err error) {
 		var ptrOffset uint
 		if len(socketPtrOffsetMap) > 0 {
 			ptrOffset = socketPtrOffsetMap[laddr]
-			log.Println("laddr", laddr, "ptr offset", socketPtrOffsetMap[laddr])
+			srv.logger.Sys("laddr %v ptr offset %v", laddr, socketPtrOffsetMap[laddr])
 		}
 
 		f := os.NewFile(uintptr(3+ptrOffset), "")
@@ -173,19 +175,19 @@ func (srv *Server) handleSignals() {
 		srv.signalHooks(PreSignal, sig)
 		switch sig {
 		case syscall.SIGHUP:
-			log.Println(pid, "Received SIGHUP. forking.")
+			srv.logger.Sys("%v Received SIGHUP. forking.", pid)
 			err := srv.fork()
 			if err != nil {
-				log.Println("Fork err:", err)
+				srv.logger.Sys("Fork err: %v", err)
 			}
 		case syscall.SIGINT:
-			log.Println(pid, "Received SIGINT.")
+			srv.logger.Sys("%v Received SIGINT.", pid)
 			srv.shutdown()
 		case syscall.SIGTERM:
-			log.Println(pid, "Received SIGTERM.")
+			srv.logger.Sys("%v Received SIGTERM.", pid)
 			srv.shutdown()
 		default:
-			log.Printf("Received %v: nothing i care about...\n", sig)
+			srv.logger.Sys("Received %v: nothing i care about...", sig)
 		}
 		srv.signalHooks(PostSignal, sig)
 	}
@@ -215,9 +217,9 @@ func (srv *Server) shutdown() {
 	}
 	err := srv.GraceListener.Close()
 	if err != nil {
-		log.Println(syscall.Getpid(), "Listener.Close() error:", err)
+		srv.logger.Sys("%v Listener.Close() error: %v", syscall.Getpid(), err)
 	} else {
-		log.Println(syscall.Getpid(), srv.GraceListener.Addr(), "Listener closed.")
+		srv.logger.Sys("%v %v Listener closed.", syscall.Getpid(), srv.GraceListener.Addr())
 	}
 }
 
@@ -227,14 +229,14 @@ func (srv *Server) shutdown() {
 func (srv *Server) serverTimeout(d time.Duration) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Println("WaitGroup at 0", r)
+			srv.logger.Sys("WaitGroup at 0 %v", r)
 		}
 	}()
 	if srv.state != StateShuttingDown {
 		return
 	}
 	time.Sleep(d)
-	log.Println("[STOP - Hammer Time] Forcefully shutting down parent")
+	srv.logger.Sys("[STOP - Hammer Time] Forcefully shutting down parent")
 	for {
 		if srv.state == StateTerminate {
 			break
@@ -263,7 +265,7 @@ func (srv *Server) fork() (err error) {
 		orderArgs[socketPtrOffsetMap[srvPtr.Server.Addr]] = srvPtr.Server.Addr
 	}
 
-	log.Println(files)
+	srv.logger.Sys("%v", files)
 	path := os.Args[0]
 	var args []string
 	if len(os.Args) > 1 {
@@ -277,7 +279,7 @@ func (srv *Server) fork() (err error) {
 	args = append(args, "-graceful")
 	if len(runningServers) > 1 {
 		args = append(args, fmt.Sprintf(`-socketorder=%s`, strings.Join(orderArgs, ",")))
-		log.Println(args)
+		srv.logger.Sys("%v", files)
 	}
 	cmd := exec.Command(path, args...)
 	cmd.Stdout = os.Stdout
@@ -285,7 +287,7 @@ func (srv *Server) fork() (err error) {
 	cmd.ExtraFiles = files
 	err = cmd.Start()
 	if err != nil {
-		log.Fatalf("Restart: Failed to launch, error: %v", err)
+		srv.logger.Fatal("Restart: Failed to launch, error: %v", err)
 	}
 
 	return

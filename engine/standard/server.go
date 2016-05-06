@@ -114,7 +114,7 @@ func (s *Server) Start() (err error) {
 
 	endRunning := make(chan bool, 1)
 	c := s.config
-	server := grace.NewServer(c.Address, s.Server)
+	server := grace.NewServer(c.Address, s.Server, s.logger)
 	if c.TLSCertfile != "" && c.TLSKeyfile != "" {
 		go func() {
 			time.Sleep(20 * time.Microsecond)
