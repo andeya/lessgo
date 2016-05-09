@@ -110,6 +110,7 @@ func (a *ApiHandler) initParamsAndSuffix() {
 	a.suffix = ""
 	for i, count := 0, len(a.Params); i < count; i++ {
 		if a.Params[i].In == "path" {
+			a.Params[i].Required = true //path参数不可缺省
 			a.suffix += "/:" + a.Params[i].Name
 		}
 	}
