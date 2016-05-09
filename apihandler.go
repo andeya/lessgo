@@ -109,7 +109,6 @@ func setApiHandler(vh *ApiHandler) {
 func (a *ApiHandler) initParamsAndSuffix() {
 	a.suffix = ""
 	for i, count := 0, len(a.Params); i < count; i++ {
-		a.Params[i].In = strings.ToLower(a.Params[i].In)
 		if a.Params[i].In == "path" {
 			a.suffix += "/:" + a.Params[i].Name
 		}
