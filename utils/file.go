@@ -44,8 +44,10 @@ func RelPath(targpath string) string {
 }
 
 //切换工作路径到自身所在目录下
+var curpath = SelfDir()
+
 func SelfChdir() {
-	if err := os.Chdir(SelfDir()); err != nil {
+	if err := os.Chdir(curpath); err != nil {
 		log.Fatal(err)
 	}
 }
