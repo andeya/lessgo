@@ -53,9 +53,6 @@ type (
 		Message string
 	}
 
-	// MiddlewareFunc defines a function to process middleware.
-	MiddlewareFunc func(HandlerFunc) HandlerFunc
-
 	// HandlerFunc defines a function to server HTTP requests.
 	HandlerFunc func(Context) error
 

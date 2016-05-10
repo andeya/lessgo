@@ -25,26 +25,52 @@ func readCookie(h engine.Header, filter string) *http.Cookie {
 	for i := 0; i < len(parts); i++ {
 		parts[i] = strings.TrimSpace(parts[i])
 		if len(parts[i]) == 0 {
-			return nil
+			continue
 		}
 		name, val := parts[i], ""
 		if j := strings.Index(name, "="); j >= 0 {
 			name, val = name[:j], name[j+1:]
 		}
 		if !isCookieNameValid(name) {
-			return nil
+			continue
 		}
 		if filter != "" && filter != name {
-			return nil
+			continue
 		}
 		val, success := parseCookieValue(val, true)
 		if !success {
-			return nil
+			continue
 		}
 		return &http.Cookie{Name: name, Value: val}
 	}
 	return nil
 }
+
+// readCookie reserve
+// func readCookie2(h engine.Header, filter string) *http.Cookie {
+// 	line := h.Get("Cookie")
+// 	if len(line) == 0 {
+// 		return nil
+// 	}
+
+// 	if index := strings.Index(line, filter); index != -1 {
+// 		line = line[index:]
+// 		if index = strings.Index(line, ";"); index != -1 {
+// 			line = line[:index]
+// 		}
+
+// 		if index = strings.Index(line, "="); index != -1 {
+// 			name, val := line[:index], line[index+1:]
+// 			if isCookieNameValid(name) {
+// 				val, success := parseCookieValue(val, true)
+// 				if success {
+// 					return &http.Cookie{Name: name, Value: val}
+// 				}
+// 			}
+// 		}
+// 	}
+// 	return nil
+// }
 
 var cookieNameSanitizer = strings.NewReplacer("\n", "-", "\r", "-")
 

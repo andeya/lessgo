@@ -25,21 +25,39 @@ type (
 		Desc          string
 		DefaultConfig interface{} // 默认配置(JSON格式)
 		defaultConfig string      // 默认配置的JSON字符串
-		Middleware    func(configJSON string) MiddlewareFunc
-		inited        bool // 标记是否已经初始化过
+		canConfig     bool        // 是否可使用动态配置
+		Middleware    interface{} // MiddlewareFunc or func(configJSON string) MiddlewareFunc
+		inited        bool        // 标记是否已经初始化过
 	}
-	// 虚拟路由中中间件配置信息
+	// 虚拟路由中中间件配置信息，用于获取中间件函数
 	MiddlewareConfig struct {
 		Name   string `json:"name"`   // 全局唯一
-		Config string `json:"config"` // JSON格式的配置
+		Config string `json:"config"` // JSON格式的配置（可选）
 	}
+	// 中间件接口
+	Middleware interface {
+		GetMiddlewareFunc(config string) MiddlewareFunc
+	}
+	// MiddlewareFunc defines a function to process middleware.
+	MiddlewareFunc func(HandlerFunc) HandlerFunc
+	// 支持配置的中间件
+	ConfMiddlewareFunc func(configJSON string) MiddlewareFunc
 )
 
-func (a *ApiMiddleware) CreateMiddlewareFunc(config string) MiddlewareFunc {
+func (c ConfMiddlewareFunc) GetMiddlewareFunc(config string) MiddlewareFunc {
+	return c(config)
+}
+
+func (m MiddlewareFunc) GetMiddlewareFunc(_ string) MiddlewareFunc {
+	return m
+}
+
+// 获取中间件
+func (a *ApiMiddleware) GetMiddlewareFunc(config string) MiddlewareFunc {
 	if config == "" {
-		return a.Middleware(a.defaultConfig)
+		return a.Middleware.(Middleware).GetMiddlewareFunc(a.defaultConfig)
 	}
-	return a.Middleware(config)
+	return a.Middleware.(Middleware).GetMiddlewareFunc(config)
 }
 
 // 注册中间件
@@ -47,10 +65,34 @@ func (a ApiMiddleware) Reg() *ApiMiddleware {
 	return a.init()
 }
 
+// 是否可以配置
+func (a ApiMiddleware) CanConfig() bool {
+	return a.canConfig
+}
+
 // 初始化中间件，设置id并当Name为空时自动添加Name
 func (a *ApiMiddleware) init() *ApiMiddleware {
+	// 检查是否重复初始化
 	if a.inited {
 		return getApiMiddleware(a.Name)
+	}
+
+	// 验证中间件处理函数类型
+	switch m := a.Middleware.(type) {
+	case ConfMiddlewareFunc:
+		a.canConfig = true
+	case func(configJSON string) MiddlewareFunc:
+		a.canConfig = true
+		a.Middleware = ConfMiddlewareFunc(m)
+	default:
+		a.canConfig = false
+		a.Middleware = WrapMiddleware(m)
+		a.DefaultConfig = nil
+	}
+
+	if a.DefaultConfig != nil {
+		b, _ := json.Marshal(a.DefaultConfig)
+		a.defaultConfig = string(b)
 	}
 
 	v := reflect.ValueOf(a.Middleware)
@@ -61,11 +103,6 @@ func (a *ApiMiddleware) init() *ApiMiddleware {
 		} else {
 			a.Name = funcName
 		}
-	}
-
-	if a.DefaultConfig != nil {
-		b, _ := json.Marshal(a.DefaultConfig)
-		a.defaultConfig = string(b)
 	}
 
 	a.id = utils.MakeHash(a.Name + funcName + a.defaultConfig)
@@ -130,10 +167,10 @@ func isExistMiddlewares(middlewareConfigs ...MiddlewareConfig) error {
 }
 
 // 根据中间件配置生成中间件
-func createMiddlewareFuncs(configs []MiddlewareConfig) []MiddlewareFunc {
+func getMiddlewareFuncs(configs []MiddlewareConfig) []MiddlewareFunc {
 	mws := make([]MiddlewareFunc, len(configs))
 	for i, mw := range configs {
-		mws[i] = apiMiddlewareMap[mw.Name].CreateMiddlewareFunc(mw.Config)
+		mws[i] = apiMiddlewareMap[mw.Name].GetMiddlewareFunc(mw.Config)
 	}
 	return mws
 }

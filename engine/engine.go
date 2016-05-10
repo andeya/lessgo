@@ -48,6 +48,9 @@ type (
 		// Header returns `engine.Header`.
 		Header() Header
 
+		// Referer returns the referring URL, if sent in the request.
+		Referer() string
+
 		// Proto() string
 		// ProtoMajor() int
 		// ProtoMinor() int

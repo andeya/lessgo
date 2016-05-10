@@ -538,7 +538,7 @@ func (vr *VirtRouter) route(group *Group) {
 	if !vr.Enable {
 		return
 	}
-	mws := createMiddlewareFuncs(vr.Middlewares)
+	mws := getMiddlewareFuncs(vr.Middlewares)
 	prefix := pathpkg.Join("/", vr.Prefix, vr.apiHandler.Suffix())
 	prefix2 := pathpkg.Join("/", strings.TrimSuffix(vr.Prefix, "/index"), vr.apiHandler.Suffix())
 	hasIndex := prefix2 != prefix
@@ -586,13 +586,13 @@ func registerVirtRouter() {
 	DefLessgo.app.router = NewRouter(DefLessgo.app)
 	DefLessgo.app.middleware = []MiddlewareFunc{DefLessgo.app.router.Process}
 	DefLessgo.app.head = DefLessgo.app.pristineHead
-	DefLessgo.app.BeforeUse(createMiddlewareFuncs(DefLessgo.before)...)
-	DefLessgo.app.AfterUse(createMiddlewareFuncs(DefLessgo.after)...)
-	DefLessgo.app.PreUse(createMiddlewareFuncs(DefLessgo.prefix)...)
-	DefLessgo.app.SufUse(createMiddlewareFuncs(DefLessgo.suffix)...)
+	DefLessgo.app.BeforeUse(getMiddlewareFuncs(DefLessgo.before)...)
+	DefLessgo.app.AfterUse(getMiddlewareFuncs(DefLessgo.after)...)
+	DefLessgo.app.PreUse(getMiddlewareFuncs(DefLessgo.prefix)...)
+	DefLessgo.app.SufUse(getMiddlewareFuncs(DefLessgo.suffix)...)
 	group := DefLessgo.app.Group(
 		DefLessgo.virtRouter.Prefix,
-		createMiddlewareFuncs(DefLessgo.virtRouter.Middlewares)...,
+		getMiddlewareFuncs(DefLessgo.virtRouter.Middlewares)...,
 	)
 	for _, child := range DefLessgo.virtRouter.Children() {
 		child.route(group)
