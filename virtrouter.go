@@ -525,7 +525,7 @@ func (vr *VirtRouter) reset() {
 	if vr.apiHandler != nil {
 		suffix = vr.apiHandler.Suffix()
 	}
-	vr.path = pathpkg.Clean(pathpkg.Join("/", parentPath, vr.Prefix, suffix))
+	vr.path = pathpkg.Join("/", parentPath, vr.Prefix, suffix)
 	for _, child := range vr.children {
 		child.reset()
 	}
@@ -624,5 +624,5 @@ func delVirtRouter(vr *VirtRouter) {
 
 func cleanPrefix(prefix string) string {
 	prefix = strings.Split(prefix, ":")[0]
-	return pathpkg.Clean(pathpkg.Join("/", prefix))
+	return pathpkg.Join("/", prefix)
 }
