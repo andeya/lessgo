@@ -36,6 +36,20 @@ func SelfDir() string {
 	return filepath.Dir(SelfPath())
 }
 
+// 转相对路径
+func RelPath(targpath string) string {
+	basepath, _ := filepath.Abs("./")
+	rel, _ := filepath.Rel(basepath, targpath)
+	return strings.Replace(rel, `\`, `/`, -1)
+}
+
+//切换工作路径到自身所在目录下
+func SelfChdir() {
+	if err := os.Chdir(SelfDir()); err != nil {
+		log.Fatal(err)
+	}
+}
+
 // FileExists reports whether the named file or directory exists.
 func FileExists(name string) bool {
 	if _, err := os.Stat(name); err != nil {
@@ -133,11 +147,4 @@ func WalkDirs(targpath string, suffixes ...string) (dirlist []string) {
 	}
 
 	return
-}
-
-// 转相对路径
-func RelPath(targpath string) string {
-	basepath, _ := filepath.Abs("./")
-	rel, _ := filepath.Rel(basepath, targpath)
-	return strings.Replace(rel, `\`, `/`, -1)
 }
