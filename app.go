@@ -6,15 +6,18 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path"
 	"reflect"
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/lessgo/lessgo/engine"
+	"github.com/lessgo/lessgo/grace"
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
+	"github.com/lessgo/lessgo/websocket"
 )
 
 type (
@@ -38,6 +41,7 @@ type (
 		caseSensitive    bool
 		memoryCache      *MemoryCache
 		sessions         *session.Manager
+		server           *http.Server
 	}
 
 	// Route contains a handler and information for matching against requests.
@@ -70,8 +74,9 @@ type (
 	}
 )
 
-// HTTP methods
+// HTTP request types
 const (
+	// HTTP methods
 	CONNECT = "CONNECT"
 	DELETE  = "DELETE"
 	GET     = "GET"
@@ -81,6 +86,9 @@ const (
 	POST    = "POST"
 	PUT     = "PUT"
 	TRACE   = "TRACE"
+
+	// request types
+	SOCKET = "SOCKET"
 )
 
 // MIME types
@@ -190,6 +198,7 @@ var (
 // New creates an instance of Echo.
 func New() (e *Echo) {
 	e = &Echo{
+		server:        new(http.Server),
 		pristineHead:  headHandlerFunc,
 		head:          headHandlerFunc,
 		maxParam:      new(int),
@@ -198,7 +207,7 @@ func New() (e *Echo) {
 		caseSensitive: true,
 	}
 	e.pool.New = func() interface{} {
-		return e.NewContext(nil, nil)
+		return e.NewContext(new(Response), new(Request))
 	}
 	e.router = NewRouter(e)
 	e.middleware = []MiddlewareFunc{e.router.Process}
@@ -213,10 +222,10 @@ func New() (e *Echo) {
 }
 
 // NewContext returns a Context instance.
-func (e *Echo) NewContext(rq engine.Request, rs engine.Response) Context {
+func (e *Echo) NewContext(resp *Response, req *Request) Context {
 	return &context{
-		request:  rq,
-		response: rs,
+		request:  req,
+		response: resp,
 		echo:     e,
 		pvalues:  make([]string, *e.maxParam),
 		store:    make(store),
@@ -419,17 +428,9 @@ func (e *Echo) Trace(path string, h HandlerFunc, m ...MiddlewareFunc) {
 	e.add(TRACE, path, h, m...)
 }
 
-// Any registers a new route for all HTTP methods and path with matching handler
+// AnyMethods registers a new route for all HTTP methods and path with matching handler
 // in the router with optional route-level middleware.
-func (e *Echo) Any(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
-	for _, m := range methods {
-		e.add(m, path, handler, middleware...)
-	}
-}
-
-// Match registers a new route for multiple HTTP methods and path with matching
-// handler in the router with optional route-level middleware.
-func (e *Echo) Match(methods []string, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+func (e *Echo) AnyMethods(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
 	for _, m := range methods {
 		e.add(m, path, handler, middleware...)
 	}
@@ -441,7 +442,7 @@ func (e *Echo) Static(prefix, root string, middleware ...MiddlewareFunc) {
 	e.addwithlog(false, GET, prefix+"*", func(c Context) error {
 		return c.File(path.Join(root, c.P(0))) // Param `_`
 	}, middleware...)
-	e.logger.Sys("| %-7s | %-30s | %v", GET, prefix+"*", root)
+	e.logger.Sys("| %-8s | %-30s | %v", GET, prefix+"*", root)
 }
 
 // File registers a new route with path to serve a static file.
@@ -449,7 +450,35 @@ func (e *Echo) File(path, file string, middleware ...MiddlewareFunc) {
 	e.addwithlog(false, GET, path, HandlerFunc(func(c Context) error {
 		return c.File(file)
 	}), middleware...)
-	e.logger.Sys("| %-7s | %-30s | %v", GET, path, file)
+	e.logger.Sys("| %-8s | %-30s | %v", GET, path, file)
+}
+
+// WebSocket adds a WebSocket route > handler to the router.
+func (e *Echo) WebSocket(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	e.addwithlog(false, GET, path, HandlerFunc(func(c Context) error {
+		websocket.Handler(func(ws *websocket.Conn) {
+			c.SetSocket(ws)
+			err := handler(c)
+			if err != nil {
+				c.Logger().Warn("WebSocket: [%v]%v", c.Request().RealRemoteAddr(), err)
+			}
+		}).ServeHTTP(c.Response().Writer(), c.Request().Request)
+		return nil
+	}), middleware...)
+	e.logger.Sys("| %-8s | %-30s | %v", "WEBSOCKET", path, handlerName(handler))
+}
+
+// MatchTypes registers a new route for multiple HTTP request types and path with matching
+// handler in the router with optional route-level middleware.
+func (e *Echo) MatchTypes(reqtypes []string, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	for _, reqtype := range reqtypes {
+		switch reqtype {
+		case SOCKET:
+			e.WebSocket(path, handler, middleware...)
+		default:
+			e.add(reqtype, path, handler, middleware...)
+		}
+	}
 }
 
 func (e *Echo) add(method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
@@ -479,7 +508,7 @@ func (e *Echo) addwithlog(logprint bool, method, path string, handler HandlerFun
 	}
 	e.router.routes = append(e.router.routes, r)
 	if logprint {
-		e.logger.Sys("| %-7s | %-30s | %v", method, path, name)
+		e.logger.Sys("| %-8s | %-30s | %v", method, path, name)
 	}
 }
 
@@ -544,15 +573,16 @@ func (e *Echo) PutContext(c Context) {
 	e.pool.Put(c)
 }
 
-func (e *Echo) ServeHTTP(rq engine.Request, rs engine.Response) {
+// ServeHTTP implements `http.Handler` interface, which serves HTTP requests.
+func (e *Echo) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	if !e.caseSensitive {
-		rq.URL().SetPath(strings.ToLower(rq.URL().Path()))
+		req.URL.Path = strings.ToLower(req.URL.Path)
 	}
 
 	c := e.pool.Get().(*context)
-	c.reset(rq, rs)
+	c.reset(rw, req)
 
 	// Execute chain
 	if err := e.head(c); err != nil {
@@ -562,10 +592,49 @@ func (e *Echo) ServeHTTP(rq engine.Request, rs engine.Response) {
 }
 
 // Run starts the HTTP server.
-func (e *Echo) Run(s engine.Server) {
-	s.SetHandler(e)
-	s.SetLogger(e.logger)
-	if err := s.Start(); err != nil {
+func (e *Echo) Run(address, tlsCertfile, tlsKeyfile string, readTimeout, writeTimeout time.Duration, graceful bool) {
+	e.server.Addr = address
+	e.server.Handler = e
+	e.server.ReadTimeout = readTimeout
+	e.server.WriteTimeout = writeTimeout
+
+	canHttps := tlsCertfile != "" && tlsKeyfile != ""
+
+	var err error
+	if !graceful {
+		if canHttps {
+			err = e.server.ListenAndServeTLS(tlsCertfile, tlsKeyfile)
+		} else {
+			err = e.server.ListenAndServe()
+		}
+
+	} else {
+
+		endRunning := make(chan bool, 1)
+		server := grace.NewServer(address, e.server, e.logger)
+		if canHttps {
+			go func() {
+				time.Sleep(20 * time.Microsecond)
+				if err = server.ListenAndServeTLS(tlsCertfile, tlsKeyfile); err != nil {
+					err = fmt.Errorf("Grace-ListenAndServeTLS: %v, %d", err, os.Getpid())
+					time.Sleep(100 * time.Microsecond)
+					endRunning <- true
+				}
+			}()
+		} else {
+			go func() {
+				// server.Network = "tcp4"
+				if err = server.ListenAndServe(); err != nil {
+					err = fmt.Errorf("Grace-ListenAndServe: %v, %d", err, os.Getpid())
+					time.Sleep(100 * time.Microsecond)
+					endRunning <- true
+				}
+			}()
+		}
+		<-endRunning
+	}
+
+	if err != nil {
 		e.logger.Fatal("%v", err)
 		select {}
 	}
@@ -584,6 +653,15 @@ func NewHTTPError(code int, msg ...string) *HTTPError {
 // Error makes it compatible with `error` interface.
 func (e *HTTPError) Error() string {
 	return e.Message
+}
+
+// 从请求类型得知请求方法
+func GetMethodFromType(reqtype string) string {
+	switch reqtype {
+	case SOCKET:
+		return GET
+	}
+	return reqtype
 }
 
 // WrapMiddleware wrap `echo.HandlerFunc` into `echo.MiddlewareFunc`.

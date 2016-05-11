@@ -3,7 +3,6 @@ package lessgo
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"path"
 	"reflect"
@@ -240,8 +239,8 @@ func CheckServer(config string) MiddlewareFunc {
 func CheckHome(config string) MiddlewareFunc {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c Context) error {
-			if c.Request().URL().Path() == "/" {
-				c.Request().URL().SetPath(GetHome())
+			if c.Request().URL.Path == "/" {
+				c.Request().URL.Path = GetHome()
 			}
 			return next(c)
 		}
@@ -255,22 +254,13 @@ func RequestLogger(config string) MiddlewareFunc {
 			req := c.Request()
 			res := c.Response()
 
-			remoteAddr := req.RemoteAddress()
-			if ip := req.Header().Get(HeaderXRealIP); ip != "" {
-				remoteAddr = ip
-			} else if ip = req.Header().Get(HeaderXForwardedFor); ip != "" {
-				remoteAddr = ip
-			} else {
-				remoteAddr, _, _ = net.SplitHostPort(remoteAddr)
-			}
-
 			start := time.Now()
 			if err := next(c); err != nil {
 				c.Error(err)
 			}
 			stop := time.Now()
-			method := req.Method()
-			path := req.URL().Path()
+			method := req.Method
+			path := req.URL.Path
 			if path == "" {
 				path = "/"
 			}
@@ -287,7 +277,7 @@ func RequestLogger(config string) MiddlewareFunc {
 				code = color.Cyan(n)
 			}
 
-			logs.Debug("%s | %s | %s | %s | %s | %d", remoteAddr, method, path, code, stop.Sub(start), size)
+			logs.Debug("%s | %s | %s | %s | %s | %d", req.RealRemoteAddr(), method, path, code, stop.Sub(start), size)
 			return nil
 		}
 	}
@@ -359,7 +349,7 @@ func CrossDomain(config string) MiddlewareFunc {
 func filterTemplate() MiddlewareFunc {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c Context) (err error) {
-			ext := path.Ext(c.Request().URL().Path())
+			ext := path.Ext(c.Request().URL.Path)
 			if len(ext) >= 4 && ext[:4] == TPL_EXT {
 				return c.NoContent(http.StatusForbidden)
 			}
@@ -371,11 +361,11 @@ func filterTemplate() MiddlewareFunc {
 func autoHTMLSuffix() MiddlewareFunc {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c Context) (err error) {
-			p := c.Request().URL().Path()
+			p := c.Request().URL.Path
 			if p[len(p)-1] != '/' {
 				ext := path.Ext(p)
 				if ext == "" || ext[0] != '.' {
-					c.Request().URL().SetPath(strings.TrimSuffix(p, ext) + STATIC_HTML_EXT + ext)
+					c.Request().URL.Path = strings.TrimSuffix(p, ext) + STATIC_HTML_EXT + ext
 					c.ParamValues()[0] += STATIC_HTML_EXT
 				}
 			}

@@ -72,10 +72,13 @@ func initVirtRouterFromDB() (err error) {
 	vr := new(VirtRouter)
 	has, err := lessgodb.Get(vrlock)
 	if vrlock.Md5 != Md5 {
-		err = lessgodb.DropTables(vr)
-		if err != nil {
-			err = fmt.Errorf("Failed to drop table virt_router: %v.", err)
-			return
+		exist, err := lessgodb.IsTableExist(vr)
+		if exist || err != nil {
+			err = lessgodb.DropTables(vr)
+			if err != nil {
+				err = fmt.Errorf("Failed to drop table virt_router: %v.", err)
+				return err
+			}
 		}
 	}
 	err = lessgodb.Sync2(vr)
@@ -273,9 +276,14 @@ func GetVirtRouter(id string) (*VirtRouter, bool) {
 	return vr, ok
 }
 
-// 返回操作列表的副本
+// 返回操作的请求类型列表
+func (vr *VirtRouter) Types() []string {
+	return vr.apiHandler.Types
+}
+
+// 返回操作的请求方法列表
 func (vr *VirtRouter) Methods() []string {
-	return vr.apiHandler.Methods
+	return vr.apiHandler.methods
 }
 
 // 操作的描述
@@ -555,12 +563,12 @@ func (vr *VirtRouter) route(group *Group) {
 			child.route(childGroup)
 		}
 	case HANDLER:
-		methods := vr.apiHandler.Methods
 		handler := vr.apiHandler.Handler
+		reqtypes := vr.apiHandler.Types
 		if hasIndex {
-			group.Match(methods, prefix2, handler, mws...)
+			group.MatchTypes(reqtypes, prefix2, handler, mws...)
 		}
-		group.Match(methods, prefix, handler, mws...)
+		group.MatchTypes(reqtypes, prefix, handler, mws...)
 	}
 }
 

@@ -21,19 +21,19 @@ type (
 
 func (b *binder) Bind(i interface{}, c Context) (err error) {
 	req := c.Request()
-	ctype := req.Header().Get(HeaderContentType)
-	if req.Body() == nil {
+	ctype := req.Header.Get(HeaderContentType)
+	if req.Body == nil {
 		err = NewHTTPError(http.StatusBadRequest, "request body can't be empty")
 		return
 	}
 	err = ErrUnsupportedMediaType
 	switch {
 	case strings.HasPrefix(ctype, MIMEApplicationJSON):
-		if err = json.NewDecoder(req.Body()).Decode(i); err != nil {
+		if err = json.NewDecoder(req.Body).Decode(i); err != nil {
 			err = NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 	case strings.HasPrefix(ctype, MIMEApplicationXML):
-		if err = xml.NewDecoder(req.Body()).Decode(i); err != nil {
+		if err = xml.NewDecoder(req.Body).Decode(i); err != nil {
 			err = NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 	case strings.HasPrefix(ctype, MIMEApplicationForm), strings.HasPrefix(ctype, MIMEMultipartForm):

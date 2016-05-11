@@ -19,13 +19,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"sync"
 	"time"
-
-	"github.com/lessgo/lessgo/engine"
 )
 
 var (
@@ -80,7 +79,7 @@ func (fs *FileSessionStore) SessionID() string {
 }
 
 // SessionRelease Write file session to local file with Gob string
-func (fs *FileSessionStore) SessionRelease(w engine.Response) {
+func (fs *FileSessionStore) SessionRelease(w http.ResponseWriter) {
 	b, err := EncodeGob(fs.values)
 	if err != nil {
 		return

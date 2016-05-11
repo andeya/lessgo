@@ -4,14 +4,14 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
-	"strings"
 	"sync"
 )
 
 type (
 	ApiHandler struct {
 		Desc    string   // 本操作的描述
-		Methods []string // 方法列表，为空时默认为全部
+		Types   []string // 请求类型列表，为空时默认为全部请求方法
+		methods []string // 请求方法列表，根据请求类型而定
 		Params  []Param  // 参数说明列表，path参数类型的先后顺序与url中保持一致
 		// Produces []string            // 支持的响应内容类型，如["application/xml", "application/json"]
 		Handler func(Context) error // 操作
@@ -62,7 +62,7 @@ func (a *ApiHandler) init() *ApiHandler {
 	if a.inited {
 		return getApiHandler(a.id)
 	}
-	a.initMethods()
+	a.initTypes()
 	a.initParamsAndSuffix()
 	a.initId()
 	a.inited = true
@@ -116,13 +116,10 @@ func (a *ApiHandler) initParamsAndSuffix() {
 	}
 }
 
-func (a *ApiHandler) initMethods() {
-	count := len(a.Methods)
-	defer func() {
-		sort.Strings(a.Methods)
-	}()
+func (a *ApiHandler) initTypes() {
+	count := len(a.Types)
 	if count == 0 {
-		a.Methods = []string{
+		a.Types = []string{
 			CONNECT,
 			DELETE,
 			GET,
@@ -133,16 +130,23 @@ func (a *ApiHandler) initMethods() {
 			PUT,
 			TRACE,
 		}
-		return
 	}
+	// 排序并去除重复请求类型
+	sort.Strings(a.Types)
 	for i := 0; i < count; i++ {
-		a.Methods[i] = strings.ToUpper(a.Methods[i])
+		if i > 0 && a.Types[i-1] == a.Types[i] {
+			a.Types = append(a.Types[:i], a.Types[i+1:]...)
+			count--
+			i--
+			continue
+		}
+		a.methods = append(a.methods, GetMethodFromType(a.Types[i]))
 	}
 }
 
 func (a *ApiHandler) initId() {
 	add := "[" + a.suffix + "][" + a.Desc + "]"
-	for _, m := range a.Methods {
+	for _, m := range a.Types {
 		add += "[" + m + "]"
 	}
 	v := reflect.ValueOf(a.Handler)

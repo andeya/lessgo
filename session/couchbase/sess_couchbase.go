@@ -20,8 +20,8 @@
 //
 // Usage:
 // import(
-//   _ "github.com/lessgo/lessgo/session/couchbase"
-//   "github.com/lessgo/lessgo/session"
+//   _ "github.com/astaxie/beego/session/couchbase"
+//   "github.com/astaxie/beego/session"
 // )
 //
 //	func init() {
@@ -33,13 +33,13 @@
 package couchbase
 
 import (
+	"net/http"
 	"strings"
 	"sync"
 
 	couchbase "github.com/couchbase/go-couchbase"
 
-	"github.com/lessgo/lessgo/engine"
-	"github.com/lessgo/lessgo/session"
+	"github.com/astaxie/beego/session"
 )
 
 var couchbpder = &Provider{}
@@ -102,7 +102,7 @@ func (cs *SessionStore) SessionID() string {
 }
 
 // SessionRelease Write couchbase session with Gob string
-func (cs *SessionStore) SessionRelease(w engine.Response) {
+func (cs *SessionStore) SessionRelease(w http.ResponseWriter) {
 	defer cs.b.Close()
 
 	bo, err := session.EncodeGob(cs.values)
