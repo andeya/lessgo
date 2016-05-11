@@ -74,9 +74,8 @@ type (
 	}
 )
 
-// HTTP request types
+// HTTP methods
 const (
-	// HTTP methods
 	CONNECT = "CONNECT"
 	DELETE  = "DELETE"
 	GET     = "GET"
@@ -87,8 +86,8 @@ const (
 	PUT     = "PUT"
 	TRACE   = "TRACE"
 
-	// request types
-	SOCKET = "SOCKET"
+	WS  = "WS" // websocket "GET"
+	ANY = "*"  // exclusion of all methods out of "WS"
 )
 
 // MIME types
@@ -428,11 +427,24 @@ func (e *Echo) Trace(path string, h HandlerFunc, m ...MiddlewareFunc) {
 	e.add(TRACE, path, h, m...)
 }
 
-// AnyMethods registers a new route for all HTTP methods and path with matching handler
+// Any registers a new route for all HTTP methods and path with matching handler
 // in the router with optional route-level middleware.
-func (e *Echo) AnyMethods(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+func (e *Echo) Any(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
 	for _, m := range methods {
 		e.add(m, path, handler, middleware...)
+	}
+}
+
+// Match registers a new route for multiple HTTP methods and path with matching
+// handler in the router with optional route-level middleware.
+func (e *Echo) Match(methods []string, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	for _, method := range methods {
+		switch method {
+		case WS:
+			e.WebSocket(path, handler, middleware...)
+		default:
+			e.add(method, path, handler, middleware...)
+		}
 	}
 }
 
@@ -442,7 +454,7 @@ func (e *Echo) Static(prefix, root string, middleware ...MiddlewareFunc) {
 	e.addwithlog(false, GET, prefix+"*", func(c Context) error {
 		return c.File(path.Join(root, c.P(0))) // Param `_`
 	}, middleware...)
-	e.logger.Sys("| %-8s | %-30s | %v", GET, prefix+"*", root)
+	e.logger.Sys("| %-7s | %-30s | %v", GET, prefix+"*", root)
 }
 
 // File registers a new route with path to serve a static file.
@@ -450,7 +462,7 @@ func (e *Echo) File(path, file string, middleware ...MiddlewareFunc) {
 	e.addwithlog(false, GET, path, HandlerFunc(func(c Context) error {
 		return c.File(file)
 	}), middleware...)
-	e.logger.Sys("| %-8s | %-30s | %v", GET, path, file)
+	e.logger.Sys("| %-7s | %-30s | %v", GET, path, file)
 }
 
 // WebSocket adds a WebSocket route > handler to the router.
@@ -465,20 +477,7 @@ func (e *Echo) WebSocket(path string, handler HandlerFunc, middleware ...Middlew
 		}).ServeHTTP(c.Response().Writer(), c.Request().Request)
 		return nil
 	}), middleware...)
-	e.logger.Sys("| %-8s | %-30s | %v", "WEBSOCKET", path, handlerName(handler))
-}
-
-// MatchTypes registers a new route for multiple HTTP request types and path with matching
-// handler in the router with optional route-level middleware.
-func (e *Echo) MatchTypes(reqtypes []string, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
-	for _, reqtype := range reqtypes {
-		switch reqtype {
-		case SOCKET:
-			e.WebSocket(path, handler, middleware...)
-		default:
-			e.add(reqtype, path, handler, middleware...)
-		}
-	}
+	e.logger.Sys("| %-7s | %-30s | %v", WS, path, handlerName(handler))
 }
 
 func (e *Echo) add(method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
@@ -508,7 +507,7 @@ func (e *Echo) addwithlog(logprint bool, method, path string, handler HandlerFun
 	}
 	e.router.routes = append(e.router.routes, r)
 	if logprint {
-		e.logger.Sys("| %-8s | %-30s | %v", method, path, name)
+		e.logger.Sys("| %-7s | %-30s | %v", method, path, name)
 	}
 }
 
@@ -653,15 +652,6 @@ func NewHTTPError(code int, msg ...string) *HTTPError {
 // Error makes it compatible with `error` interface.
 func (e *HTTPError) Error() string {
 	return e.Message
-}
-
-// 从请求类型得知请求方法
-func GetMethodFromType(reqtype string) string {
-	switch reqtype {
-	case SOCKET:
-		return GET
-	}
-	return reqtype
 }
 
 // WrapMiddleware wrap `echo.HandlerFunc` into `echo.MiddlewareFunc`.

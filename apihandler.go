@@ -3,15 +3,15 @@ package lessgo
 import (
 	"reflect"
 	"runtime"
-	"sort"
+	"strings"
 	"sync"
 )
 
 type (
 	ApiHandler struct {
 		Desc    string   // 本操作的描述
-		Types   []string // 请求类型列表，为空时默认为全部请求方法
-		methods []string // 请求方法列表，根据请求类型而定
+		Method  string   // 请求方法，"*"表示除"WS"外全部方法
+		methods []string // 真实的请求方法列表(自动转换: "WS"->"GET", "*"->methods)
 		Params  []Param  // 参数说明列表，path参数类型的先后顺序与url中保持一致
 		// Produces []string            // 支持的响应内容类型，如["application/xml", "application/json"]
 		Handler func(Context) error // 操作
@@ -62,7 +62,7 @@ func (a *ApiHandler) init() *ApiHandler {
 	if a.inited {
 		return getApiHandler(a.id)
 	}
-	a.initTypes()
+	a.initMethod()
 	a.initParamsAndSuffix()
 	a.initId()
 	a.inited = true
@@ -81,6 +81,11 @@ func (a *ApiHandler) Id() string {
 // 操作的url前缀
 func (a *ApiHandler) Suffix() string {
 	return a.suffix
+}
+
+// 真实的请求方法列表(自动转换: "WS"->"GET", "*"->methods)
+func (a *ApiHandler) Methods() []string {
+	return a.methods
 }
 
 func getApiHandler(id string) *ApiHandler {
@@ -116,39 +121,22 @@ func (a *ApiHandler) initParamsAndSuffix() {
 	}
 }
 
-func (a *ApiHandler) initTypes() {
-	count := len(a.Types)
-	if count == 0 {
-		a.Types = []string{
-			CONNECT,
-			DELETE,
-			GET,
-			HEAD,
-			OPTIONS,
-			PATCH,
-			POST,
-			PUT,
-			TRACE,
-		}
-	}
-	// 排序并去除重复请求类型
-	sort.Strings(a.Types)
-	for i := 0; i < count; i++ {
-		if i > 0 && a.Types[i-1] == a.Types[i] {
-			a.Types = append(a.Types[:i], a.Types[i+1:]...)
-			count--
-			i--
-			continue
-		}
-		a.methods = append(a.methods, GetMethodFromType(a.Types[i]))
+func (a *ApiHandler) initMethod() {
+	a.Method = strings.ToUpper(a.Method)
+	switch a.Method {
+	case ANY:
+		a.methods = methods[:]
+	case WS:
+		a.methods = []string{GET}
+	case CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE:
+		a.methods = []string{a.Method}
+	default:
+		Logger().Fatal("ApiHandler %v's \"Method\" can't be %v. ", a.Desc, a.Method)
 	}
 }
 
 func (a *ApiHandler) initId() {
-	add := "[" + a.suffix + "][" + a.Desc + "]"
-	for _, m := range a.Types {
-		add += "[" + m + "]"
-	}
+	add := "[" + a.suffix + "][" + a.Desc + "]" + "[" + a.Method + "]"
 	v := reflect.ValueOf(a.Handler)
 	t := v.Type()
 	if t.Kind() == reflect.Func {

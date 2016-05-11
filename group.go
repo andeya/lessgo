@@ -61,17 +61,17 @@ func (g *Group) Trace(path string, h HandlerFunc, m ...MiddlewareFunc) {
 	g.add(TRACE, path, h, m...)
 }
 
-// AnyMethods implements `Echo#AnyMethods()` for sub-routes within the Group.
-func (g *Group) AnyMethods(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+// Any implements `Echo#Any()` for sub-routes within the Group.
+func (g *Group) Any(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
 	for _, m := range methods {
 		g.add(m, path, handler, middleware...)
 	}
 }
 
-// MatchTypes implements `Echo#MatchTypes()` for sub-routes within the Group.
-func (g *Group) MatchTypes(reqtypes []string, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
-	for _, reqtype := range reqtypes {
-		g.add(reqtype, path, handler, middleware...)
+// Match implements `Echo#Match()` for sub-routes within the Group.
+func (g *Group) Match(methods []string, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	for _, method := range methods {
+		g.add(method, path, handler, middleware...)
 	}
 }
 
@@ -81,13 +81,13 @@ func (g *Group) Group(prefix string, m ...MiddlewareFunc) *Group {
 	return g.echo.Group(joinpath(g.prefix, prefix), m...)
 }
 
-func (g *Group) add(reqtypes, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+func (g *Group) add(methods, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
 	path = joinpath(g.prefix, path)
 	middleware = append(g.middleware, middleware...)
-	switch reqtypes {
-	case SOCKET:
+	switch methods {
+	case WS:
 		g.echo.WebSocket(path, handler, middleware...)
 	default:
-		g.echo.add(reqtypes, path, handler, middleware...)
+		g.echo.add(methods, path, handler, middleware...)
 	}
 }
