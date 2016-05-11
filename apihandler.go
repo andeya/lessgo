@@ -131,7 +131,7 @@ func (a *ApiHandler) initMethod() {
 	case CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE:
 		a.methods = []string{a.Method}
 	default:
-		Logger().Fatal("ApiHandler %v's \"Method\" can't be %v. ", a.Desc, a.Method)
+		Logger().Fatal("ApiHandler \"%v\"'s method can't be %v. ", a.Desc, a.Method)
 	}
 }
 
