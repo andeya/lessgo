@@ -21,8 +21,6 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
-
-	"github.com/lessgo/lessgo/engine"
 )
 
 var cookiepder = &CookieProvider{}
@@ -75,7 +73,7 @@ func (st *CookieSessionStore) SessionID() string {
 }
 
 // SessionRelease Write cookie session to http response cookie
-func (st *CookieSessionStore) SessionRelease(w engine.Response) {
+func (st *CookieSessionStore) SessionRelease(w http.ResponseWriter) {
 	str, err := encodeCookie(cookiepder.block,
 		cookiepder.config.SecurityKey,
 		cookiepder.config.SecurityName,
@@ -89,7 +87,7 @@ func (st *CookieSessionStore) SessionRelease(w engine.Response) {
 		HttpOnly: true,
 		Secure:   cookiepder.config.Secure,
 		MaxAge:   cookiepder.config.Maxage}
-	w.SetCookie(cookie)
+	http.SetCookie(w, cookie)
 	return
 }
 

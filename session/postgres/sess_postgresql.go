@@ -38,8 +38,8 @@
 //
 // Usage:
 // import(
-//   _ "github.com/lessgo/lessgo/session/postgresql"
-//   "github.com/lessgo/lessgo/session"
+//   _ "github.com/astaxie/beego/session/postgresql"
+//   "github.com/astaxie/beego/session"
 // )
 //
 //	func init() {
@@ -52,14 +52,13 @@ package postgres
 
 import (
 	"database/sql"
+	"net/http"
 	"sync"
 	"time"
 
+	"github.com/astaxie/beego/session"
 	// import postgresql Driver
 	_ "github.com/lib/pq"
-
-	"github.com/lessgo/lessgo/engine"
-	"github.com/lessgo/lessgo/session"
 )
 
 var postgresqlpder = &Provider{}
@@ -114,7 +113,7 @@ func (st *SessionStore) SessionID() string {
 
 // SessionRelease save postgresql session values to database.
 // must call this method to save values to database.
-func (st *SessionStore) SessionRelease(w engine.Response) {
+func (st *SessionStore) SessionRelease(w http.ResponseWriter) {
 	defer st.c.Close()
 	b, err := session.EncodeGob(st.values)
 	if err != nil {

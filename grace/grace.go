@@ -25,13 +25,13 @@
 //   "github.com/astaxie/beego/grace"
 // )
 //
-//  func handler(w http.ResponseWriter, r *http.Request) {
+//  func server(w http.ResponseWriter, r *http.Request) {
 //	  w.Write([]byte("WORLD!"))
 //  }
 //
 //  func main() {
 //      mux := http.NewServeMux()
-//      mux.HandleFunc("/hello", handler)
+//      mux.HandleFunc("/hello", server)
 //
 //	    err := grace.ListenAndServe("localhost:8080", mux)
 //      if err != nil {
@@ -50,6 +50,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/lessgo/lessgo/logs"
 )
 
 const (
@@ -74,10 +76,6 @@ var (
 	socketPtrOffsetMap   map[string]uint
 	runningServersForked bool
 
-	// DefaultReadTimeOut is the HTTP read timeout
-	DefaultReadTimeOut time.Duration
-	// DefaultWriteTimeOut is the HTTP Write timeout
-	DefaultWriteTimeOut time.Duration
 	// DefaultMaxHeaderBytes is the Max HTTP Herder size, default is 0, no limit
 	DefaultMaxHeaderBytes int
 	// DefaultTimeout is the shutdown server's timeout. default is 60s
@@ -98,7 +96,7 @@ func onceInit() {
 }
 
 // NewServer returns a new graceServer.
-func NewServer(addr string, handler http.Handler) (srv *Server) {
+func NewServer(addr string, server *http.Server, logger logs.Logger) (srv *Server) {
 	once.Do(onceInit)
 	regLock.Lock()
 	defer regLock.Unlock()
@@ -114,6 +112,8 @@ func NewServer(addr string, handler http.Handler) (srv *Server) {
 	}
 
 	srv = &Server{
+		Server:  server,
+		logger:  logger,
 		wg:      sync.WaitGroup{},
 		sigChan: make(chan os.Signal),
 		isChild: isChild,
@@ -132,12 +132,6 @@ func NewServer(addr string, handler http.Handler) (srv *Server) {
 		state:   StateInit,
 		Network: "tcp",
 	}
-	srv.Server = &http.Server{}
-	srv.Server.Addr = addr
-	srv.Server.ReadTimeout = DefaultReadTimeOut
-	srv.Server.WriteTimeout = DefaultWriteTimeOut
-	srv.Server.MaxHeaderBytes = DefaultMaxHeaderBytes
-	srv.Server.Handler = handler
 
 	runningServersOrder = append(runningServersOrder, addr)
 	runningServers[addr] = srv
@@ -146,13 +140,11 @@ func NewServer(addr string, handler http.Handler) (srv *Server) {
 }
 
 // ListenAndServe refer http.ListenAndServe
-func ListenAndServe(addr string, handler http.Handler) error {
-	server := NewServer(addr, handler)
-	return server.ListenAndServe()
+func ListenAndServe(addr string, server *http.Server, logger logs.Logger) error {
+	return NewServer(addr, server, logger).ListenAndServe()
 }
 
 // ListenAndServeTLS refer http.ListenAndServeTLS
-func ListenAndServeTLS(addr string, certFile string, keyFile string, handler http.Handler) error {
-	server := NewServer(addr, handler)
-	return server.ListenAndServeTLS(certFile, keyFile)
+func ListenAndServeTLS(addr string, certFile string, keyFile string, server *http.Server, logger logs.Logger) error {
+	return NewServer(addr, server, logger).ListenAndServeTLS(certFile, keyFile)
 }

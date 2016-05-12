@@ -53,9 +53,7 @@ func NewRouter(e *Echo) *Router {
 // Process implements `echo.MiddlewareFunc` which makes router a middleware.
 func (r *Router) Process(next HandlerFunc) HandlerFunc {
 	return func(c Context) error {
-		method := c.Request().Method()
-		path := c.Request().URL().Path()
-		r.Find(method, path, c)
+		r.Find(c.Request().Method, c.Request().URL.Path, c)
 		if err := c.Handler()(c); err != nil {
 			return err
 		}
@@ -416,7 +414,7 @@ func (r *Router) Find(method, path string, context Context) {
 End:
 	context.SetHandler(cn.findHandler(method))
 	context.SetPath(cn.ppath)
-	context.SetParamNames(cn.pnames)
+	context.setParamNames(cn.pnames)
 
 	// NOTE: Slow zone...
 	if context.Handler() == nil {
@@ -440,7 +438,7 @@ End:
 			context.SetHandler(cn.checkMethodNotAllowed())
 		}
 		context.SetPath(cn.ppath)
-		context.SetParamNames(cn.pnames)
+		context.setParamNames(cn.pnames)
 	}
 
 	return

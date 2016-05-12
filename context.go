@@ -15,9 +15,9 @@ import (
 
 	netContext "golang.org/x/net/context"
 
-	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
+	"github.com/lessgo/lessgo/websocket"
 )
 
 type (
@@ -32,12 +32,19 @@ type (
 		// SetNetContext sets `http://blog.golang.org/context.Context` interface.
 		SetNetContext(netContext.Context)
 
+		// About Socket's methods.
+		Socket() *websocket.Conn
+		SetSocket(*websocket.Conn)
+		WsRecvJSON(interface{}) error
+		WsRecvMsg(*string) error
+		WsSendJSON(interface{}) (int, error)
+		WsSendMsg(string) (int, error)
+
 		// Request returns `engine.Request` interface.
-		Request() engine.Request
+		Request() *Request
 
 		// Request returns `engine.Response` interface.
-		// implement http.ResponseWriter.
-		Response() engine.Response
+		Response() *Response
 
 		// Path returns the registered path for the handler.
 		Path() string
@@ -54,20 +61,17 @@ type (
 		// ParamNames returns path parameter names.
 		ParamNames() []string
 
-		// SetParamNames sets path parameter names.
-		SetParamNames([]string)
-
-		// AddParamName adds path parameter names.
-		AddParamName(...string)
-
 		// ParamValues returns path parameter values.
 		ParamValues() []string
 
-		// SetParamValues sets path parameter values.
-		SetParamValues([]string)
+		// SetParam sets path parameter.
+		SetParam(name, value string)
 
-		// AddParamValues adds path parameter values.
-		AddParamValue(...string)
+		// setParamNames sets path parameter names.
+		setParamNames([]string)
+
+		// setParamValues sets path parameter values.
+		setParamValues([]string)
 
 		// QueryParam returns the query param for the provided name. It is an alias
 		// for `engine.URL#QueryParam()`.
@@ -187,18 +191,19 @@ type (
 		// Reset resets the context after request completes. It must be called along
 		// with `Echo#AcquireContext()` and `Echo#ReleaseContext()`.
 		// See `Echo#ServeHTTP()`
-		reset(engine.Request, engine.Response)
+		reset(http.ResponseWriter, *http.Request)
 	}
 
 	context struct {
 		netContext netContext.Context
-		request    engine.Request
-		response   engine.Response
+		request    *Request
+		response   *Response
 		path       string
 		pnames     []string
 		pvalues    []string
 		store      store
 		handler    HandlerFunc
+		socket     *websocket.Conn
 		echo       *Echo
 	}
 
@@ -235,11 +240,35 @@ func (c *context) Value(key interface{}) interface{} {
 	return c.netContext.Value(key)
 }
 
-func (c *context) Request() engine.Request {
+func (c *context) Socket() *websocket.Conn {
+	return c.socket
+}
+
+func (c *context) SetSocket(conn *websocket.Conn) {
+	c.socket = conn
+}
+
+func (c *context) WsRecvJSON(v interface{}) error {
+	return websocket.JSON.Receive(c.socket, v)
+}
+
+func (c *context) WsRecvMsg(v *string) error {
+	return websocket.Message.Receive(c.socket, v)
+}
+
+func (c *context) WsSendJSON(v interface{}) (int, error) {
+	return websocket.JSON.Send(c.socket, v)
+}
+
+func (c *context) WsSendMsg(v string) (int, error) {
+	return websocket.Message.Send(c.socket, v)
+}
+
+func (c *context) Request() *Request {
 	return c.request
 }
 
-func (c *context) Response() engine.Response {
+func (c *context) Response() *Response {
 	return c.response
 }
 
@@ -274,32 +303,40 @@ func (c *context) ParamNames() []string {
 	return c.pnames
 }
 
-func (c *context) SetParamNames(names []string) {
-	c.pnames = names
-}
-
-func (c *context) AddParamName(names ...string) {
-	c.pnames = append(c.pnames, names...)
+func (c *context) SetParam(name, value string) {
+	l := len(c.pnames)
+	for i, n := range c.pnames {
+		if n == name && i < l {
+			c.pvalues[i] = value
+			return
+		}
+	}
+	c.pnames = append(c.pnames, name)
+	if len(c.pvalues) > l {
+		c.pvalues[l] = value
+	} else {
+		c.pvalues = append(c.pvalues, value)
+	}
 }
 
 func (c *context) ParamValues() []string {
 	return c.pvalues
 }
 
-func (c *context) SetParamValues(values []string) {
+func (c *context) setParamNames(names []string) {
+	c.pnames = names
+}
+
+func (c *context) setParamValues(values []string) {
 	c.pvalues = values
 }
 
-func (c *context) AddParamValue(values ...string) {
-	c.pvalues = append(c.pvalues, values...)
-}
-
 func (c *context) QueryParam(name string) string {
-	return c.request.URL().QueryParam(name)
+	return c.request.QueryParam(name)
 }
 
 func (c *context) QueryParams() map[string][]string {
-	return c.request.URL().QueryParams()
+	return c.request.QueryParams()
 }
 
 func (c *context) FormValue(name string) string {
@@ -311,7 +348,8 @@ func (c *context) FormParams() map[string][]string {
 }
 
 func (c *context) FormFile(name string) (*multipart.FileHeader, error) {
-	return c.request.FormFile(name)
+	_, fh, err := c.request.FormFile(name)
+	return fh, err
 }
 
 func (c *context) MultipartForm() (*multipart.Form, error) {
@@ -334,7 +372,7 @@ func (c *context) Session() (session.Store, error) {
 	if c.echo.sessions == nil {
 		return nil, fmt.Errorf("Sessions is unset.")
 	}
-	return c.echo.sessions.SessionStart(c.Response(), c.Request())
+	return c.echo.sessions.SessionStart(c.Response().Writer(), c.Request().Request)
 }
 
 func (c *context) Set(key string, val interface{}) {
@@ -515,18 +553,18 @@ func (c *context) Logger() logs.Logger {
 
 func (c *context) ServeContent(content io.ReadSeeker, name string, modtime time.Time) error {
 	req := c.Request()
-	res := c.Response()
+	resp := c.Response()
 
-	if t, err := time.Parse(http.TimeFormat, req.Header().Get(HeaderIfModifiedSince)); err == nil && modtime.Before(t.Add(1*time.Second)) {
-		res.Header().Del(HeaderContentType)
-		res.Header().Del(HeaderContentLength)
+	if t, err := time.Parse(http.TimeFormat, req.Header.Get(HeaderIfModifiedSince)); err == nil && modtime.Before(t.Add(1*time.Second)) {
+		resp.Header().Del(HeaderContentType)
+		resp.Header().Del(HeaderContentLength)
 		return c.NoContent(http.StatusNotModified)
 	}
 
-	res.Header().Set(HeaderContentType, ContentTypeByExtension(name))
-	res.Header().Set(HeaderLastModified, modtime.UTC().Format(http.TimeFormat))
-	res.WriteHeader(http.StatusOK)
-	_, err := io.Copy(res, content)
+	resp.Header().Set(HeaderContentType, ContentTypeByExtension(name))
+	resp.Header().Set(HeaderLastModified, modtime.UTC().Format(http.TimeFormat))
+	resp.WriteHeader(http.StatusOK)
+	_, err := io.Copy(resp, content)
 	return err
 }
 
@@ -540,11 +578,15 @@ func ContentTypeByExtension(name string) (t string) {
 	return
 }
 
-func (c *context) reset(rq engine.Request, rs engine.Response) {
+func (c *context) reset(rw http.ResponseWriter, req *http.Request) {
 	c.netContext = nil
-	c.request = rq
-	c.response = rs
+	c.response.reset(rw)
+	c.request.reset(req)
+	c.socket = nil
 	c.store = make(store)
 	c.handler = notFoundHandler
-	c.pvalues = make([]string, *c.echo.maxParam)
+	for i := len(c.pnames) - 1; i >= 0; i-- {
+		c.pvalues[i] = ""
+	}
+	c.pnames = []string{}
 }

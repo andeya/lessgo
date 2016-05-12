@@ -26,9 +26,9 @@ type (
 		DBList              map[string]DBConfig
 	}
 	Info struct {
-		Version           string
-		Description       string
-		Host              string
+		Version     string
+		Description string
+		// Host              string
 		Email             string
 		TermsOfServiceUrl string
 		License           string
@@ -127,9 +127,9 @@ func initConfig() *Config {
 	return &Config{
 		AppName: "lessgo",
 		Info: Info{
-			Version:           "0.4.0",
-			Description:       "A simple, stable, efficient and flexible web framework.",
-			Host:              "127.0.0.1:8080",
+			Version:     "0.4.0",
+			Description: "A simple, stable, efficient and flexible web framework.",
+			// Host:              "127.0.0.1:8080",
 			Email:             "henrylee_cn@foxmail.com",
 			TermsOfServiceUrl: "https://github.com/lessgo/lessgo",
 			License:           "MIT",
@@ -198,7 +198,7 @@ func defaultAppConfig(iniconf *config.IniConfigContainer) {
 
 	iniconf.Set("info::version", BConfig.Info.Version)
 	iniconf.Set("info::description", BConfig.Info.Description)
-	iniconf.Set("info::host", BConfig.Info.Host)
+	// iniconf.Set("info::host", BConfig.Info.Host)
 	iniconf.Set("info::email", BConfig.Info.Email)
 	iniconf.Set("info::termsofserviceurl", BConfig.Info.TermsOfServiceUrl)
 	iniconf.Set("info::license", BConfig.Info.License)
@@ -208,7 +208,7 @@ func defaultAppConfig(iniconf *config.IniConfigContainer) {
 	iniconf.Set("filecache::singlefileallowmb", fmt.Sprint(BConfig.FileCache.SingleFileAllowMB))
 	iniconf.Set("filecache::maxcapmb", fmt.Sprint(BConfig.FileCache.MaxCapMB))
 
-	// iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
+	iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
 	iniconf.Set("listen::address", fmt.Sprint(BConfig.Listen.Address))
 	iniconf.Set("listen::readtimeout", fmt.Sprint(BConfig.Listen.ReadTimeout))
 	iniconf.Set("listen::writetimeout", fmt.Sprint(BConfig.Listen.WriteTimeout))
@@ -312,10 +312,10 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 		iniconf.Set("info::description", BConfig.Info.Description)
 		AppConfig.Info.Description = BConfig.Info.Description
 	}
-	if AppConfig.Info.Host = iniconf.String("info::host"); AppConfig.Info.Host == "" {
-		iniconf.Set("info::host", BConfig.Info.Host)
-		AppConfig.Info.Host = BConfig.Info.Host
-	}
+	// if AppConfig.Info.Host = iniconf.String("info::host"); AppConfig.Info.Host == "" {
+	// 	iniconf.Set("info::host", BConfig.Info.Host)
+	// 	AppConfig.Info.Host = BConfig.Info.Host
+	// }
 	if AppConfig.Info.Email = iniconf.String("info::email"); AppConfig.Info.Email == "" {
 		iniconf.Set("info::email", BConfig.Info.Email)
 		AppConfig.Info.Email = BConfig.Info.Email
@@ -346,10 +346,10 @@ func trySetAppConfig(iniconf *config.IniConfigContainer) {
 		AppConfig.FileCache.MaxCapMB = BConfig.FileCache.MaxCapMB
 	}
 
-	// if AppConfig.Listen.Graceful, err = iniconf.Bool("listen::graceful"); err != nil {
-	// 	iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
-	// 	AppConfig.Listen.Graceful = BConfig.Listen.Graceful
-	// }
+	if AppConfig.Listen.Graceful, err = iniconf.Bool("listen::graceful"); err != nil {
+		iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
+		AppConfig.Listen.Graceful = BConfig.Listen.Graceful
+	}
 	if AppConfig.Listen.Address = iniconf.String("listen::address"); AppConfig.Listen.Address == "" {
 		iniconf.Set("listen::address", fmt.Sprint(BConfig.Listen.Address))
 		AppConfig.Listen.Address = BConfig.Listen.Address

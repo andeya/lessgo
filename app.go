@@ -6,15 +6,18 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path"
 	"reflect"
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/lessgo/lessgo/engine"
+	"github.com/lessgo/lessgo/grace"
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
+	"github.com/lessgo/lessgo/websocket"
 )
 
 type (
@@ -38,6 +41,7 @@ type (
 		caseSensitive    bool
 		memoryCache      *MemoryCache
 		sessions         *session.Manager
+		server           *http.Server
 	}
 
 	// Route contains a handler and information for matching against requests.
@@ -52,9 +56,6 @@ type (
 		Code    int
 		Message string
 	}
-
-	// MiddlewareFunc defines a function to process middleware.
-	MiddlewareFunc func(HandlerFunc) HandlerFunc
 
 	// HandlerFunc defines a function to server HTTP requests.
 	HandlerFunc func(Context) error
@@ -84,6 +85,9 @@ const (
 	POST    = "POST"
 	PUT     = "PUT"
 	TRACE   = "TRACE"
+
+	WS  = "WS" // websocket "GET"
+	ANY = "*"  // exclusion of all methods out of "WS"
 )
 
 // MIME types
@@ -193,6 +197,7 @@ var (
 // New creates an instance of Echo.
 func New() (e *Echo) {
 	e = &Echo{
+		server:        new(http.Server),
 		pristineHead:  headHandlerFunc,
 		head:          headHandlerFunc,
 		maxParam:      new(int),
@@ -201,7 +206,7 @@ func New() (e *Echo) {
 		caseSensitive: true,
 	}
 	e.pool.New = func() interface{} {
-		return e.NewContext(nil, nil)
+		return e.NewContext(new(Response), new(Request))
 	}
 	e.router = NewRouter(e)
 	e.middleware = []MiddlewareFunc{e.router.Process}
@@ -216,10 +221,10 @@ func New() (e *Echo) {
 }
 
 // NewContext returns a Context instance.
-func (e *Echo) NewContext(rq engine.Request, rs engine.Response) Context {
+func (e *Echo) NewContext(resp *Response, req *Request) Context {
 	return &context{
-		request:  rq,
-		response: rs,
+		request:  req,
+		response: resp,
 		echo:     e,
 		pvalues:  make([]string, *e.maxParam),
 		store:    make(store),
@@ -433,8 +438,13 @@ func (e *Echo) Any(path string, handler HandlerFunc, middleware ...MiddlewareFun
 // Match registers a new route for multiple HTTP methods and path with matching
 // handler in the router with optional route-level middleware.
 func (e *Echo) Match(methods []string, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
-	for _, m := range methods {
-		e.add(m, path, handler, middleware...)
+	for _, method := range methods {
+		switch method {
+		case WS:
+			e.WebSocket(path, handler, middleware...)
+		default:
+			e.add(method, path, handler, middleware...)
+		}
 	}
 }
 
@@ -453,6 +463,21 @@ func (e *Echo) File(path, file string, middleware ...MiddlewareFunc) {
 		return c.File(file)
 	}), middleware...)
 	e.logger.Sys("| %-7s | %-30s | %v", GET, path, file)
+}
+
+// WebSocket adds a WebSocket route > handler to the router.
+func (e *Echo) WebSocket(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	e.addwithlog(false, GET, path, HandlerFunc(func(c Context) error {
+		websocket.Handler(func(ws *websocket.Conn) {
+			c.SetSocket(ws)
+			err := handler(c)
+			if err != nil {
+				c.Logger().Warn("WebSocket: [%v]%v", c.Request().RealRemoteAddr(), err)
+			}
+		}).ServeHTTP(c.Response().Writer(), c.Request().Request)
+		return nil
+	}), middleware...)
+	e.logger.Sys("| %-7s | %-30s | %v", WS, path, handlerName(handler))
 }
 
 func (e *Echo) add(method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
@@ -547,15 +572,16 @@ func (e *Echo) PutContext(c Context) {
 	e.pool.Put(c)
 }
 
-func (e *Echo) ServeHTTP(rq engine.Request, rs engine.Response) {
+// ServeHTTP implements `http.Handler` interface, which serves HTTP requests.
+func (e *Echo) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	if !e.caseSensitive {
-		rq.URL().SetPath(strings.ToLower(rq.URL().Path()))
+		req.URL.Path = strings.ToLower(req.URL.Path)
 	}
 
 	c := e.pool.Get().(*context)
-	c.reset(rq, rs)
+	c.reset(rw, req)
 
 	// Execute chain
 	if err := e.head(c); err != nil {
@@ -565,10 +591,49 @@ func (e *Echo) ServeHTTP(rq engine.Request, rs engine.Response) {
 }
 
 // Run starts the HTTP server.
-func (e *Echo) Run(s engine.Server) {
-	s.SetHandler(e)
-	s.SetLogger(e.logger)
-	if err := s.Start(); err != nil {
+func (e *Echo) Run(address, tlsCertfile, tlsKeyfile string, readTimeout, writeTimeout time.Duration, graceful bool) {
+	e.server.Addr = address
+	e.server.Handler = e
+	e.server.ReadTimeout = readTimeout
+	e.server.WriteTimeout = writeTimeout
+
+	canHttps := tlsCertfile != "" && tlsKeyfile != ""
+
+	var err error
+	if !graceful {
+		if canHttps {
+			err = e.server.ListenAndServeTLS(tlsCertfile, tlsKeyfile)
+		} else {
+			err = e.server.ListenAndServe()
+		}
+
+	} else {
+
+		endRunning := make(chan bool, 1)
+		server := grace.NewServer(address, e.server, e.logger)
+		if canHttps {
+			go func() {
+				time.Sleep(20 * time.Microsecond)
+				if err = server.ListenAndServeTLS(tlsCertfile, tlsKeyfile); err != nil {
+					err = fmt.Errorf("Grace-ListenAndServeTLS: %v, %d", err, os.Getpid())
+					time.Sleep(100 * time.Microsecond)
+					endRunning <- true
+				}
+			}()
+		} else {
+			go func() {
+				// server.Network = "tcp4"
+				if err = server.ListenAndServe(); err != nil {
+					err = fmt.Errorf("Grace-ListenAndServe: %v, %d", err, os.Getpid())
+					time.Sleep(100 * time.Microsecond)
+					endRunning <- true
+				}
+			}()
+		}
+		<-endRunning
+	}
+
+	if err != nil {
 		e.logger.Fatal("%v", err)
 		select {}
 	}

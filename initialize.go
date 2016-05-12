@@ -13,7 +13,6 @@ import (
 
 	"github.com/lessgo/lessgo/config"
 	"github.com/lessgo/lessgo/dbservice"
-	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
 	"github.com/lessgo/lessgo/utils"
@@ -60,7 +59,7 @@ func newLessgo() *lessgo {
 	l.app.SetCaseSensitive(AppConfig.RouterCaseSensitive)
 
 	// 设置上传文件允许的最大尺寸
-	engine.MaxMemory = AppConfig.MaxMemoryMB * MB
+	MaxMemory = AppConfig.MaxMemoryMB * MB
 
 	// 配置数据库
 	l.dbService = registerDBService()
@@ -163,10 +162,12 @@ func registerDBService() *dbservice.DBService {
 	for _, conf := range AppConfig.DBList {
 		engine, err := xorm.NewEngine(conf.Driver, conf.ConnString)
 		if err != nil {
-			logs.Error("%v", err)
+			logs.Error("%v\n", err)
 			continue
 		}
 		logger := dbservice.NewILogger(AppConfig.Log.AsyncChan, AppConfig.Log.Level, conf.Name)
+		logger.BeeLogger.EnableFuncCallDepth(AppConfig.Debug)
+
 		engine.SetLogger(logger)
 		engine.SetMaxOpenConns(conf.MaxOpenConns)
 		engine.SetMaxIdleConns(conf.MaxIdleConns)

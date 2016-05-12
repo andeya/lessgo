@@ -7,9 +7,9 @@ Author2: https://github.com/changyu72
 package lessgo
 
 import (
-	"net"
 	"os"
 	"os/exec"
+	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -19,7 +19,6 @@ import (
 
 	_ "github.com/lessgo/lessgo/_fixture"
 	"github.com/lessgo/lessgo/dbservice"
-	"github.com/lessgo/lessgo/engine"
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
 	"github.com/lessgo/lessgo/utils"
@@ -57,7 +56,6 @@ type (
 		serverEnable bool   //服务是否启用
 		lock         sync.RWMutex
 	}
-	NewServer func(engine.Config) engine.Server
 )
 
 const (
@@ -128,38 +126,50 @@ func ServerEnable() bool {
 /*
  * 运行服务
  */
-func Run(server NewServer, listener ...net.Listener) {
+func Run() {
 	// 从数据库初始化虚拟路由
 	checkHooks(initVirtRouterFromDB())
 	// 重建路由
 	ReregisterRouter()
 
-	// 配置服务器引擎
-	c := engine.Config{
-		Address:      AppConfig.Listen.Address,
-		ReadTimeout:  time.Duration(AppConfig.Listen.ReadTimeout),
-		WriteTimeout: time.Duration(AppConfig.Listen.WriteTimeout),
-	}
-	h := "HTTP"
-	if AppConfig.Listen.EnableHTTPS {
-		h = "HTTPS"
-		c.TLSKeyfile = AppConfig.Listen.HTTPSKeyFile
-		c.TLSCertfile = AppConfig.Listen.HTTPSCertFile
-	}
-	if len(listener) > 0 && listener[0] != nil {
-		c.Listener = listener[0]
-	}
-
 	// 开启最大核心数运行
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	// 启动服务
-	mode := "release"
+	// 配置服务器引擎
+	var (
+		tlsCertfile string
+		tlsKeyfile  string
+		mode        string
+		graceful    string
+		h           = "HTTP"
+	)
+	if AppConfig.Listen.EnableHTTPS {
+		h = "HTTPS"
+		tlsCertfile = AppConfig.Listen.HTTPSCertFile
+		tlsKeyfile = AppConfig.Listen.HTTPSKeyFile
+	}
 	if AppConfig.Debug {
 		mode = "debug"
+	} else {
+		mode = "release"
 	}
-	Logger().Sys("> %s listening and serving %s on %v (%s-mode)", AppConfig.AppName, h, c.Address, mode)
-	DefLessgo.app.Run(server(c))
+	if AppConfig.Listen.Graceful {
+		graceful = "(enable-graceful-restart)"
+	} else {
+		graceful = "(disable-graceful-restart)"
+	}
+
+	Logger().Sys("> %s listening and serving %s on %v (%s-mode) %v", AppConfig.AppName, h, AppConfig.Listen.Address, mode, graceful)
+
+	// 启动服务
+	DefLessgo.app.Run(
+		AppConfig.Listen.Address,
+		tlsCertfile,
+		tlsKeyfile,
+		time.Duration(AppConfig.Listen.ReadTimeout),
+		time.Duration(AppConfig.Listen.WriteTimeout),
+		AppConfig.Listen.Graceful,
+	)
 }
 
 /*
@@ -311,6 +321,13 @@ func Leaf(prefix string, apiHandler *ApiHandler, middlewares ...*ApiMiddleware) 
 		Hid:         apiHandler.id,
 	}
 	return vr
+}
+
+// 创建静态目录服务的操作
+func StaticFunc(root string) HandlerFunc {
+	return func(c Context) error {
+		return c.File(path.Join(root, c.P(0)))
+	}
 }
 
 /*

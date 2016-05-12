@@ -70,8 +70,8 @@ func (g *Group) Any(path string, handler HandlerFunc, middleware ...MiddlewareFu
 
 // Match implements `Echo#Match()` for sub-routes within the Group.
 func (g *Group) Match(methods []string, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
-	for _, m := range methods {
-		g.add(m, path, handler, middleware...)
+	for _, method := range methods {
+		g.add(method, path, handler, middleware...)
 	}
 }
 
@@ -81,8 +81,13 @@ func (g *Group) Group(prefix string, m ...MiddlewareFunc) *Group {
 	return g.echo.Group(joinpath(g.prefix, prefix), m...)
 }
 
-func (g *Group) add(method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+func (g *Group) add(methods, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
 	path = joinpath(g.prefix, path)
 	middleware = append(g.middleware, middleware...)
-	g.echo.add(method, path, handler, middleware...)
+	switch methods {
+	case WS:
+		g.echo.WebSocket(path, handler, middleware...)
+	default:
+		g.echo.add(methods, path, handler, middleware...)
+	}
 }

@@ -2,15 +2,14 @@
 package ledis
 
 import (
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/astaxie/beego/session"
 	"github.com/siddontang/ledisdb/config"
 	"github.com/siddontang/ledisdb/ledis"
-
-	"github.com/lessgo/lessgo/engine"
-	"github.com/lessgo/lessgo/session"
 )
 
 var ledispder = &Provider{}
@@ -64,7 +63,7 @@ func (ls *SessionStore) SessionID() string {
 }
 
 // SessionRelease save session values to ledis
-func (ls *SessionStore) SessionRelease(w engine.Response) {
+func (ls *SessionStore) SessionRelease(w http.ResponseWriter) {
 	b, err := session.EncodeGob(ls.values)
 	if err != nil {
 		return

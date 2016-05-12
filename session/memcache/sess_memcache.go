@@ -20,8 +20,8 @@
 //
 // Usage:
 // import(
-//   _ "github.com/lessgo/lessgo/session/memcache"
-//   "github.com/lessgo/lessgo/session"
+//   _ "github.com/astaxie/beego/session/memcache"
+//   "github.com/astaxie/beego/session"
 // )
 //
 //	func init() {
@@ -33,13 +33,13 @@
 package memcache
 
 import (
+	"net/http"
 	"strings"
 	"sync"
 
-	"github.com/bradfitz/gomemcache/memcache"
+	"github.com/astaxie/beego/session"
 
-	"github.com/lessgo/lessgo/engine"
-	"github.com/lessgo/lessgo/session"
+	"github.com/bradfitz/gomemcache/memcache"
 )
 
 var mempder = &MemProvider{}
@@ -93,7 +93,7 @@ func (rs *SessionStore) SessionID() string {
 }
 
 // SessionRelease save session values to memcache
-func (rs *SessionStore) SessionRelease(w engine.Response) {
+func (rs *SessionStore) SessionRelease(w http.ResponseWriter) {
 	b, err := session.EncodeGob(rs.values)
 	if err != nil {
 		return

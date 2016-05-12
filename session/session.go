@@ -35,18 +35,16 @@ import (
 	"net/http"
 	"net/url"
 	"time"
-
-	"github.com/lessgo/lessgo/engine"
 )
 
 // Store contains all data for one session process with specific id.
 type Store interface {
-	Set(key, value interface{}) error //set session value
-	Get(key interface{}) interface{}  //get session value
-	Delete(key interface{}) error     //delete session value
-	SessionID() string                //back current sessionID
-	SessionRelease(w engine.Response) //release the resource & save data to provider & return the data
-	Flush() error                     //delete all data
+	Set(key, value interface{}) error     //set session value
+	Get(key interface{}) interface{}      //get session value
+	Delete(key interface{}) error         //delete session value
+	SessionID() string                    //back current sessionID
+	SessionRelease(w http.ResponseWriter) // release the resource & save data to provider & return the data
+	Flush() error                         //delete all data
 }
 
 // Provider contains global session methods and saved SessionStores.
@@ -142,9 +140,14 @@ func NewManager(provideName, config string) (*Manager, error) {
 // error is not nil when there is anything wrong.
 // sid is empty when need to generate a new session id
 // otherwise return an valid session id.
-func (manager *Manager) getSid(r engine.Request) (string, error) {
+func (manager *Manager) getSid(r *http.Request) (string, error) {
 	cookie, errs := r.Cookie(manager.config.CookieName)
 	if errs != nil || cookie.Value == "" || cookie.MaxAge < 0 {
+		errs := r.ParseForm()
+		if errs != nil {
+			return "", errs
+		}
+
 		sid := r.FormValue(manager.config.CookieName)
 		return sid, nil
 	}
@@ -155,7 +158,7 @@ func (manager *Manager) getSid(r engine.Request) (string, error) {
 
 // SessionStart generate or read the session id from http request.
 // if session id exists, return SessionStore with this id.
-func (manager *Manager) SessionStart(w engine.Response, r engine.Request) (session Store, err error) {
+func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session Store, err error) {
 	sid, errs := manager.getSid(r)
 	if errs != nil {
 		return nil, errs
@@ -185,7 +188,7 @@ func (manager *Manager) SessionStart(w engine.Response, r engine.Request) (sessi
 		cookie.Expires = time.Now().Add(time.Duration(manager.config.CookieLifeTime) * time.Second)
 	}
 	if manager.config.EnableSetCookie {
-		w.SetCookie(cookie)
+		http.SetCookie(w, cookie)
 	}
 	r.AddCookie(cookie)
 
@@ -193,7 +196,7 @@ func (manager *Manager) SessionStart(w engine.Response, r engine.Request) (sessi
 }
 
 // SessionDestroy Destroy session by its id in http request cookie.
-func (manager *Manager) SessionDestroy(w engine.Response, r engine.Request) {
+func (manager *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(manager.config.CookieName)
 	if err != nil || cookie.Value == "" {
 		return
@@ -209,7 +212,7 @@ func (manager *Manager) SessionDestroy(w engine.Response, r engine.Request) {
 			Expires:  expiration,
 			MaxAge:   -1}
 
-		w.SetCookie(cookie)
+		http.SetCookie(w, cookie)
 	}
 }
 
@@ -227,7 +230,7 @@ func (manager *Manager) GC() {
 }
 
 // SessionRegenerateID Regenerate a session id for this SessionStore who's id is saving in http request.
-func (manager *Manager) SessionRegenerateID(w engine.Response, r engine.Request) (session Store) {
+func (manager *Manager) SessionRegenerateID(w http.ResponseWriter, r *http.Request) (session Store) {
 	sid, err := manager.sessionID()
 	if err != nil {
 		return
@@ -255,7 +258,7 @@ func (manager *Manager) SessionRegenerateID(w engine.Response, r engine.Request)
 		cookie.Expires = time.Now().Add(time.Duration(manager.config.CookieLifeTime) * time.Second)
 	}
 	if manager.config.EnableSetCookie {
-		w.SetCookie(cookie)
+		http.SetCookie(w, cookie)
 	}
 	r.AddCookie(cookie)
 	return
@@ -281,16 +284,15 @@ func (manager *Manager) sessionID() (string, error) {
 }
 
 // Set cookie with https.
-func (manager *Manager) isSecure(req engine.Request) bool {
+func (manager *Manager) isSecure(req *http.Request) bool {
 	if !manager.config.Secure {
 		return false
 	}
-	scheme := req.Scheme()
-	if scheme != "" {
-		return scheme == "https"
+	if req.URL.Scheme != "" {
+		return req.URL.Scheme == "https"
 	}
-	if req.IsTLS() {
-		return true
+	if req.TLS == nil {
+		return false
 	}
-	return false
+	return true
 }

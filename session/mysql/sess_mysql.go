@@ -28,8 +28,8 @@
 //
 // Usage:
 // import(
-//   _ "github.com/lessgo/lessgo/session/mysql"
-//   "github.com/lessgo/lessgo/session"
+//   _ "github.com/astaxie/beego/session/mysql"
+//   "github.com/astaxie/beego/session"
 // )
 //
 //	func init() {
@@ -42,14 +42,13 @@ package mysql
 
 import (
 	"database/sql"
+	"net/http"
 	"sync"
 	"time"
 
+	"github.com/astaxie/beego/session"
 	// import mysql driver
 	_ "github.com/go-sql-driver/mysql"
-
-	"github.com/lessgo/lessgo/engine"
-	"github.com/lessgo/lessgo/session"
 )
 
 var (
@@ -108,7 +107,7 @@ func (st *SessionStore) SessionID() string {
 
 // SessionRelease save mysql session values to database.
 // must call this method to save values to database.
-func (st *SessionStore) SessionRelease(w engine.Response) {
+func (st *SessionStore) SessionRelease(w http.ResponseWriter) {
 	defer st.c.Close()
 	b, err := session.EncodeGob(st.values)
 	if err != nil {

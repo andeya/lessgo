@@ -72,10 +72,13 @@ func initVirtRouterFromDB() (err error) {
 	vr := new(VirtRouter)
 	has, err := lessgodb.Get(vrlock)
 	if vrlock.Md5 != Md5 {
-		err = lessgodb.DropTables(vr)
-		if err != nil {
-			err = fmt.Errorf("Failed to drop table virt_router: %v.", err)
-			return
+		exist, err := lessgodb.IsTableExist(vr)
+		if exist || err != nil {
+			err = lessgodb.DropTables(vr)
+			if err != nil {
+				err = fmt.Errorf("Failed to drop table virt_router: %v.", err)
+				return err
+			}
 		}
 	}
 	err = lessgodb.Sync2(vr)
@@ -273,9 +276,14 @@ func GetVirtRouter(id string) (*VirtRouter, bool) {
 	return vr, ok
 }
 
-// 返回操作列表的副本
+// 返回操作中定义的方法字符串("WS"和"*"不做转换)
+func (vr *VirtRouter) Method() string {
+	return vr.apiHandler.Method
+}
+
+// 真实的请求方法列表(自动转换: "WS"->"GET", "*"->methods)
 func (vr *VirtRouter) Methods() []string {
-	return vr.apiHandler.Methods
+	return vr.apiHandler.Methods()
 }
 
 // 操作的描述
@@ -525,7 +533,7 @@ func (vr *VirtRouter) reset() {
 	if vr.apiHandler != nil {
 		suffix = vr.apiHandler.Suffix()
 	}
-	vr.path = pathpkg.Clean(pathpkg.Join("/", parentPath, vr.Prefix, suffix))
+	vr.path = pathpkg.Join("/", parentPath, vr.Prefix, suffix)
 	for _, child := range vr.children {
 		child.reset()
 	}
@@ -538,7 +546,7 @@ func (vr *VirtRouter) route(group *Group) {
 	if !vr.Enable {
 		return
 	}
-	mws := createMiddlewareFuncs(vr.Middlewares)
+	mws := getMiddlewareFuncs(vr.Middlewares)
 	prefix := pathpkg.Join("/", vr.Prefix, vr.apiHandler.Suffix())
 	prefix2 := pathpkg.Join("/", strings.TrimSuffix(vr.Prefix, "/index"), vr.apiHandler.Suffix())
 	hasIndex := prefix2 != prefix
@@ -555,12 +563,16 @@ func (vr *VirtRouter) route(group *Group) {
 			child.route(childGroup)
 		}
 	case HANDLER:
-		methods := vr.apiHandler.Methods
-		handler := vr.apiHandler.Handler
-		if hasIndex {
-			group.Match(methods, prefix2, handler, mws...)
+		var ms []string
+		if vr.Method() == WS {
+			ms = []string{WS}
+		} else {
+			ms = vr.Methods()
 		}
-		group.Match(methods, prefix, handler, mws...)
+		if hasIndex {
+			group.Match(ms, prefix2, vr.apiHandler.Handler, mws...)
+		}
+		group.Match(ms, prefix, vr.apiHandler.Handler, mws...)
 	}
 }
 
@@ -586,13 +598,13 @@ func registerVirtRouter() {
 	DefLessgo.app.router = NewRouter(DefLessgo.app)
 	DefLessgo.app.middleware = []MiddlewareFunc{DefLessgo.app.router.Process}
 	DefLessgo.app.head = DefLessgo.app.pristineHead
-	DefLessgo.app.BeforeUse(createMiddlewareFuncs(DefLessgo.before)...)
-	DefLessgo.app.AfterUse(createMiddlewareFuncs(DefLessgo.after)...)
-	DefLessgo.app.PreUse(createMiddlewareFuncs(DefLessgo.prefix)...)
-	DefLessgo.app.SufUse(createMiddlewareFuncs(DefLessgo.suffix)...)
+	DefLessgo.app.BeforeUse(getMiddlewareFuncs(DefLessgo.before)...)
+	DefLessgo.app.AfterUse(getMiddlewareFuncs(DefLessgo.after)...)
+	DefLessgo.app.PreUse(getMiddlewareFuncs(DefLessgo.prefix)...)
+	DefLessgo.app.SufUse(getMiddlewareFuncs(DefLessgo.suffix)...)
 	group := DefLessgo.app.Group(
 		DefLessgo.virtRouter.Prefix,
-		createMiddlewareFuncs(DefLessgo.virtRouter.Middlewares)...,
+		getMiddlewareFuncs(DefLessgo.virtRouter.Middlewares)...,
 	)
 	for _, child := range DefLessgo.virtRouter.Children() {
 		child.route(group)
@@ -624,5 +636,5 @@ func delVirtRouter(vr *VirtRouter) {
 
 func cleanPrefix(prefix string) string {
 	prefix = strings.Split(prefix, ":")[0]
-	return pathpkg.Clean(pathpkg.Join("/", prefix))
+	return pathpkg.Join("/", prefix)
 }

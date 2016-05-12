@@ -20,8 +20,8 @@
 //
 // Usage:
 // import(
-//   _ "github.com/lessgo/lessgo/session/redis"
-//   "github.com/lessgo/lessgo/session"
+//   _ "github.com/astaxie/beego/session/redis"
+//   "github.com/astaxie/beego/session"
 // )
 //
 //	func init() {
@@ -33,14 +33,14 @@
 package redis
 
 import (
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/garyburd/redigo/redis"
+	"github.com/astaxie/beego/session"
 
-	"github.com/lessgo/lessgo/engine"
-	"github.com/lessgo/lessgo/session"
+	"github.com/garyburd/redigo/redis"
 )
 
 var redispder = &Provider{}
@@ -97,7 +97,7 @@ func (rs *SessionStore) SessionID() string {
 }
 
 // SessionRelease save session values to redis
-func (rs *SessionStore) SessionRelease(w engine.Response) {
+func (rs *SessionStore) SessionRelease(w http.ResponseWriter) {
 	b, err := session.EncodeGob(rs.values)
 	if err != nil {
 		return
