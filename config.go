@@ -314,10 +314,12 @@ func syncSingleConfig(section string, p interface{}, iniconf config.Configer) {
 					pf.SetInt(num)
 				}
 			case "log::level":
-				str := iniconf.DefaultString(fullname, logLevelString(int(num)))
-				num = int64(logLevelInt(str))
+				str := logLevelString(int(num))
+				str2 := iniconf.DefaultString(fullname, str)
+				num = int64(logLevelInt(str2))
 				if num != -10 {
 					pf.SetInt(num)
+					iniconf.Set(fullname, str2)
 				} else {
 					iniconf.Set(fullname, str)
 				}
