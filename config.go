@@ -201,30 +201,30 @@ func LoadAppConfig() (err error) {
 	fname := APPCONFIG_FILE
 	iniconf, err := config.NewConfig("ini", fname)
 	if err == nil {
-		syncSingleConfig("system", AppConfig, iniconf)
-		syncSingleConfig("filecache", &AppConfig.FileCache, iniconf)
-		syncSingleConfig("info", &AppConfig.Info, iniconf)
-		syncSingleConfig("listen", &AppConfig.Listen, iniconf)
-		syncSingleConfig("log", &AppConfig.Log, iniconf)
-		syncSingleConfig("session", &AppConfig.Session, iniconf)
-	} else {
-		os.MkdirAll(filepath.Dir(fname), 0777)
-		f, err := os.Create(fname)
-		if err != nil {
-			return err
-		}
-		f.Close()
-		iniconf, err = config.NewConfig("ini", fname)
-		if err != nil {
-			return err
-		}
-		initSingleConfig("system", AppConfig, iniconf)
-		initSingleConfig("filecache", &AppConfig.FileCache, iniconf)
-		initSingleConfig("info", &AppConfig.Info, iniconf)
-		initSingleConfig("listen", &AppConfig.Listen, iniconf)
-		initSingleConfig("log", &AppConfig.Log, iniconf)
-		initSingleConfig("session", &AppConfig.Session, iniconf)
+		os.Remove(fname)
+		readSingleConfig("system", AppConfig, iniconf)
+		readSingleConfig("filecache", &AppConfig.FileCache, iniconf)
+		readSingleConfig("info", &AppConfig.Info, iniconf)
+		readSingleConfig("listen", &AppConfig.Listen, iniconf)
+		readSingleConfig("log", &AppConfig.Log, iniconf)
+		readSingleConfig("session", &AppConfig.Session, iniconf)
 	}
+	os.MkdirAll(filepath.Dir(fname), 0777)
+	f, err := os.Create(fname)
+	if err != nil {
+		return err
+	}
+	f.Close()
+	iniconf, err = config.NewConfig("ini", fname)
+	if err != nil {
+		return err
+	}
+	writeSingleConfig("system", AppConfig, iniconf)
+	writeSingleConfig("filecache", &AppConfig.FileCache, iniconf)
+	writeSingleConfig("info", &AppConfig.Info, iniconf)
+	writeSingleConfig("listen", &AppConfig.Listen, iniconf)
+	writeSingleConfig("log", &AppConfig.Log, iniconf)
+	writeSingleConfig("session", &AppConfig.Session, iniconf)
 
 	return iniconf.SaveConfigFile(fname)
 }
@@ -233,48 +233,40 @@ func LoadDBConfig() (err error) {
 	fname := DBCONFIG_FILE
 	iniconf, err := config.NewConfig("ini", fname)
 	if err == nil {
-		sysDB := AppConfig.DBList["lessgo"]
-		defDB := sysDB
-		delete(AppConfig.DBList, "lessgo") // 移除预设数据库
+		os.Remove(fname)
+		defDB := AppConfig.DBList["lessgo"]
 		for _, section := range iniconf.(*config.IniConfigContainer).Sections() {
 			dbconfig := defDB
-			syncSingleConfig(section, &dbconfig, iniconf)
+			readSingleConfig(section, &dbconfig, iniconf)
 			if strings.ToLower(section) == DEFAULTDB_SECTION {
 				AppConfig.DefaultDB = dbconfig.Name
 			}
 			AppConfig.DBList[dbconfig.Name] = dbconfig
 		}
-		if _, ok := AppConfig.DBList["lessgo"]; !ok {
-			section := "lessgo"
-			if AppConfig.DefaultDB == "lessgo" {
-				section = DEFAULTDB_SECTION
-			}
-			initSingleConfig(section, &sysDB, iniconf)
-		}
-	} else {
-		os.MkdirAll(filepath.Dir(fname), 0777)
-		f, err := os.Create(fname)
-		if err != nil {
-			return err
-		}
-		f.Close()
-		iniconf, err = config.NewConfig("ini", fname)
-		if err != nil {
-			return err
-		}
-		for _, dbconfig := range AppConfig.DBList {
-			if AppConfig.DefaultDB == dbconfig.Name {
-				initSingleConfig(DEFAULTDB_SECTION, &dbconfig, iniconf)
-			} else {
-				initSingleConfig(dbconfig.Name, &dbconfig, iniconf)
-			}
+	}
+
+	os.MkdirAll(filepath.Dir(fname), 0777)
+	f, err := os.Create(fname)
+	if err != nil {
+		return err
+	}
+	f.Close()
+	iniconf, err = config.NewConfig("ini", fname)
+	if err != nil {
+		return err
+	}
+	for _, dbconfig := range AppConfig.DBList {
+		if AppConfig.DefaultDB == dbconfig.Name {
+			writeSingleConfig(DEFAULTDB_SECTION, &dbconfig, iniconf)
+		} else {
+			writeSingleConfig(dbconfig.Name, &dbconfig, iniconf)
 		}
 	}
 
 	return iniconf.SaveConfigFile(fname)
 }
 
-func syncSingleConfig(section string, p interface{}, iniconf config.Configer) {
+func readSingleConfig(section string, p interface{}, iniconf config.Configer) {
 	pt := reflect.TypeOf(p)
 	if pt.Kind() != reflect.Ptr {
 		return
@@ -319,26 +311,18 @@ func syncSingleConfig(section string, p interface{}, iniconf config.Configer) {
 				num = int64(logLevelInt(str2))
 				if num != -10 {
 					pf.SetInt(num)
-					iniconf.Set(fullname, str2)
-				} else {
-					iniconf.Set(fullname, str)
 				}
-				continue
 			default:
 				pf.SetInt(num)
 			}
 
 		case reflect.Bool:
 			pf.SetBool(iniconf.DefaultBool(fullname, pf.Bool()))
-
-		default:
-			continue
 		}
-		iniconf.Set(fullname, fmt.Sprint(pf.Interface()))
 	}
 }
 
-func initSingleConfig(section string, p interface{}, iniconf config.Configer) {
+func writeSingleConfig(section string, p interface{}, iniconf config.Configer) {
 	pt := reflect.TypeOf(p)
 	if pt.Kind() != reflect.Ptr {
 		return
