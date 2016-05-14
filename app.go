@@ -276,16 +276,16 @@ func (e *Echo) SetSessions(sessions *session.Manager) {
 
 // DefaultHTTPErrorHandler invokes the default HTTP error handler.
 func (e *Echo) DefaultHTTPErrorHandler(err error, c Context) {
-	code := http.StatusInternalServerError
-	msg := http.StatusText(code)
-	if he, ok := err.(*HTTPError); ok {
-		code = he.Code
-		msg = he.Message
-	}
-	if e.debug {
-		msg = err.Error()
-	}
 	if !c.Response().Committed() {
+		code := http.StatusInternalServerError
+		msg := http.StatusText(code)
+		if he, ok := err.(*HTTPError); ok {
+			code = he.Code
+			msg = he.Message
+		}
+		if e.debug {
+			msg = err.Error()
+		}
 		c.String(code, msg)
 	}
 	e.logger.Debug("%v", err)
@@ -581,13 +581,21 @@ func (e *Echo) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	c := e.pool.Get().(*context)
-	c.reset(rw, req)
+	defer func() {
+		c.free()
+		e.pool.Put(c)
+	}()
+	var err error
+	if err = c.init(rw, req); err != nil {
+		e.httpErrorHandler(err, c)
+		return
+	}
 
 	// Execute chain
-	if err := e.head(c); err != nil {
+	if err = e.head(c); err != nil {
 		e.httpErrorHandler(err, c)
+		return
 	}
-	e.pool.Put(c)
 }
 
 // Run starts the HTTP server.

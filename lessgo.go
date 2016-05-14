@@ -128,7 +128,7 @@ func ServerEnable() bool {
  */
 func Run() {
 	// 从数据库初始化虚拟路由
-	checkHooks(initVirtRouterFromDB())
+	initVirtRouterFromDB()
 	// 重建路由
 	ReregisterRouter()
 

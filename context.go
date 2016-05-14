@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
-	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -109,9 +108,24 @@ type (
 		// It is an alias for `engine.Request#Cookies()`.
 		Cookies() []*http.Cookie
 
-		// Session generate or read the session id from Request.
-		// if session id exists, return SessionStore with this id.
-		Session() (session.Store, error)
+		// CruSession returns session data store.
+		CruSession() session.Store
+
+		// SetSession puts value into session.
+		SetSession(name interface{}, value interface{})
+
+		// GetSession gets value from session.
+		GetSession(name interface{}) interface{}
+
+		// DelSession removes value from session.
+		DelSession(name interface{})
+
+		// SessionRegenerateID regenerates session id for this session.
+		// the session data have no changes.
+		SessionRegenerateID()
+
+		// DestroySession cleans session data and session cookie.
+		DestroySession()
 
 		// Get retrieves data from the context.
 		Get(string) interface{}
@@ -188,10 +202,11 @@ type (
 		// and `Last-Modified` response headers.
 		ServeContent(io.ReadSeeker, string, time.Time) error
 
-		// Reset resets the context after request completes. It must be called along
-		// with `Echo#AcquireContext()` and `Echo#ReleaseContext()`.
-		// See `Echo#ServeHTTP()`
-		reset(http.ResponseWriter, *http.Request)
+		// init context
+		init(http.ResponseWriter, *http.Request) error
+
+		// free context
+		free()
 	}
 
 	context struct {
@@ -203,6 +218,7 @@ type (
 		pvalues    []string
 		store      store
 		handler    HandlerFunc
+		cruSession session.Store
 		socket     *websocket.Conn
 		echo       *Echo
 	}
@@ -368,11 +384,53 @@ func (c *context) Cookies() []*http.Cookie {
 	return c.request.Cookies()
 }
 
-func (c *context) Session() (session.Store, error) {
-	if c.echo.sessions == nil {
-		return nil, fmt.Errorf("Sessions is unset.")
+// session data info.
+func (c *context) CruSession() session.Store {
+	return c.cruSession
+}
+
+// SetSession puts value into session.
+func (c *context) SetSession(name interface{}, value interface{}) {
+	if c.cruSession == nil {
+		return
 	}
-	return c.echo.sessions.SessionStart(c.Response().Writer(), c.Request().Request)
+	c.cruSession.Set(name, value)
+}
+
+// GetSession gets value from session.
+func (c *context) GetSession(name interface{}) interface{} {
+	if c.cruSession == nil {
+		return nil
+	}
+	return c.cruSession.Get(name)
+}
+
+// DelSession removes value from session.
+func (c *context) DelSession(name interface{}) {
+	if c.cruSession == nil {
+		return
+	}
+	c.cruSession.Delete(name)
+}
+
+// SessionRegenerateID regenerates session id for this session.
+// the session data have no changes.
+func (c *context) SessionRegenerateID() {
+	if c.cruSession == nil {
+		return
+	}
+	c.cruSession.SessionRelease(c.Response().Writer())
+	c.cruSession = c.echo.sessions.SessionRegenerateID(c.Response().Writer(), c.Request().Request)
+}
+
+// DestroySession cleans session data and session cookie.
+func (c *context) DestroySession() {
+	if c.cruSession == nil {
+		return
+	}
+	c.cruSession.Flush()
+	c.cruSession = nil
+	c.echo.sessions.SessionDestroy(c.Response().Writer(), c.Request().Request)
 }
 
 func (c *context) Set(key string, val interface{}) {
@@ -568,6 +626,36 @@ func (c *context) ServeContent(content io.ReadSeeker, name string, modtime time.
 	return err
 }
 
+func (c *context) init(rw http.ResponseWriter, req *http.Request) (err error) {
+	if c.echo.sessions != nil {
+		c.cruSession, err = c.echo.sessions.SessionStart(rw, req)
+		if err != nil {
+			c.NoContent(503)
+			return err
+		}
+	}
+	c.response.SetWriter(rw)
+	c.request.SetRequest(req)
+	return err
+}
+
+func (c *context) free() {
+	if c.cruSession != nil {
+		c.cruSession.SessionRelease(c.Response().Writer())
+		c.cruSession = nil
+	}
+	c.handler = notFoundHandler
+	c.netContext = nil
+	c.socket = nil
+	c.store = make(store)
+	for i := len(c.pnames) - 1; i >= 0; i-- {
+		c.pvalues[i] = ""
+	}
+	c.pnames = []string{}
+	c.response.free()
+	c.request.free()
+}
+
 // ContentTypeByExtension returns the MIME type associated with the file based on
 // its extension. It returns `application/octet-stream` incase MIME type is not
 // found.
@@ -576,17 +664,4 @@ func ContentTypeByExtension(name string) (t string) {
 		t = MIMEOctetStream
 	}
 	return
-}
-
-func (c *context) reset(rw http.ResponseWriter, req *http.Request) {
-	c.netContext = nil
-	c.response.reset(rw)
-	c.request.reset(req)
-	c.socket = nil
-	c.store = make(store)
-	c.handler = notFoundHandler
-	for i := len(c.pnames) - 1; i >= 0; i-- {
-		c.pvalues[i] = ""
-	}
-	c.pnames = []string{}
 }

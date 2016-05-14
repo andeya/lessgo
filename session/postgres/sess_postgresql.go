@@ -38,8 +38,8 @@
 //
 // Usage:
 // import(
-//   _ "github.com/astaxie/beego/session/postgresql"
-//   "github.com/astaxie/beego/session"
+//   _ "github.com/lessgo/lessgo/session/postgresql"
+//   "github.com/lessgo/lessgo/session"
 // )
 //
 //	func init() {
@@ -56,7 +56,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/astaxie/beego/session"
+	"github.com/lessgo/lessgo/session"
 	// import postgresql Driver
 	_ "github.com/lib/pq"
 )
@@ -73,11 +73,10 @@ type SessionStore struct {
 
 // Set value in postgresql session.
 // it is temp value in map.
-func (st *SessionStore) Set(key, value interface{}) error {
+func (st *SessionStore) Set(key, value interface{}) {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	st.values[key] = value
-	return nil
 }
 
 // Get value from postgresql session
@@ -91,19 +90,17 @@ func (st *SessionStore) Get(key interface{}) interface{} {
 }
 
 // Delete value in postgresql session
-func (st *SessionStore) Delete(key interface{}) error {
+func (st *SessionStore) Delete(key interface{}) {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	delete(st.values, key)
-	return nil
 }
 
 // Flush clear all values in postgresql session
-func (st *SessionStore) Flush() error {
+func (st *SessionStore) Flush() {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	st.values = make(map[interface{}]interface{})
-	return nil
 }
 
 // SessionID get session id of this postgresql session store

@@ -20,8 +20,8 @@
 //
 // Usage:
 // import(
-//   _ "github.com/astaxie/beego/session/couchbase"
-//   "github.com/astaxie/beego/session"
+//   _ "github.com/lessgo/lessgo/session/couchbase"
+//   "github.com/lessgo/lessgo/session"
 // )
 //
 //	func init() {
@@ -39,7 +39,7 @@ import (
 
 	couchbase "github.com/couchbase/go-couchbase"
 
-	"github.com/astaxie/beego/session"
+	"github.com/lessgo/lessgo/session"
 )
 
 var couchbpder = &Provider{}
@@ -63,11 +63,10 @@ type Provider struct {
 }
 
 // Set value to couchabse session
-func (cs *SessionStore) Set(key, value interface{}) error {
+func (cs *SessionStore) Set(key, value interface{}) {
 	cs.lock.Lock()
 	defer cs.lock.Unlock()
 	cs.values[key] = value
-	return nil
 }
 
 // Get value from couchabse session
@@ -81,19 +80,17 @@ func (cs *SessionStore) Get(key interface{}) interface{} {
 }
 
 // Delete value in couchbase session by given key
-func (cs *SessionStore) Delete(key interface{}) error {
+func (cs *SessionStore) Delete(key interface{}) {
 	cs.lock.Lock()
 	defer cs.lock.Unlock()
 	delete(cs.values, key)
-	return nil
 }
 
 // Flush Clean all values in couchbase session
-func (cs *SessionStore) Flush() error {
+func (cs *SessionStore) Flush() {
 	cs.lock.Lock()
 	defer cs.lock.Unlock()
 	cs.values = make(map[interface{}]interface{})
-	return nil
 }
 
 // SessionID Get couchbase session store id

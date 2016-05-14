@@ -28,8 +28,8 @@
 //
 // Usage:
 // import(
-//   _ "github.com/astaxie/beego/session/mysql"
-//   "github.com/astaxie/beego/session"
+//   _ "github.com/lessgo/lessgo/session/mysql"
+//   "github.com/lessgo/lessgo/session"
 // )
 //
 //	func init() {
@@ -46,7 +46,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/astaxie/beego/session"
+	"github.com/lessgo/lessgo/session"
 	// import mysql driver
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -67,11 +67,10 @@ type SessionStore struct {
 
 // Set value in mysql session.
 // it is temp value in map.
-func (st *SessionStore) Set(key, value interface{}) error {
+func (st *SessionStore) Set(key, value interface{}) {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	st.values[key] = value
-	return nil
 }
 
 // Get value from mysql session
@@ -85,19 +84,17 @@ func (st *SessionStore) Get(key interface{}) interface{} {
 }
 
 // Delete value in mysql session
-func (st *SessionStore) Delete(key interface{}) error {
+func (st *SessionStore) Delete(key interface{}) {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	delete(st.values, key)
-	return nil
 }
 
 // Flush clear all values in mysql session
-func (st *SessionStore) Flush() error {
+func (st *SessionStore) Flush() {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	st.values = make(map[interface{}]interface{})
-	return nil
 }
 
 // SessionID get session id of this mysql session store
@@ -115,7 +112,6 @@ func (st *SessionStore) SessionRelease(w http.ResponseWriter) {
 	}
 	st.c.Exec("UPDATE "+TableName+" set `session_data`=?, `session_expiry`=? where session_key=?",
 		b, time.Now().Unix(), st.sid)
-
 }
 
 // Provider mysql session provider

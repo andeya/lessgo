@@ -11,7 +11,6 @@ import (
 	"github.com/go-xorm/core"
 	"github.com/go-xorm/xorm"
 
-	"github.com/lessgo/lessgo/config"
 	"github.com/lessgo/lessgo/dbservice"
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
@@ -20,8 +19,14 @@ import (
 
 func newLessgo() *lessgo {
 	printInfo()
-	registerAppConfig()
-	registerDBConfig()
+	err := LoadAppConfig()
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = LoadDBConfig()
+	if err != nil {
+		fmt.Println(err)
+	}
 	registerMime()
 
 	l := &lessgo{
@@ -65,11 +70,16 @@ func newLessgo() *lessgo {
 	l.dbService = registerDBService()
 
 	// 初始化全局session
-	err := registerSession()
+	err = registerSession()
 	if err != nil {
 		l.app.Logger().Error("Failed to create GlobalSessions: %v.", err)
 	}
-	l.app.SetSessions(GlobalSessions)
+	if GlobalSessions == nil {
+		l.app.Logger().Sys("Session is disable.")
+	} else {
+		l.app.SetSessions(GlobalSessions)
+		l.app.Logger().Sys("Session is enable.")
+	}
 
 	return l
 }
@@ -84,59 +94,25 @@ func registerMime() {
 	}
 }
 
-func registerAppConfig() (err error) {
-	fname := APPCONFIG_FILE
-	appconf, err := config.NewConfig("ini", fname)
-	if err == nil {
-		trySetAppConfig(appconf.(*config.IniConfigContainer))
-		return appconf.SaveConfigFile(fname)
-	}
-
-	os.MkdirAll(filepath.Dir(fname), 0777)
-	f, err := os.Create(fname)
-	if err != nil {
-		panic(err)
-	}
-	f.Close()
-	appconf, err = config.NewConfig("ini", fname)
-	defaultAppConfig(appconf.(*config.IniConfigContainer))
-	return appconf.SaveConfigFile(fname)
-}
-
-func registerDBConfig() (err error) {
-	fname := DBCONFIG_FILE
-	appconf, err := config.NewConfig("ini", fname)
-	if err == nil {
-		trySetDBConfig(appconf.(*config.IniConfigContainer))
-		return appconf.SaveConfigFile(fname)
-	}
-
-	os.MkdirAll(filepath.Dir(fname), 0777)
-	f, err := os.Create(fname)
-	if err != nil {
-		panic(err)
-	}
-	f.Close()
-	appconf, err = config.NewConfig("ini", fname)
-	defaultDBConfig(appconf.(*config.IniConfigContainer))
-	return appconf.SaveConfigFile(fname)
-}
-
 func registerSession() (err error) {
-	if !AppConfig.Session.Enable {
+	if !AppConfig.Session.SessionOn {
+		GlobalSessions = nil
 		return
 	}
 	conf := map[string]interface{}{
-		"cookieName":      AppConfig.Session.CookieName,
-		"gclifetime":      AppConfig.Session.GcMaxlifetime,
-		"providerConfig":  filepath.ToSlash(AppConfig.Session.ProviderConfig),
-		"secure":          AppConfig.Listen.EnableHTTPS,
-		"enableSetCookie": AppConfig.Session.EnableSetCookie,
-		"domain":          AppConfig.Session.Domain,
-		"cookieLifeTime":  AppConfig.Session.CookieLifeTime,
+		"cookieName":              AppConfig.Session.SessionName,
+		"gclifetime":              AppConfig.Session.SessionGCMaxLifetime,
+		"providerConfig":          filepath.ToSlash(AppConfig.Session.SessionProviderConfig),
+		"secure":                  AppConfig.Listen.EnableHTTPS,
+		"enableSetCookie":         AppConfig.Session.SessionAutoSetCookie,
+		"domain":                  AppConfig.Session.SessionDomain,
+		"cookieLifeTime":          AppConfig.Session.SessionCookieLifeTime,
+		"enableSidInHttpHeader":   AppConfig.Session.EnableSidInHttpHeader,
+		"sessionNameInHttpHeader": AppConfig.Session.SessionNameInHttpHeader,
+		"enableSidInUrlQuery":     AppConfig.Session.EnableSidInUrlQuery,
 	}
 	confBytes, _ := json.Marshal(conf)
-	GlobalSessions, err = session.NewManager(AppConfig.Session.Provider, string(confBytes))
+	GlobalSessions, err = session.NewManager(AppConfig.Session.SessionProvider, string(confBytes))
 	if err != nil {
 		return
 	}
@@ -217,11 +193,4 @@ func registerDBService() *dbservice.DBService {
 		}
 	}
 	return dbService
-}
-
-func checkHooks(err error) {
-	if err == nil {
-		return
-	}
-	DefLessgo.app.Logger().Fatal("%v", err)
 }

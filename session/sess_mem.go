@@ -33,11 +33,10 @@ type MemSessionStore struct {
 }
 
 // Set value to memory session
-func (st *MemSessionStore) Set(key, value interface{}) error {
+func (st *MemSessionStore) Set(key, value interface{}) {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	st.value[key] = value
-	return nil
 }
 
 // Get value from memory session by key
@@ -51,19 +50,17 @@ func (st *MemSessionStore) Get(key interface{}) interface{} {
 }
 
 // Delete in memory session by key
-func (st *MemSessionStore) Delete(key interface{}) error {
+func (st *MemSessionStore) Delete(key interface{}) {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	delete(st.value, key)
-	return nil
 }
 
 // Flush clear all values in memory session
-func (st *MemSessionStore) Flush() error {
+func (st *MemSessionStore) Flush() {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	st.value = make(map[interface{}]interface{})
-	return nil
 }
 
 // SessionID get this id of memory session store

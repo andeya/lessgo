@@ -21,6 +21,16 @@ var (
 	MaxMemory int64 = 32 << 20
 )
 
+// NewRequest creates a new instance of Request.
+func NewRequest(req *http.Request) *Request {
+	return &Request{Request: req}
+}
+
+// SetRequest sets the http.Request instance for this Request.
+func (r *Request) SetRequest(req *http.Request) {
+	r.Request = req
+}
+
 func (r *Request) IsTLS() bool {
 	return r.Request.TLS != nil
 }
@@ -86,8 +96,8 @@ func (r *Request) MultipartForm() (*multipart.Form, error) {
 	return r.Request.MultipartForm, err
 }
 
-func (r *Request) reset(req *http.Request) {
-	r.Request = req
+func (r *Request) free() {
+	r.Request = nil
 	r.query = nil
 	r.realRemoteAddr = ""
 }

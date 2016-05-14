@@ -52,21 +52,21 @@ var (
 )
 
 // 从数据库初始化虚拟路由
-func initVirtRouterFromDB() (err error) {
+func initVirtRouterFromDB() {
 	lessgodb, _ = GetDB("lessgo")
 	if lessgodb == nil {
-		Logger().Warn("The lessgo database can not be used, now only use source code routing.\n")
+		Logger().Warn("Can only use source code routing.")
 		return
 	}
+	var err error
 	if err = lessgodb.Ping(); err != nil {
-		Logger().Error("%v", err)
-		Logger().Warn("The lessgo database connection failed, now only use source code routing.\n")
-		return nil
+		Logger().Warn("Can only use source code routing: [dbPing] %v.", err)
+		return
 	}
 	vrlock := new(VirtRouterLock)
 	err = lessgodb.Sync2(vrlock)
 	if err != nil {
-		err = fmt.Errorf("Failed to sync table virt_router_lock: %v.", err)
+		Logger().Error("Can only use source code routing: [vr-dbSync] %v.", err)
 		return
 	}
 	vr := new(VirtRouter)
@@ -76,20 +76,21 @@ func initVirtRouterFromDB() (err error) {
 		if exist || err != nil {
 			err = lessgodb.DropTables(vr)
 			if err != nil {
-				err = fmt.Errorf("Failed to drop table virt_router: %v.", err)
-				return err
+				Logger().Error("Can only use source code routing: [vr-dbDrop] %v.", err)
+				return
 			}
 		}
 	}
 	err = lessgodb.Sync2(vr)
 	if err != nil {
-		err = fmt.Errorf("Failed to sync table virt_router: %v.", err)
+		Logger().Error("Can only use source code routing: [vr-dbSync] %v.", err)
 		return
 	}
 	session := lessgodb.NewSession()
 	defer session.Close()
 	err = session.Begin()
 	if err != nil {
+		Logger().Error("Can only use source code routing: [db-begin] %v.", err)
 		return
 	}
 
@@ -101,13 +102,18 @@ func initVirtRouterFromDB() (err error) {
 		if err != nil {
 			session.Rollback()
 			vrlock.Md5 = ""
-			err = fmt.Errorf("Failed to insert table virt_router md5: %v.", err)
+			Logger().Error("Can only use source code routing: [md5-dbInsert] %v.", err)
 			return
 		}
 
 		err = dbReset(session)
 		if err != nil {
+			Logger().Error("Can only use source code routing: [info-dbInsert] %v.", err)
 			return
+		}
+		err = session.Commit()
+		if err != nil {
+			Logger().Error("Can only use source code routing: [dbCommit] %v.", err)
 		}
 
 	} else if vrlock.Md5 != Md5 {
@@ -118,7 +124,7 @@ func initVirtRouterFromDB() (err error) {
 		if err != nil {
 			session.Rollback()
 			vrlock.Md5 = ""
-			err = fmt.Errorf("Failed to update table virt_router md5: %v.", err)
+			Logger().Error("Can only use source code routing: [md5-dbUpdate] %v.", err)
 			return
 		}
 
@@ -126,7 +132,7 @@ func initVirtRouterFromDB() (err error) {
 		err = session.Find(&dbInfo)
 		if err != nil {
 			session.Rollback()
-			err = fmt.Errorf("Failed to read table virt_router: %v.", err)
+			Logger().Error("Can only use source code routing: [info-dbFind] %v.", err)
 			return
 		}
 		if len(dbInfo) > 0 {
@@ -143,7 +149,12 @@ func initVirtRouterFromDB() (err error) {
 		}
 		err = dbReset(session)
 		if err != nil {
+			Logger().Error("Can only use source code routing: [info-dbInsert] %v.", err)
 			return
+		}
+		err = session.Commit()
+		if err != nil {
+			Logger().Error("Can only use source code routing: [dbCommit] %v.", err)
 		}
 
 	} else {
@@ -153,19 +164,19 @@ func initVirtRouterFromDB() (err error) {
 		err = session.Find(&dbInfo)
 		if err != nil {
 			session.Rollback()
-			err = fmt.Errorf("Failed to read table virt_router: %v.", err)
+			Logger().Error("Can only use source code routing: [info-dbFind] %v.", err)
 			return
 		}
 		if len(dbInfo) == 0 {
-			session.Rollback()
-			err = fmt.Errorf("Table virt_router does not exist.")
 			return
+		}
+		err = session.Commit()
+		if err != nil {
+			Logger().Error("Can only use source code routing: [dbCommit] %v.", err)
 		}
 		// 从配置信息构建虚拟路由树
 		DefLessgo.virtRouter = buildVirtRouter(dbInfo)
 	}
-	err = session.Commit()
-	return
 }
 
 // 重建数据库中虚拟路由配置信息
@@ -174,7 +185,6 @@ func dbReset(session *xorm.Session) (err error) {
 	_, err = session.Insert(&nodes)
 	if err != nil {
 		session.Rollback()
-		err = fmt.Errorf("Failed to insert table virt_router: %v.", err)
 	}
 	return
 }

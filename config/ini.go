@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -369,7 +370,13 @@ func (c *IniConfigContainer) SaveConfigFile(filename string) (err error) {
 	buf := bytes.NewBuffer(nil)
 	// Save default section at first place
 	if dt, ok := c.data[defaultSection]; ok {
-		for key, val := range dt {
+		keys := []string{}
+		for key := range dt {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			val := dt[key]
 			if key != " " {
 				// Write key comments.
 				if v := getCommentStr(defaultSection, key); len(v) > 0 {
@@ -391,7 +398,13 @@ func (c *IniConfigContainer) SaveConfigFile(filename string) (err error) {
 		}
 	}
 	// Save named sections
-	for section, dt := range c.data {
+	sections := []string{}
+	for section := range c.data {
+		sections = append(sections, section)
+	}
+	sort.Strings(sections)
+	for _, section := range sections {
+		dt := c.data[section]
 		if section != defaultSection {
 			// Write section comments.
 			if v := getCommentStr(section, ""); len(v) > 0 {
@@ -404,8 +417,13 @@ func (c *IniConfigContainer) SaveConfigFile(filename string) (err error) {
 			if _, err = buf.WriteString(string(sectionStart) + section + string(sectionEnd) + lineBreak); err != nil {
 				return err
 			}
-
-			for key, val := range dt {
+			keys := []string{}
+			for key := range dt {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				val := dt[key]
 				if key != " " {
 					// Write key comments.
 					if v := getCommentStr(section, key); len(v) > 0 {

@@ -109,8 +109,8 @@ func (resp *Response) Committed() bool {
 	return resp.committed
 }
 
-func (resp *Response) reset(rw http.ResponseWriter) {
-	resp.writer = rw
+func (resp *Response) free() {
+	resp.writer = nil
 	resp.size = 0
 	resp.status = http.StatusOK
 	resp.committed = false
