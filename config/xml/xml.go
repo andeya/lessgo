@@ -41,7 +41,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/beego/x2j"
+	"github.com/lessgo/lessgo/config/xml/x2j"
 
 	"github.com/lessgo/lessgo/config"
 )

@@ -22,7 +22,7 @@ import (
 )
 
 var yamlcontext = `
-"appname": beeapi
+"appname": lessgoapi
 "httpport": 8080
 "mysqlport": 3600
 "PI": 3.1415976
@@ -47,8 +47,8 @@ func TestYaml(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if yamlconf.String("appname") != "beeapi" {
-		t.Fatal("appname not equal to beeapi")
+	if yamlconf.String("appname") != "lessgoapi" {
+		t.Fatal("appname not equal to lessgoapi")
 	}
 	if port, err := yamlconf.Int("httpport"); err != nil || port != 8080 {
 		t.Error(port)
