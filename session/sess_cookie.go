@@ -78,7 +78,7 @@ func (st *CookieSessionStore) SessionRelease(w http.ResponseWriter) {
 	if err != nil {
 		return
 	}
-	cookie := &http.Cookie{Name: cookiepder.config.CookieName,
+	cookie := &http.Cookie{Name: CookieName,
 		Value:    url.QueryEscape(str),
 		Path:     "/",
 		HttpOnly: true,
@@ -92,7 +92,6 @@ type cookieConfig struct {
 	SecurityKey  string `json:"securityKey"`
 	BlockKey     string `json:"blockKey"`
 	SecurityName string `json:"securityName"`
-	CookieName   string `json:"cookieName"`
 	Secure       bool   `json:"secure"`
 	Maxage       int    `json:"maxage"`
 }
@@ -103,6 +102,8 @@ type CookieProvider struct {
 	config      *cookieConfig
 	block       cipher.Block
 }
+
+var CookieName string
 
 // SessionInit Init cookie session provider with max lifetime and config json.
 // maxlifetime is ignored.

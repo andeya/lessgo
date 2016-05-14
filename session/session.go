@@ -151,6 +151,9 @@ func NewManager(provideName, config string) (*Manager, error) {
 		cf.SessionIDLength = 16
 	}
 
+	// 设置存储提供者cookie的CookieName
+	CookieName = cf.CookieName
+
 	return &Manager{
 		provider,
 		cf,

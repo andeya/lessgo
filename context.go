@@ -466,6 +466,7 @@ func (c *context) Render(code int, name string, data interface{}) (err error) {
 		return
 	}
 	c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
+	c.freeSession()
 	c.response.WriteHeader(code)
 	_, err = c.response.Write(buf.Bytes())
 	return
@@ -473,6 +474,7 @@ func (c *context) Render(code int, name string, data interface{}) (err error) {
 
 func (c *context) HTML(code int, html string) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
+	c.freeSession()
 	c.response.WriteHeader(code)
 	_, err = c.response.Write([]byte(html))
 	return
@@ -480,6 +482,7 @@ func (c *context) HTML(code int, html string) (err error) {
 
 func (c *context) String(code int, s string) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMETextPlainCharsetUTF8)
+	c.freeSession()
 	c.response.WriteHeader(code)
 	_, err = c.response.Write([]byte(s))
 	return
@@ -498,6 +501,7 @@ func (c *context) JSON(code int, i interface{}) (err error) {
 
 func (c *context) JSONBlob(code int, b []byte) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMEApplicationJSONCharsetUTF8)
+	c.freeSession()
 	c.response.WriteHeader(code)
 	_, err = c.response.Write(b)
 	return
@@ -509,6 +513,7 @@ func (c *context) JSONP(code int, callback string, i interface{}) (err error) {
 		return err
 	}
 	c.response.Header().Set(HeaderContentType, MIMEApplicationJavaScriptCharsetUTF8)
+	c.freeSession()
 	c.response.WriteHeader(code)
 	if _, err = c.response.Write([]byte(callback + "(")); err != nil {
 		return
@@ -533,6 +538,7 @@ func (c *context) XML(code int, i interface{}) (err error) {
 
 func (c *context) XMLBlob(code int, b []byte) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMEApplicationXMLCharsetUTF8)
+	c.freeSession()
 	c.response.WriteHeader(code)
 	if _, err = c.response.Write([]byte(xml.Header)); err != nil {
 		return
@@ -570,12 +576,14 @@ func (c *context) File(file string) error {
 func (c *context) Attachment(r io.ReadSeeker, name string) (err error) {
 	c.response.Header().Set(HeaderContentType, ContentTypeByExtension(name))
 	c.response.Header().Set(HeaderContentDisposition, "attachment; filename="+name)
+	c.freeSession()
 	c.response.WriteHeader(http.StatusOK)
 	_, err = io.Copy(c.response, r)
 	return
 }
 
 func (c *context) NoContent(code int) error {
+	c.freeSession()
 	c.response.WriteHeader(code)
 	return nil
 }
@@ -585,6 +593,7 @@ func (c *context) Redirect(code int, url string) error {
 		return ErrInvalidRedirectCode
 	}
 	c.response.Header().Set(HeaderLocation, url)
+	c.freeSession()
 	c.response.WriteHeader(code)
 	return nil
 }
@@ -621,9 +630,17 @@ func (c *context) ServeContent(content io.ReadSeeker, name string, modtime time.
 
 	resp.Header().Set(HeaderContentType, ContentTypeByExtension(name))
 	resp.Header().Set(HeaderLastModified, modtime.UTC().Format(http.TimeFormat))
+	c.freeSession()
 	resp.WriteHeader(http.StatusOK)
 	_, err := io.Copy(resp, content)
 	return err
+}
+
+func (c *context) freeSession() {
+	if c.cruSession != nil {
+		c.cruSession.SessionRelease(c.Response().Writer())
+		c.cruSession = nil
+	}
 }
 
 func (c *context) init(rw http.ResponseWriter, req *http.Request) (err error) {
@@ -640,10 +657,6 @@ func (c *context) init(rw http.ResponseWriter, req *http.Request) (err error) {
 }
 
 func (c *context) free() {
-	if c.cruSession != nil {
-		c.cruSession.SessionRelease(c.Response().Writer())
-		c.cruSession = nil
-	}
 	c.handler = notFoundHandler
 	c.netContext = nil
 	c.socket = nil
