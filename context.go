@@ -501,9 +501,11 @@ func (c *context) String(code int, s string) (err error) {
 }
 
 func (c *context) JSON(code int, i interface{}) (err error) {
-	b, err := json.Marshal(i)
+	var b []byte
 	if c.echo.Debug() {
 		b, err = json.MarshalIndent(i, "", "  ")
+	} else {
+		b, err = json.Marshal(i)
 	}
 	if err != nil {
 		return err
@@ -512,12 +514,17 @@ func (c *context) JSON(code int, i interface{}) (err error) {
 }
 
 func (c *context) JSONMsg(code int, msgcode int, info interface{}) (err error) {
-	b, err := json.Marshal(CommMsg{
-		Code: msgcode,
-		Info: info,
-	})
+	var b []byte
 	if c.echo.Debug() {
-		b, err = json.MarshalIndent(info, "", "  ")
+		b, err = json.MarshalIndent(CommMsg{
+			Code: msgcode,
+			Info: info,
+		}, "", "  ")
+	} else {
+		b, err = json.Marshal(CommMsg{
+			Code: msgcode,
+			Info: info,
+		})
 	}
 	if err != nil {
 		return err
@@ -535,7 +542,12 @@ func (c *context) JSONBlob(code int, b []byte) (err error) {
 }
 
 func (c *context) JSONP(code int, callback string, i interface{}) (err error) {
-	b, err := json.Marshal(i)
+	var b []byte
+	if c.echo.Debug() {
+		b, err = json.MarshalIndent(i, "", "  ")
+	} else {
+		b, err = json.Marshal(i)
+	}
 	if err != nil {
 		return err
 	}
@@ -553,10 +565,18 @@ func (c *context) JSONP(code int, callback string, i interface{}) (err error) {
 }
 
 func (c *context) JSONPMsg(code int, callback string, msgcode int, info interface{}) (err error) {
-	b, err := json.Marshal(CommMsg{
-		Code: msgcode,
-		Info: info,
-	})
+	var b []byte
+	if c.echo.Debug() {
+		b, err = json.MarshalIndent(CommMsg{
+			Code: msgcode,
+			Info: info,
+		}, "", "  ")
+	} else {
+		b, err = json.Marshal(CommMsg{
+			Code: msgcode,
+			Info: info,
+		})
+	}
 	if err != nil {
 		return err
 	}

@@ -23,7 +23,7 @@ type (
 	}
 	Param struct {
 		Name     string      // 参数名
-		In       string      // 参数出现位置form、query、path、body、header
+		In       string      // 参数出现位置formData、query、path、body、header
 		Required bool        // 是否必填
 		Format   interface{} // 参数值示例(至少为相应go基础类型空值)
 		Desc     string      // 参数描述

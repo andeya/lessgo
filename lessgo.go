@@ -268,7 +268,7 @@ func SufUse(middleware ...MiddlewareConfig) {
 }
 
 // 从根路由开始配置路由(必须在init()中调用)
-func Root(nodes ...*VirtRouter) *VirtRouter {
+func Root(nodes ...*VirtRouter) {
 	var err error
 	for _, node := range nodes {
 		if node == nil {
@@ -279,7 +279,6 @@ func Root(nodes ...*VirtRouter) *VirtRouter {
 			Logger().Error("%v", err)
 		}
 	}
-	return DefLessgo.virtRouter
 }
 
 // 配置路由分组(必须在init()中调用)

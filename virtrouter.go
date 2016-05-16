@@ -231,7 +231,7 @@ func buildVirtRouter(vrs []*VirtRouter) *VirtRouter {
 
 // 创建虚拟路由根节点
 func newRootVirtRouter() *VirtRouter {
-	ah := NilApiHandler("Service Root")
+	ah := NilApiHandler("root-level")
 	root := &VirtRouter{
 		Id:          uuid.New().String(),
 		Type:        ROOT,
