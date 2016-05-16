@@ -53,11 +53,12 @@ var (
 
 // 从数据库初始化虚拟路由
 func initVirtRouterFromDB() {
-	lessgodb, _ = GetDB("lessgo")
-	if lessgodb == nil {
-		Logger().Warn("Can only use source code routing.")
-		return
-	}
+	defer func() {
+		if p := recover(); p != nil {
+			Logger().Warn("Can only use source code routing: %v.", p)
+		}
+	}()
+	lessgodb = DefaultDB()
 	var err error
 	if err = lessgodb.Ping(); err != nil {
 		Logger().Warn("Can only use source code routing: [dbPing] %v.", err)

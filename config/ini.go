@@ -202,6 +202,7 @@ func (c *IniConfigContainer) MainKeys() []string {
 		a[i] = k
 		i++
 	}
+	sort.Strings(a)
 	return a
 }
 
@@ -216,6 +217,7 @@ func (c *IniConfigContainer) Sections() []string {
 		a[i] = k
 		i++
 	}
+	sort.Strings(a)
 	return a
 }
 
@@ -227,6 +229,7 @@ func (c *IniConfigContainer) SectionKeys(section string) []string {
 		a[i] = k
 		i++
 	}
+	sort.Strings(a)
 	return a
 }
 

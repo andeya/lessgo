@@ -234,14 +234,22 @@ func LoadDBConfig() (err error) {
 	iniconf, err := config.NewConfig("ini", fname)
 	if err == nil {
 		os.Remove(fname)
-		defDB := AppConfig.DBList["lessgo"]
-		for _, section := range iniconf.(*config.IniConfigContainer).Sections() {
-			dbconfig := defDB
-			readSingleConfig(section, &dbconfig, iniconf)
-			if strings.ToLower(section) == DEFAULTDB_SECTION {
-				AppConfig.DefaultDB = dbconfig.Name
+		sections := iniconf.(*config.IniConfigContainer).Sections()
+		if len(sections) > 0 {
+			AppConfig.DefaultDB = ""
+			defDB := AppConfig.DBList["lessgo"]
+			delete(AppConfig.DBList, "lessgo")
+			for _, section := range sections {
+				dbconfig := defDB
+				readSingleConfig(section, &dbconfig, iniconf)
+				if strings.ToLower(section) == DEFAULTDB_SECTION {
+					AppConfig.DefaultDB = dbconfig.Name
+				}
+				AppConfig.DBList[dbconfig.Name] = dbconfig
 			}
-			AppConfig.DBList[dbconfig.Name] = dbconfig
+			if AppConfig.DefaultDB == "" {
+				AppConfig.DefaultDB = iniconf.DefaultString(sections[0]+"::name", defDB.Name)
+			}
 		}
 	}
 
