@@ -515,16 +515,14 @@ func (c *context) JSON(code int, i interface{}) (err error) {
 
 func (c *context) JSONMsg(code int, msgcode int, info interface{}) (err error) {
 	var b []byte
+	i := CommMsg{
+		Code: msgcode,
+		Info: info,
+	}
 	if c.echo.Debug() {
-		b, err = json.MarshalIndent(CommMsg{
-			Code: msgcode,
-			Info: info,
-		}, "", "  ")
+		b, err = json.MarshalIndent(i, "", "  ")
 	} else {
-		b, err = json.Marshal(CommMsg{
-			Code: msgcode,
-			Info: info,
-		})
+		b, err = json.Marshal(i)
 	}
 	if err != nil {
 		return err
@@ -566,16 +564,14 @@ func (c *context) JSONP(code int, callback string, i interface{}) (err error) {
 
 func (c *context) JSONPMsg(code int, callback string, msgcode int, info interface{}) (err error) {
 	var b []byte
+	i := CommMsg{
+		Code: msgcode,
+		Info: info,
+	}
 	if c.echo.Debug() {
-		b, err = json.MarshalIndent(CommMsg{
-			Code: msgcode,
-			Info: info,
-		}, "", "  ")
+		b, err = json.MarshalIndent(i, "", "  ")
 	} else {
-		b, err = json.Marshal(CommMsg{
-			Code: msgcode,
-			Info: info,
-		})
+		b, err = json.Marshal(i)
 	}
 	if err != nil {
 		return err
