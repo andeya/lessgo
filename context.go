@@ -156,12 +156,18 @@ type (
 		// JSON sends a JSON response with status code.
 		JSON(int, interface{}) error
 
+		// JSONMsg sends a JSON response with common message format.
+		JSONMsg(code int, msgcode int, info interface{}) error
+
 		// JSONBlob sends a JSON blob response with status code.
 		JSONBlob(int, []byte) error
 
 		// JSONP sends a JSONP response with status code. It uses `callback` to construct
 		// the JSONP payload.
 		JSONP(int, string, interface{}) error
+
+		// JSONPMsg sends a JSONP response with common message format.
+		JSONPMsg(code int, callback string, msgcode int, info interface{}) error
 
 		// XML sends an XML response with status code.
 		XML(int, interface{}) error
@@ -224,6 +230,12 @@ type (
 	}
 
 	store map[string]interface{}
+
+	// Common message format of JSON and JSONP.
+	CommMsg struct {
+		Code int         `json:"code"`
+		Info interface{} `json:"info"`
+	}
 )
 
 const (
@@ -499,6 +511,21 @@ func (c *context) JSON(code int, i interface{}) (err error) {
 	return c.JSONBlob(code, b)
 }
 
+func (c *context) JSONMsg(code int, msgcode int, info interface{}) (err error) {
+	b, err := json.Marshal(CommMsg{
+		Code: msgcode,
+		Info: info,
+	})
+	if c.echo.Debug() {
+		b, err = json.MarshalIndent(info, "", "  ")
+	}
+	if err != nil {
+		return err
+	}
+
+	return c.JSONBlob(code, b)
+}
+
 func (c *context) JSONBlob(code int, b []byte) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMEApplicationJSONCharsetUTF8)
 	c.freeSession()
@@ -509,6 +536,27 @@ func (c *context) JSONBlob(code int, b []byte) (err error) {
 
 func (c *context) JSONP(code int, callback string, i interface{}) (err error) {
 	b, err := json.Marshal(i)
+	if err != nil {
+		return err
+	}
+	c.response.Header().Set(HeaderContentType, MIMEApplicationJavaScriptCharsetUTF8)
+	c.freeSession()
+	c.response.WriteHeader(code)
+	if _, err = c.response.Write([]byte(callback + "(")); err != nil {
+		return
+	}
+	if _, err = c.response.Write(b); err != nil {
+		return
+	}
+	_, err = c.response.Write([]byte(");"))
+	return
+}
+
+func (c *context) JSONPMsg(code int, callback string, msgcode int, info interface{}) (err error) {
+	b, err := json.Marshal(CommMsg{
+		Code: msgcode,
+		Info: info,
+	})
 	if err != nil {
 		return err
 	}
