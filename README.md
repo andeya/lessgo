@@ -196,8 +196,9 @@ func init() {
 ##贡献者名单
 贡献者                          |贡献概要
 --------------------------------|--------------------------------------------------
-[henrylee2cn](https://github.com/henrylee2cn)|第一作者 (主要代码实现者) 
-[changyu72](https://github.com/changyu72)|第二作者 (主要架构设计者) 
+[henrylee2cn](https://github.com/henrylee2cn)|第一作者 (代码的主要实现者) 
+[changyu72](https://github.com/changyu72)|第二作者 (架构的主要设计者) 
+[skiy](https://github.com/skiy)| (gorm版分支维护) 
 
 ##开源协议
 Lessgo 项目采用商业应用友好的 [MIT](https://github.com/lessgo/lessgo/raw/master/LICENSE) 协议发布。
