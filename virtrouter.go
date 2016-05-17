@@ -287,12 +287,7 @@ func GetVirtRouter(id string) (*VirtRouter, bool) {
 	return vr, ok
 }
 
-// 返回操作中定义的方法字符串("WS"和"*"不做转换)
-func (vr *VirtRouter) Method() string {
-	return vr.apiHandler.Method
-}
-
-// 真实的请求方法列表(自动转换: "WS"->"GET", "*"->methods)
+// 获取操作的请求方法列表（已排序）
 func (vr *VirtRouter) Methods() []string {
 	return vr.apiHandler.Methods()
 }
@@ -574,16 +569,10 @@ func (vr *VirtRouter) route(group *Group) {
 			child.route(childGroup)
 		}
 	case HANDLER:
-		var ms []string
-		if vr.Method() == WS {
-			ms = []string{WS}
-		} else {
-			ms = vr.Methods()
-		}
 		if hasIndex {
-			group.Match(ms, prefix2, vr.apiHandler.Handler, mws...)
+			group.Match(vr.Methods(), prefix2, vr.apiHandler.Handler, mws...)
 		}
-		group.Match(ms, prefix, vr.apiHandler.Handler, mws...)
+		group.Match(vr.Methods(), prefix, vr.apiHandler.Handler, mws...)
 	}
 }
 

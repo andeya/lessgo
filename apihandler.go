@@ -3,6 +3,7 @@ package lessgo
 import (
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -10,8 +11,8 @@ import (
 type (
 	ApiHandler struct {
 		Desc    string   // 本操作的描述
-		Method  string   // 请求方法，"*"表示除"WS"外全部方法
-		methods []string // 真实的请求方法列表(自动转换: "WS"->"GET", "*"->methods)
+		Method  string   // 请求方法，"*"表示除"WS"外全部方法，多方法写法："GET|POST"或"GET POST"，冲突时优先级WS>GET>*
+		methods []string // 真实的请求方法列表
 		Params  []Param  // 参数说明列表，path参数类型的先后顺序与url中保持一致
 		// Produces []string            // 支持的响应内容类型，如["application/xml", "application/json"]
 		Handler func(Context) error // 操作
@@ -122,16 +123,34 @@ func (a *ApiHandler) initParamsAndSuffix() {
 }
 
 func (a *ApiHandler) initMethod() {
+	defer func() {
+		sort.Strings(a.methods)                 //方法排序，保证一致性
+		a.Method = strings.Join(a.methods, "|") //格式化，保证一致性
+	}()
+
+	a.methods = []string{}
 	a.Method = strings.ToUpper(a.Method)
-	switch a.Method {
-	case ANY:
-		a.methods = methods[:]
-	case WS:
-		a.methods = []string{GET}
-	case CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE:
-		a.methods = []string{a.Method}
-	default:
-		Logger().Fatal("ApiHandler \"%v\"'s method can't be %v. ", a.Desc, a.Method)
+
+	// 检查websocket方法，若存在则不允许GET方法存在
+	if strings.Contains(a.Method, WS) {
+		a.Method = strings.Replace(a.Method, GET, "", -1)
+		a.methods = append(a.methods, WS)
+	}
+
+	// 遍历标准方法
+	for _, method := range methods {
+		if strings.Contains(a.Method, method) {
+			a.methods = append(a.methods, method)
+		}
+	}
+
+	// 当只含有 * 时表示除WS外任意方法
+	if len(a.methods) == 0 {
+		if strings.Contains(a.Method, ANY) {
+			a.methods = methods[:]
+		} else {
+			Logger().Fatal("ApiHandler \"%v\"'s method can't be %v. ", a.Desc, a.Method)
+		}
 	}
 }
 

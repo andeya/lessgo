@@ -61,8 +61,11 @@ import (
 )
 
 func main() {
-    swagger.Init()
+    // 开启自动api文档，false表示仅允许内网访问
+    swagger.Reg(false)
+    // 指定根目录URL
     lessgo.SetHome("/home")
+    // 开启网络服务
     lessgo.Run()
 }
 ```
@@ -75,10 +78,10 @@ import (
 
 var IndexHandle = ApiHandler{
     Desc:   "后台管理登录操作",
-    Method: "GET",
+    Method: "POST|PUT",
     Params: []Param{
-        {"user", "path", true, "henry", "用户名"},
-        {"password", "path", true, "12345678", "密码"},
+        {"user", "formData", true, "henry", "用户名"},
+        {"password", "formData", true, "12345678", "密码"},
     },
     Handler: func(ctx Context) error {
         // 测试读取cookie
@@ -89,15 +92,15 @@ var IndexHandle = ApiHandler{
         ctx.Logger().Info("从session读取上次请求的输入: %#v", ctx.GetSession("info"))
 
         ctx.SetSession("info", map[string]interface{}{
-            "user":     ctx.Param("user"),
-            "password": ctx.Param("password"),
+            "user":     ctx.FormValue("user"),
+            "password": ctx.FormValue("password"),
         })
 
         return ctx.Render(200,
             "SystemView/Admin/Login/index.tpl",
             map[string]interface{}{
-                "name":       ctx.Param("user"),
-                "password":   ctx.Param("password"),
+                "name":       ctx.FormValue("user"),
+                "password":   ctx.FormValue("password"),
                 "repeatfunc": repeatfunc,
             },
         )
