@@ -29,6 +29,11 @@ type VirtRouter struct {
 	children   virtRouterSlice `xorm:"-"` // 子节点
 	apiHandler *ApiHandler     `xorm:"-"` // 操作
 }
+
+type VirtRouterLock struct {
+	Md5 string `json:"Md5" xorm:"not null VARCHAR(500)"`
+}
+
 type virtRouterSlice []*VirtRouter
 
 func (vs virtRouterSlice) Len() int {
@@ -41,10 +46,6 @@ func (vs virtRouterSlice) Less(i, j int) bool {
 
 func (vs virtRouterSlice) Swap(i, j int) {
 	vs[i], vs[j] = vs[j], vs[i]
-}
-
-type VirtRouterLock struct {
-	Md5 string `json:"Md5" xorm:"not null VARCHAR(500)"`
 }
 
 func (v *VirtRouter) Sort() {
