@@ -110,7 +110,7 @@ var IndexHandle = ApiHandler{
 
 - 一个简单的中间件
 ```
-var ShowHeaderWare = lessgo.RegMiddleware(lessgo.ApiMiddleware{
+var ShowHeaderWare = lessgo.ApiMiddleware{
     Name:          "显示Header",
     Desc:          "显示Header测试",
     DefaultConfig: nil,
@@ -118,7 +118,7 @@ var ShowHeaderWare = lessgo.RegMiddleware(lessgo.ApiMiddleware{
         logs.Info("测试中间件-显示Header：%v", ctx.Request().Header)
         return nil
     },
-})
+}.Reg()
 ```
 
 - 在源码中定义路由
@@ -153,6 +153,8 @@ func init() {
 
 
 ##项目目录组织
+
+```
 ─Project 项目开发目录
 ├─config 配置文件目录
 │  ├─app.config 系统应用配置文件
@@ -199,6 +201,7 @@ func init() {
 ├─database 默认数据库文件存储目录
 ├─logger 运行日志输出目录
 └─main.go 应用入口文件
+```
 
 ##贡献者名单
 贡献者                          |贡献概要

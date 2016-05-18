@@ -204,11 +204,6 @@ func Sessions() *session.Manager {
  * 操作
  */
 
-// 注册操作
-func RegHandler(a ApiHandler) *ApiHandler {
-	return a.init()
-}
-
 // 获取已注册的操作列表
 func Handlers() []*ApiHandler {
 	return DefLessgo.apiHandlers
@@ -217,11 +212,6 @@ func Handlers() []*ApiHandler {
 /*
  * 中间件
  */
-
-// 注册中间件
-func RegMiddleware(a ApiMiddleware) *ApiMiddleware {
-	return a.init()
-}
 
 // 获取已注册的中间件列表
 func Middlewares() []*ApiMiddleware {
