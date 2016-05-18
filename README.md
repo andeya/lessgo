@@ -50,14 +50,14 @@ go get -u github.com/lessgo/lessgoext
 
 ##代码示例
 
-- Main.go
+- main.go
 ```go
 import (
     "github.com/lessgo/lessgo"
     "github.com/lessgo/lessgoext/swagger"
-    _ "github.com/lessgo/demo/BusinessAPI"
-    _ "github.com/lessgo/demo/Common/Middleware"
-    _ "github.com/lessgo/demo/SystemAPI"
+
+    _ "github.com/lessgo/demo/middleware"
+    _ "github.com/lessgo/demo/router"
 )
 
 func main() {
@@ -97,7 +97,7 @@ var IndexHandle = ApiHandler{
         })
 
         return ctx.Render(200,
-            "SystemView/Admin/Login/index.tpl",
+            "sysview/admin/login/index.tpl",
             map[string]interface{}{
                 "name":       ctx.FormValue("user"),
                 "password":   ctx.FormValue("password"),
@@ -123,18 +123,21 @@ var ShowHeaderWare = lessgo.RegMiddleware(lessgo.ApiMiddleware{
 
 - 在源码中定义路由
 ```go
+package router
+
 import (
     "github.com/lessgo/lessgo"
-    "github.com/lessgo/demo/BusinessAPI/Home"
-    "github.com/lessgo/demo/Common/Middleware"
+
+    "github.com/lessgo/demo/bizhandler/home"
+    "github.com/lessgo/demo/middleware"
 )
 
 func init() {
     lessgo.Root(
-        lessgo.Leaf("/websocket", Home.WebSocketHandle, Middleware.ShowHeaderWare),
+        lessgo.Leaf("/websocket", home.WebSocketHandle, middleware.ShowHeaderWare),
         lessgo.Branch("/home", "前台",
-            lessgo.Leaf("/index", Home.IndexHandle, Middleware.ShowHeaderWare),
-        ).Use(Middleware.PrintWare),
+            lessgo.Leaf("/index", home.IndexHandle, middleware.ShowHeaderWare),
+        ).Use(middleware.PrintWare),
     )
 }
 ```
@@ -150,51 +153,52 @@ func init() {
 
 
 ##项目目录组织
-─Project 项目开发目录  
-├─Config 配置文件目录  
-│  ├─app.config 系统应用配置文件  
-│  └─db.config 数据库配置文件  
-├─Common 后端公共目录  
-│  ├─Middleware 中间件目录  
-│  └─Model 数据模型  
-│  └─... 其他  
-├─Static 前端公共目录 (url: /static)  
-│  ├─Tpl 公共tpl模板目录  
-│  ├─Js 公共js目录 (url: /static/js)  
-│  ├─Css 公共css目录 (url: /static/css)  
-│  ├─Img 公共img目录 (url: /static/img)  
-│  └─Plugin 公共js插件 (url: /static/plugin)  
-├─SystemAPI 系统模块后端目录  
-│  ├─SysRouter.go 系统模块路由文件  
-│  ├─Xxx Xxx子模块目录  
-│  │  ├─ExampleHandle.go Example操作  
-│  │  ├─ExampleModel.go Example数据模型及模板函数  
-│  │  └─... Xxx的子模块目录  
-│  └─... 其他子模块目录  
-├─SystemView 系统模块前端目录 (url: /sys)  
-│  ├─Xxx Xxx子模块目录 (url: /sys/xxx)  
-│  │  ├─example.tpl ExampleHandle对应的模板文件  
-│  │  ├─example2.html 无需绑定操作的静态html文件  
-│  │  ├─xxx.css css文件(可有多个)  
-│  │  ├─xxx.js js文件(可有多个)  
-│  │  └─... Xxx的子模块目录  
-├─BusinessAPI 业务模块后端目录  
-│  ├─BusRouter.go 业务模块路由文件  
-│  ├─Xxx Xxx子模块目录  
-│  │  ├─ExampleHandle.go Example操作  
-│  │  ├─ExampleModel.go Example数据模型及模板函数  
-│  │  └─... Xxx的子模块目录  
-│  └─... 其他子模块目录  
-├─BusinessView 业务模块前端目录 (url: /bus)  
-│  ├─Xxx Xxx子模块目录 (url: /bus/xxx)  
-│  │  ├─example.tpl ExampleHandle对应的模板文件    
-│  │  ├─example2.html 无需绑定操作的静态html文件  
-│  │  ├─xxx.css css文件(可有多个)  
-│  │  ├─xxx.js js文件(可有多个)  
-│  │  └─... Xxx的子模块目录  
-├─Uploads 默认上传下载目录  
-├─Logger 运行日志输出目录  
-└─Main.go 应用入口文件 
+─Project 项目开发目录
+├─config 配置文件目录
+│  ├─app.config 系统应用配置文件
+│  └─db.config 数据库配置文件
+├─common 后端公共目录
+│  └─... 如utils等其他
+├─middleware 后端公共中间件目录
+├─static 前端公共目录 (url: /static)
+│  ├─tpl 公共tpl模板目录
+│  ├─js 公共js目录 (url: /static/js)
+│  ├─css 公共css目录 (url: /static/css)
+│  ├─img 公共img目录 (url: /static/img)
+│  └─plugin 公共js插件 (url: /static/plugin)
+├─uploads 默认上传下载目录
+├─router 源码路由配置
+│  ├─sysrouter.go 系统模块路由文件
+│  ├─bizrouter.go 业务模块路由文件
+├─syshandler 系统模块后端目录
+│  ├─xxx 子模块目录
+│  │  ├─example.go example操作
+│  │  └─... xxx的子模块目录
+│  └─... 其他子模块目录
+├─sysmodel 系统模块数据模型目录
+├─sysview 系统模块前端目录 (url: /sys)
+│  ├─xxx 与syshandler对应的子模块目录 (url: /sys/xxx)
+│  │  ├─example.tpl 相应操作的模板文件
+│  │  ├─example2.html 无需绑定操作的静态html文件
+│  │  ├─xxx.css css文件(可有多个)
+│  │  ├─xxx.js js文件(可有多个)
+│  │  └─... xxx的子模块目录
+├─bizhandler 业务模块后端目录
+│  ├─xxx 子模块目录
+│  │  ├─example.go example操作
+│  │  └─... xxx的子模块目录
+│  └─... 其他子模块目录
+├─bizmodel 业务模块数据模型目录
+├─bizview 业务模块前端目录 (url: /biz)
+│  ├─xxx 与bizhandler对应的子模块目录 (url: /biz/xxx)
+│  │  ├─example.tpl 相应操作的模板文件
+│  │  ├─example2.html 无需绑定操作的静态html文件
+│  │  ├─xxx.css css文件(可有多个)
+│  │  ├─xxx.js js文件(可有多个)
+│  │  └─... xxx的子模块目录
+├─database 默认数据库文件存储目录
+├─logger 运行日志输出目录
+└─main.go 应用入口文件
 
 ##贡献者名单
 贡献者                          |贡献概要

@@ -3,6 +3,7 @@ package lessgo
 import (
 	"fmt"
 	pathpkg "path"
+	"sort"
 	"strings"
 	"sync"
 
@@ -22,15 +23,35 @@ type VirtRouter struct {
 	Dynamic     bool               `json:"dynamic" xorm:"not null TINYINT(1)"`  // 是否动态追加的节点
 	Hid         string             `json:"hid" xorm:"not null VARCHAR(500)"`    // 操作ApiHandler.id
 
-	path       string        `xorm:"-"` // 路由匹配模式
-	prefixPath string        `xorm:"-"` // 路由节点的url前缀的固定路径部分
-	parent     *VirtRouter   `xorm:"-"` // 父节点
-	children   []*VirtRouter `xorm:"-"` // 子节点
-	apiHandler *ApiHandler   `xorm:"-"` // 操作
+	path       string          `xorm:"-"` // 路由匹配模式
+	prefixPath string          `xorm:"-"` // 路由节点的url前缀的固定路径部分
+	parent     *VirtRouter     `xorm:"-"` // 父节点
+	children   virtRouterSlice `xorm:"-"` // 子节点
+	apiHandler *ApiHandler     `xorm:"-"` // 操作
+}
+type virtRouterSlice []*VirtRouter
+
+func (vs virtRouterSlice) Len() int {
+	return len(vs)
+}
+
+func (vs virtRouterSlice) Less(i, j int) bool {
+	return vs[i].path <= vs[j].path
+}
+
+func (vs virtRouterSlice) Swap(i, j int) {
+	vs[i], vs[j] = vs[j], vs[i]
 }
 
 type VirtRouterLock struct {
 	Md5 string `json:"Md5" xorm:"not null VARCHAR(500)"`
+}
+
+func (v *VirtRouter) Sort() {
+	sort.Sort(v.children)
+	for _, child := range v.children {
+		sort.Sort(child.children)
+	}
 }
 
 // 虚拟路由节点类型
@@ -57,6 +78,7 @@ func initVirtRouterFromDB() {
 		if p := recover(); p != nil {
 			Logger().Warn("Can only use source code routing: %v.", p)
 		}
+		DefLessgo.virtRouter.Sort()
 	}()
 	lessgodb = DefaultDB()
 	var err error
@@ -232,7 +254,7 @@ func buildVirtRouter(vrs []*VirtRouter) *VirtRouter {
 
 // 创建虚拟路由根节点
 func newRootVirtRouter() *VirtRouter {
-	ah := NilApiHandler("root-level")
+	ah := NilApiHandler("root")
 	root := &VirtRouter{
 		Id:          uuid.New().String(),
 		Type:        ROOT,
@@ -529,8 +551,17 @@ func (vr *VirtRouter) delete() error {
 	return fmt.Errorf("Can not delete the root node.")
 }
 
-// 根据父节点重置虚拟路由节点自身及其子节点path
+// 格式化路由
 func (vr *VirtRouter) reset() {
+	vr.resetPath()
+	vr.Sort()
+	if vr.parent != nil {
+		sort.Sort(vr.parent.children)
+	}
+}
+
+// 根据父节点重置虚拟路由节点自身及其子节点path
+func (vr *VirtRouter) resetPath() {
 	var parentPath = "/"
 	if vr.parent != nil {
 		parentPath = vr.parent.path

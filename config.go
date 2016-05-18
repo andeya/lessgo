@@ -92,32 +92,32 @@ type (
 
 // 项目固定目录文件名称
 const (
-	BUSINESS_API_DIR  = "BusinessApi"
-	BUSINESS_VIEW_DIR = "BusinessView"
-	SYSTEM_API_DIR    = "SystemApi"
-	SYSTEM_VIEW_DIR   = "SystemView"
-	STATIC_DIR        = "Static"
-	IMG_DIR           = STATIC_DIR + "/Img"
-	JS_DIR            = STATIC_DIR + "/Js"
-	CSS_DIR           = STATIC_DIR + "/Css"
-	TPL_DIR           = STATIC_DIR + "/Tpl"
-	PLUGIN_DIR        = STATIC_DIR + "/Plugin"
-	UPLOADS_DIR       = "Uploads"
-	COMMON_DIR        = "Common"
-	MIDDLEWARE_DIR    = COMMON_DIR + "/Middleware"
+	BIZ_HANDLER_DIR = "bizhandler"
+	BIZ_MODEL_DIR   = "bizmodel"
+	BIZ_VIEW_DIR    = "bizview"
+	SYS_HANDLER_DIR = "syshandler"
+	SYS_MODEL_DIR   = "sysmodel"
+	SYS_VIEW_DIR    = "sysview"
+	STATIC_DIR      = "static"
+	IMG_DIR         = STATIC_DIR + "/img"
+	JS_DIR          = STATIC_DIR + "/js"
+	CSS_DIR         = STATIC_DIR + "/css"
+	TPL_DIR         = STATIC_DIR + "/tpl"
+	PLUGIN_DIR      = STATIC_DIR + "/plugin"
+	UPLOADS_DIR     = "uploads"
+	COMMON_DIR      = "common"
+	MIDDLEWARE_DIR  = "middleware"
+	ROUTER_DIR      = "router"
 
 	TPL_EXT         = ".tpl"
 	STATIC_HTML_EXT = ".html"
 
-	CONFIG_DIR     = "Config"
+	CONFIG_DIR     = "config"
 	APPCONFIG_FILE = CONFIG_DIR + "/app.config"
 	DBCONFIG_FILE  = CONFIG_DIR + "/db.config"
 
-	DB_DIR            = COMMON_DIR + "/DB"
+	DATABASE_DIR      = "database"
 	DEFAULTDB_SECTION = "defaultdb"
-
-	VIEW_PKG      = "/View"
-	MODULE_SUFFIX = "Module"
 )
 
 var (
@@ -180,7 +180,7 @@ func initConfig() *Config {
 			"lessgo": {
 				Name:         "lessgo",
 				Driver:       "sqlite3",
-				ConnString:   DB_DIR + "/sqlite.db",
+				ConnString:   DATABASE_DIR + "/sqlite.db",
 				MaxOpenConns: 1,
 				MaxIdleConns: 1,
 				TableFix:     "prefix",

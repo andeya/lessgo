@@ -124,8 +124,8 @@ func registerSession() (err error) {
 func registerStaticRouter() {
 	DefLessgo.app.Static("/uploads", UPLOADS_DIR, autoHTMLSuffix())
 	DefLessgo.app.Static("/static", STATIC_DIR, filterTemplate(), autoHTMLSuffix())
-	DefLessgo.app.Static("/bus", BUSINESS_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
-	DefLessgo.app.Static("/sys", SYSTEM_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
+	DefLessgo.app.Static("/biz", BIZ_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
+	DefLessgo.app.Static("/sys", SYS_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
 
 	DefLessgo.app.File("/favicon.ico", IMG_DIR+"/favicon.ico")
 }

@@ -215,7 +215,7 @@ func New() (e *Echo) {
 	// Defaults
 	e.SetHTTPErrorHandler(e.DefaultHTTPErrorHandler)
 	e.logger.AddAdapter("console", "")
-	e.logger.AddAdapter("file", `{"filename":"Logger/lessgo.log"}`)
+	e.logger.AddAdapter("file", `{"filename":"logger/lessgo.log"}`)
 	e.SetDebug(true)
 	return
 }
