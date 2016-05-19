@@ -60,6 +60,9 @@ type (
 	// HandlerFunc defines a function to server HTTP requests.
 	HandlerFunc func(Context) error
 
+	// MiddlewareFunc defines a function to process middleware.
+	MiddlewareFunc func(HandlerFunc) HandlerFunc
+
 	// HTTPErrorHandler is a centralized HTTP error handler.
 	HTTPErrorHandler func(error, Context)
 

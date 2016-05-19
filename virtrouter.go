@@ -14,14 +14,14 @@ import (
 
 // 虚拟路由
 type VirtRouter struct {
-	Id          string             `json:"id" xorm:"not null pk VARCHAR(36)"`   // UUID
-	Pid         string             `json:"pid" xorm:"VARCHAR(36)"`              // 父节点id
-	Type        int                `json:"type" xorm:"not null TINYINT(1)"`     // 操作类型: 根目录/路由分组/操作
-	Prefix      string             `json:"prefix" xorm:"not null VARCHAR(500)"` // 路由节点的url前缀(不含参数)
-	Middlewares []MiddlewareConfig `json:"middlewares" xorm:"TEXT json"`        // 中间件列表 (允许运行时修改)
-	Enable      bool               `json:"enable" xorm:"not null TINYINT(1)"`   // 是否启用当前路由节点
-	Dynamic     bool               `json:"dynamic" xorm:"not null TINYINT(1)"`  // 是否动态追加的节点
-	Hid         string             `json:"hid" xorm:"not null VARCHAR(500)"`    // 操作ApiHandler.id
+	Id          string              `json:"id" xorm:"not null pk VARCHAR(36)"`   // UUID
+	Pid         string              `json:"pid" xorm:"VARCHAR(36)"`              // 父节点id
+	Type        int                 `json:"type" xorm:"not null TINYINT(1)"`     // 操作类型: 根目录/路由分组/操作
+	Prefix      string              `json:"prefix" xorm:"not null VARCHAR(500)"` // 路由节点的url前缀(不含参数)
+	Middlewares []*MiddlewareConfig `json:"middlewares" xorm:"TEXT json"`        // 中间件列表 (允许运行时修改)
+	Enable      bool                `json:"enable" xorm:"not null TINYINT(1)"`   // 是否启用当前路由节点
+	Dynamic     bool                `json:"dynamic" xorm:"not null TINYINT(1)"`  // 是否动态追加的节点
+	Hid         string              `json:"hid" xorm:"not null VARCHAR(500)"`    // 操作ApiHandler.id
 
 	path       string          `xorm:"-"` // 路由匹配模式
 	prefixPath string          `xorm:"-"` // 路由节点的url前缀的固定路径部分
@@ -263,7 +263,7 @@ func newRootVirtRouter() *VirtRouter {
 		Dynamic:     false,
 		Enable:      true,
 		apiHandler:  ah,
-		Middlewares: []MiddlewareConfig{},
+		Middlewares: []*MiddlewareConfig{},
 		Hid:         ah.id,
 	}
 	root.reset()
@@ -281,13 +281,13 @@ func NewGroupVirtRouter(prefix, desc string) *VirtRouter {
 		Enable:      true,
 		Dynamic:     true,
 		apiHandler:  ah,
-		Middlewares: []MiddlewareConfig{},
+		Middlewares: []*MiddlewareConfig{},
 		Hid:         ah.id,
 	}
 }
 
 // 创建虚拟路由动态操作
-func NewHandlerVirtRouter(prefix, hid string, middlewares ...MiddlewareConfig) (*VirtRouter, error) {
+func NewHandlerVirtRouter(prefix, hid string, middlewares ...*MiddlewareConfig) (*VirtRouter, error) {
 	prefix = strings.Split(prefix, "/:")[0]
 	vr := &VirtRouter{
 		Id:          uuid.New().String(),
@@ -393,26 +393,23 @@ func (vr *VirtRouter) Use(middlewares ...*ApiMiddleware) *VirtRouter {
 		return vr
 	}
 	_l := len(vr.Middlewares)
-	ms := make([]MiddlewareConfig, _l+l)
+	ms := make([]*MiddlewareConfig, _l+l)
 	copy(ms, vr.Middlewares)
 	for i, m := range middlewares {
 		m.init()
-		ms[i+_l] = MiddlewareConfig{
-			Name:   m.Name,
-			Config: m.defaultConfig,
-		}
+		ms[i+_l] = m.NewMiddlewareConfig()
 	}
 	vr.Middlewares = ms
 	return vr
 }
 
 // 重置中间件
-func (vr *VirtRouter) ResetUse(middlewares []MiddlewareConfig) (err error) {
+func (vr *VirtRouter) ResetUse(middlewares []*MiddlewareConfig) (err error) {
 	if !vr.Dynamic {
 		return notDynamicError
 	}
 	if middlewares == nil {
-		middlewares = []MiddlewareConfig{}
+		middlewares = []*MiddlewareConfig{}
 	}
 	if lessgodb == nil {
 		goto label

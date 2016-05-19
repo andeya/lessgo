@@ -36,10 +36,10 @@ func newLessgo() *lessgo {
 		serverEnable:   true,
 		apiHandlers:    []*ApiHandler{},
 		apiMiddlewares: []*ApiMiddleware{},
-		before:         []MiddlewareConfig{},
-		after:          []MiddlewareConfig{},
-		prefix:         []MiddlewareConfig{},
-		suffix:         []MiddlewareConfig{},
+		before:         []*MiddlewareConfig{},
+		after:          []*MiddlewareConfig{},
+		prefix:         []*MiddlewareConfig{},
+		suffix:         []*MiddlewareConfig{},
 		virtRouter:     newRootVirtRouter(),
 	}
 
@@ -122,10 +122,10 @@ func registerSession() (err error) {
 
 // 注册固定的静态文件与目录
 func registerStaticRouter() {
-	DefLessgo.app.Static("/uploads", UPLOADS_DIR, autoHTMLSuffix())
-	DefLessgo.app.Static("/static", STATIC_DIR, filterTemplate(), autoHTMLSuffix())
-	DefLessgo.app.Static("/biz", BIZ_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
-	DefLessgo.app.Static("/sys", SYS_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
+	DefLessgo.app.Static("/uploads", UPLOADS_DIR, autoHTMLSuffix)
+	DefLessgo.app.Static("/static", STATIC_DIR, filterTemplate(), autoHTMLSuffix)
+	DefLessgo.app.Static("/biz", BIZ_VIEW_DIR, filterTemplate(), autoHTMLSuffix)
+	DefLessgo.app.Static("/sys", SYS_VIEW_DIR, filterTemplate(), autoHTMLSuffix)
 
 	DefLessgo.app.File("/favicon.ico", IMG_DIR+"/favicon.ico")
 }

@@ -77,31 +77,31 @@ import (
     "github.com/lessgo/demo/sysmodel/admin"
 )
 
-var IndexHandle = ApiHandler{
+var Index = ApiHandler{
     Desc:   "后台管理登录操作",
     Method: "POST|PUT",
     Params: []Param{
         {"user", "formData", true, "henry", "用户名"},
         {"password", "formData", true, "12345678", "密码"},
     },
-    Handler: func(ctx Context) error {
+    Handler: func(c Context) error {
         // 测试读取cookie
-        id, err := ctx.Request().Cookie("name")
-        ctx.Logger().Info("cookie中的%v: %#v (%v)", "name", id, err)
+        id, err := c.Request().Cookie("name")
+        c.Logger().Info("cookie中的%v: %#v (%v)", "name", id, err)
 
         // 测试session
-        ctx.Logger().Info("从session读取上次请求的输入: %#v", ctx.GetSession("info"))
+        c.Logger().Info("从session读取上次请求的输入: %#v", c.GetSession("info"))
 
-        ctx.SetSession("info", map[string]interface{}{
-            "user":     ctx.FormValue("user"),
-            "password": ctx.FormValue("password"),
+        c.SetSession("info", map[string]interface{}{
+            "user":     c.FormValue("user"),
+            "password": c.FormValue("password"),
         })
 
-        return ctx.Render(200,
+        return c.Render(200,
             "sysview/admin/login/index.tpl",
             map[string]interface{}{
-                "name":       ctx.FormValue("user"),
-                "password":   ctx.FormValue("password"),
+                "name":       c.FormValue("user"),
+                "password":   c.FormValue("password"),
                 "repeatfunc": admin.Login.Repeatfunc,
             },
         )
@@ -124,12 +124,12 @@ func (_ login) Repeatfunc(s string, count int) string {
 
 - 一个简单的中间件
 ```
-var ShowHeaderWare = lessgo.ApiMiddleware{
+var ShowHeader = lessgo.ApiMiddleware{
     Name:          "显示Header",
     Desc:          "显示Header测试",
-    DefaultConfig: nil,
-    Middleware: func(ctx lessgo.Context) error {
-        logs.Info("测试中间件-显示Header：%v", ctx.Request().Header)
+    Config: nil,
+    Middleware: func(c lessgo.Context) error {
+        logs.Info("测试中间件-显示Header：%v", c.Request().Header)
         return nil
     },
 }.Reg()
@@ -148,10 +148,10 @@ import (
 
 func init() {
     lessgo.Root(
-        lessgo.Leaf("/websocket", home.WebSocketHandle, middleware.ShowHeaderWare),
+        lessgo.Leaf("/websocket", home.WebSocket, middleware.ShowHeader),
         lessgo.Branch("/home", "前台",
-            lessgo.Leaf("/index", home.IndexHandle, middleware.ShowHeaderWare),
-        ).Use(middleware.PrintWare),
+            lessgo.Leaf("/index", home.Index, middleware.ShowHeader),
+        ).Use(middleware.Print),
     )
 }
 ```

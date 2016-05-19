@@ -16,57 +16,63 @@ import (
 	"github.com/lessgo/lessgo/utils"
 )
 
-// 一旦注册，不可再更改
-type (
-	ApiMiddleware struct {
-		Name          string // 全局唯一
-		id            string
-		Desc          string
-		DefaultConfig interface{} // 默认配置(JSON格式)
-		defaultConfig string      // 默认配置的JSON字符串
-		canConfig     bool        // 是否可使用动态配置
-		Middleware    interface{} // MiddlewareFunc or func(configJSON string) MiddlewareFunc
-		inited        bool        // 标记是否已经初始化过
-	}
-	// 虚拟路由中中间件配置信息，用于获取中间件函数
-	MiddlewareConfig struct {
-		Name   string `json:"name"`   // 全局唯一
-		Config string `json:"config"` // JSON格式的配置（可选）
-	}
-	// 中间件接口
-	Middleware interface {
-		GetMiddlewareFunc(config string) MiddlewareFunc
-	}
-	// MiddlewareFunc defines a function to process middleware.
-	MiddlewareFunc func(HandlerFunc) HandlerFunc
-	// 支持配置的中间件
-	ConfMiddlewareFunc func(configJSON string) MiddlewareFunc
-)
-
-func (c ConfMiddlewareFunc) GetMiddlewareFunc(config string) MiddlewareFunc {
-	return c(config)
-}
-
-func (m MiddlewareFunc) GetMiddlewareFunc(_ string) MiddlewareFunc {
-	return m
-}
-
-// 获取中间件
-func (a *ApiMiddleware) GetMiddlewareFunc(config string) MiddlewareFunc {
-	if config == "" {
-		return a.Middleware.(Middleware).GetMiddlewareFunc(a.defaultConfig)
-	}
-	return a.Middleware.(Middleware).GetMiddlewareFunc(config)
+/*
+ * 中间件
+ * ApiMiddleware.Middleware 支持的处理函数类型:
+ * MiddlewareFunc
+ * func(HandlerFunc) HandlerFunc
+ * HandlerFunc
+ * func(Context) error
+ * ConfMiddlewareFunc
+ * func(confObject interface{}) MiddlewareFunc
+ */
+type ApiMiddleware struct {
+	Name       string // 全局唯一
+	Desc       string
+	Config     interface{} // 当前配置，若希望使用参数，则Config不能为nil，至少为对应类型的空值
+	Middleware interface{} // 处理函数，类型参考上面注释
+	id         string      // 允许不同id相同name的中间件注册，但在name末尾追加"(2)"
+	dynamic    bool        // 是否可使用运行时动态配置
+	configJSON string      // 若可动态配置，则存入当前配置的JSON字符串
+	inited     bool        // 标记是否已经初始化过
+	lock       sync.RWMutex
 }
 
 // 注册中间件
 func (a ApiMiddleware) Reg() *ApiMiddleware {
+	a.lock.Lock()
+	defer a.lock.Unlock()
 	return a.init()
 }
 
-// 是否可以配置
-func (a ApiMiddleware) CanConfig() bool {
-	return a.canConfig
+// 获取JSON字符串格式的中间件配置
+func (a *ApiMiddleware) ConfigJSON() string {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	return a.configJSON
+}
+
+// 设置默认配置，重置中间件
+func (a *ApiMiddleware) SetConfig(confObject interface{}) *ApiMiddleware {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	a.Config = confObject
+	a.inited = false
+	apiMiddlewareLock.Lock()
+	delete(apiMiddlewareMap, a.Name)
+	apiMiddlewareLock.Unlock()
+	return a.init()
+}
+
+// 返回中间件配置结构体
+func (a *ApiMiddleware) NewMiddlewareConfig() *MiddlewareConfig {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	return &MiddlewareConfig{
+		Name:          a.Name,
+		Config:        a.configJSON,
+		apiMiddleware: a,
+	}
 }
 
 // 初始化中间件，设置id并当Name为空时自动添加Name
@@ -75,23 +81,28 @@ func (a *ApiMiddleware) init() *ApiMiddleware {
 	if a.inited {
 		return getApiMiddleware(a.Name)
 	}
+	defer func() {
+		a.inited = true
+	}()
 
-	// 验证中间件处理函数类型
+	// 格式化验证中间件处理函数类型
 	switch m := a.Middleware.(type) {
 	case ConfMiddlewareFunc:
-		a.canConfig = true
-	case func(configJSON string) MiddlewareFunc:
-		a.canConfig = true
+	case func(config interface{}) MiddlewareFunc:
 		a.Middleware = ConfMiddlewareFunc(m)
 	default:
-		a.canConfig = false
 		a.Middleware = WrapMiddleware(m)
-		a.DefaultConfig = nil
+		a.Config = nil
 	}
 
-	if a.DefaultConfig != nil {
-		b, _ := json.Marshal(a.DefaultConfig)
-		a.defaultConfig = string(b)
+	a.dynamic = false
+	a.configJSON = ""
+	if a.Config != nil {
+		b, err := json.MarshalIndent(a.Config, "", "  ")
+		if err == nil {
+			a.dynamic = true
+			a.configJSON = string(b)
+		}
 	}
 
 	v := reflect.ValueOf(a.Middleware)
@@ -104,22 +115,115 @@ func (a *ApiMiddleware) init() *ApiMiddleware {
 		}
 	}
 
-	a.id = utils.MakeHash(a.Name + funcName + a.defaultConfig)
-
+	a.id = utils.MakeHash(a.Name + funcName)
 	if m := getApiMiddleware(a.Name); m != nil {
 		if m.id == a.id {
 			return m
 		} else {
 			a.Name += "(2)"
-			a.id = utils.MakeHash(a.Name + funcName + a.defaultConfig)
+			a.id = utils.MakeHash(a.Name + funcName)
 		}
 	}
-
-	a.inited = true
 
 	setApiMiddleware(a)
 
 	return a
+}
+
+// 获取中间件函数，
+// 支持动态配置的中间件可传入JSON字节流进行配置。
+func (a *ApiMiddleware) regetFunc(configJSONBytes []byte) (fn MiddlewareFunc, err error) {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	if a.dynamic && len(configJSONBytes) > 0 {
+		config := utils.NewObjectPtr(a.Config)
+		err = json.Unmarshal(configJSONBytes, config)
+		if err == nil {
+			return a.Middleware.(Middleware).getMiddlewareFunc(config), err
+		}
+		err = fmt.Errorf("Middleware \"%s\" uses initial config, because the type of param is error:\ngot format -> %s,\nwant format -> %s.",
+			a.Name, string(configJSONBytes), a.configJSON)
+	}
+	return a.Middleware.(Middleware).getMiddlewareFunc(a.Config), err
+}
+
+// 是否支持动态配置
+func (a *ApiMiddleware) getDynamic() bool {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	return a.dynamic
+}
+
+// 虚拟路由中中间件配置信息，用于获取中间件函数
+type MiddlewareConfig struct {
+	Name          string `json:"name"`   // 全局唯一
+	Config        string `json:"config"` // JSON格式的配置（可选）
+	apiMiddleware *ApiMiddleware
+	lock          sync.RWMutex
+}
+
+// 获取JSON字符串格式的中间件配置
+func (m *MiddlewareConfig) GetConfig() string {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.Config
+}
+
+// 以JSON字节流格式配置中间件
+func (m *MiddlewareConfig) SetConfig(configJSONBytes []byte) error {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	_, err := m.apiMiddleware.regetFunc(configJSONBytes)
+	if err == nil {
+		m.Config = string(configJSONBytes)
+	}
+	return err
+}
+
+// 检查是否支持动态配置
+func (m *MiddlewareConfig) CheckDynamic() bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	bol := m.apiMiddleware.getDynamic()
+	if !bol && len(m.Config) > 0 {
+		m.Config = ""
+	}
+	return bol
+}
+
+// 获取中间件操作函数
+func (m *MiddlewareConfig) middlewareFunc() MiddlewareFunc {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if m.apiMiddleware == nil {
+		m.apiMiddleware = getApiMiddleware(m.Name)
+	}
+	fn, err := m.apiMiddleware.regetFunc([]byte(m.Config))
+	if err != nil {
+		Logger().Error(err.Error())
+	}
+	return fn
+}
+
+type (
+	// 中间件接口
+	Middleware interface {
+		getMiddlewareFunc(confObject interface{}) MiddlewareFunc
+	}
+	// 支持配置的中间件处理函数，
+	// 若接收参数类型为字符串，且默认配置Config不为nil，则支持运行时动态配置。
+	ConfMiddlewareFunc func(confObject interface{}) MiddlewareFunc
+)
+
+// 不支持配置的中间件函数实现中间件接口
+func (m MiddlewareFunc) getMiddlewareFunc(_ interface{}) MiddlewareFunc {
+	return m
+}
+
+// 支持配置的中间件处理函数实现中间件接口，
+// 若接收参数类型为字符串，且默认配置Config不为nil，则支持运行时动态配置。
+func (c ConfMiddlewareFunc) getMiddlewareFunc(confObject interface{}) MiddlewareFunc {
+	return c(confObject)
 }
 
 var (
@@ -133,25 +237,25 @@ func getApiMiddleware(name string) *ApiMiddleware {
 	return apiMiddlewareMap[name]
 }
 
-func setApiMiddleware(vh *ApiMiddleware) {
+func setApiMiddleware(a *ApiMiddleware) {
 	apiMiddlewareLock.Lock()
 	defer apiMiddlewareLock.Unlock()
-	apiMiddlewareMap[vh.Name] = vh
-	for i, vh2 := range DefLessgo.apiMiddlewares {
-		if vh.Name < vh2.Name {
+	apiMiddlewareMap[a.Name] = a
+	for i, a2 := range DefLessgo.apiMiddlewares {
+		if a.Name < a2.Name {
 			list := make([]*ApiMiddleware, len(DefLessgo.apiMiddlewares)+1)
 			copy(list, DefLessgo.apiMiddlewares[:i])
-			list[i] = vh
+			list[i] = a
 			copy(list[i+1:], DefLessgo.apiMiddlewares[i:])
 			DefLessgo.apiMiddlewares = list
 			return
 		}
 	}
-	DefLessgo.apiMiddlewares = append(DefLessgo.apiMiddlewares, vh)
+	DefLessgo.apiMiddlewares = append(DefLessgo.apiMiddlewares, a)
 }
 
 // 检查中间件是否存在
-func isExistMiddlewares(middlewareConfigs ...MiddlewareConfig) error {
+func isExistMiddlewares(middlewareConfigs ...*MiddlewareConfig) error {
 	var errstring string
 	for _, m := range middlewareConfigs {
 		_, ok := apiMiddlewareMap[m.Name]
@@ -166,10 +270,10 @@ func isExistMiddlewares(middlewareConfigs ...MiddlewareConfig) error {
 }
 
 // 根据中间件配置生成中间件
-func getMiddlewareFuncs(configs []MiddlewareConfig) []MiddlewareFunc {
+func getMiddlewareFuncs(configs []*MiddlewareConfig) []MiddlewareFunc {
 	mws := make([]MiddlewareFunc, len(configs))
 	for i, mw := range configs {
-		mws[i] = apiMiddlewareMap[mw.Name].GetMiddlewareFunc(mw.Config)
+		mws[i] = mw.middlewareFunc()
 	}
 	return mws
 }
@@ -199,7 +303,7 @@ func init() {
 	(&ApiMiddleware{
 		Name: "捕获运行时恐慌",
 		Desc: "Recover returns a middleware which recovers from panics anywhere in the chain and handles the control to the centralized HTTPErrorHandler.",
-		DefaultConfig: RecoverConfig{
+		Config: RecoverConfig{
 			StackSize:         4 << 10, // 4 KB
 			DisableStackAll:   false,
 			DisablePrintStack: false,
@@ -215,71 +319,65 @@ func init() {
 
 	// 系统预设中间件
 	PreUse(
-		MiddlewareConfig{Name: "检查服务器是否启用"},
-		MiddlewareConfig{Name: "检查是否为访问主页"},
-		MiddlewareConfig{Name: "系统运行日志打印"},
-		MiddlewareConfig{Name: "捕获运行时恐慌"},
-		MiddlewareConfig{Name: "设置允许跨域"},
+		&MiddlewareConfig{Name: "检查服务器是否启用"},
+		&MiddlewareConfig{Name: "检查是否为访问主页"},
+		&MiddlewareConfig{Name: "系统运行日志打印"},
+		&MiddlewareConfig{Name: "捕获运行时恐慌"},
+		&MiddlewareConfig{Name: "设置允许跨域"},
 	)
 }
 
 // 检查服务器是否启用
-func CheckServer(config string) MiddlewareFunc {
-	return func(next HandlerFunc) HandlerFunc {
-		return func(c Context) error {
-			if !ServerEnable() {
-				return c.NoContent(http.StatusServiceUnavailable)
-			}
-			return next(c)
+func CheckServer(next HandlerFunc) HandlerFunc {
+	return func(c Context) error {
+		if !ServerEnable() {
+			return c.NoContent(http.StatusServiceUnavailable)
 		}
+		return next(c)
 	}
 }
 
 // 检查是否为访问主页
-func CheckHome(config string) MiddlewareFunc {
-	return func(next HandlerFunc) HandlerFunc {
-		return func(c Context) error {
-			if c.Request().URL.Path == "/" {
-				c.Request().URL.Path = GetHome()
-			}
-			return next(c)
+func CheckHome(next HandlerFunc) HandlerFunc {
+	return func(c Context) error {
+		if c.Request().URL.Path == "/" {
+			c.Request().URL.Path = GetHome()
 		}
+		return next(c)
 	}
 }
 
 // RequestLogger returns a middleware that logs HTTP requests.
-func RequestLogger(config string) MiddlewareFunc {
-	return func(next HandlerFunc) HandlerFunc {
-		return func(c Context) (err error) {
-			req := c.Request()
-			res := c.Response()
+func RequestLogger(next HandlerFunc) HandlerFunc {
+	return func(c Context) (err error) {
+		req := c.Request()
+		res := c.Response()
 
-			start := time.Now()
-			if err := next(c); err != nil {
-				c.Error(err)
-			}
-			stop := time.Now()
-			method := req.Method
-			path := req.URL.Path
-			if path == "" {
-				path = "/"
-			}
-			size := res.Size()
-
-			n := res.Status()
-			code := color.Green(n)
-			switch {
-			case n >= 500:
-				code = color.Red(n)
-			case n >= 400:
-				code = color.Yellow(n)
-			case n >= 300:
-				code = color.Cyan(n)
-			}
-
-			logs.Debug("%s | %s | %s | %s | %s | %d", req.RealRemoteAddr(), method, path, code, stop.Sub(start), size)
-			return nil
+		start := time.Now()
+		if err := next(c); err != nil {
+			c.Error(err)
 		}
+		stop := time.Now()
+		method := req.Method
+		path := req.URL.Path
+		if path == "" {
+			path = "/"
+		}
+		size := res.Size()
+
+		n := res.Status()
+		code := color.Green(n)
+		switch {
+		case n >= 500:
+			code = color.Red(n)
+		case n >= 400:
+			code = color.Yellow(n)
+		case n >= 300:
+			code = color.Cyan(n)
+		}
+
+		logs.Debug("%s | %s | %s | %s | %s | %d", req.RealRemoteAddr(), method, path, code, stop.Sub(start), size)
+		return nil
 	}
 }
 
@@ -303,10 +401,8 @@ type (
 
 // RecoverWithConfig returns a recover middleware from config.
 // See `Recover()`.
-func Recover(configJSON string) MiddlewareFunc {
-	config := RecoverConfig{}
-	json.Unmarshal([]byte(configJSON), &config)
-
+func Recover(confObject interface{}) MiddlewareFunc {
+	config := confObject.(RecoverConfig)
 	// Defaults
 	if config.StackSize == 0 {
 		config.StackSize = 4 << 10
@@ -337,15 +433,14 @@ func Recover(configJSON string) MiddlewareFunc {
 }
 
 // 设置允许跨域
-func CrossDomain(config string) MiddlewareFunc {
-	return WrapMiddleware(func(c Context) error {
-		if AppConfig.CrossDomain {
-			c.Response().Header().Set("Access-Control-Allow-Origin", "*")
-		}
-		return nil
-	})
+func CrossDomain(c Context) error {
+	if AppConfig.CrossDomain {
+		c.Response().Header().Set("Access-Control-Allow-Origin", "*")
+	}
+	return nil
 }
 
+// 过滤前端模板，不允许直接访问
 func filterTemplate() MiddlewareFunc {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c Context) (err error) {
@@ -358,18 +453,17 @@ func filterTemplate() MiddlewareFunc {
 	}
 }
 
-func autoHTMLSuffix() MiddlewareFunc {
-	return func(next HandlerFunc) HandlerFunc {
-		return func(c Context) (err error) {
-			p := c.Request().URL.Path
-			if p[len(p)-1] != '/' {
-				ext := path.Ext(p)
-				if ext == "" || ext[0] != '.' {
-					c.Request().URL.Path = strings.TrimSuffix(p, ext) + STATIC_HTML_EXT + ext
-					c.ParamValues()[0] += STATIC_HTML_EXT
-				}
+// 静态路由时智能追加".html"后缀
+func autoHTMLSuffix(next HandlerFunc) HandlerFunc {
+	return func(c Context) (err error) {
+		p := c.Request().URL.Path
+		if p[len(p)-1] != '/' {
+			ext := path.Ext(p)
+			if ext == "" || ext[0] != '.' {
+				c.Request().URL.Path = strings.TrimSuffix(p, ext) + STATIC_HTML_EXT + ext
+				c.ParamValues()[0] += STATIC_HTML_EXT
 			}
-			return next(c)
 		}
+		return next(c)
 	}
 }

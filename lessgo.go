@@ -38,10 +38,10 @@ type (
 		apiMiddlewares []*ApiMiddleware
 
 		// 路由执行前后的中间件登记
-		before []MiddlewareConfig //路由执行前中间件
-		after  []MiddlewareConfig //路由执行后中间件
-		prefix []MiddlewareConfig //第一批执行的中间件
-		suffix []MiddlewareConfig //最后一批执行的中间件
+		before []*MiddlewareConfig //路由执行前中间件
+		after  []*MiddlewareConfig //路由执行后中间件
+		prefix []*MiddlewareConfig //第一批执行的中间件
+		suffix []*MiddlewareConfig //最后一批执行的中间件
 
 		// 用于构建最终真实路由的虚拟路由；
 		// 初始值为源码中定义的路由，之后追加配置中定义的路由；
@@ -238,22 +238,22 @@ func ApiHandlerList() []*ApiHandler {
 }
 
 // 在路由执行位置之前紧邻插入中间件队列
-func BeforeUse(middleware ...MiddlewareConfig) {
+func BeforeUse(middleware ...*MiddlewareConfig) {
 	DefLessgo.before = append(DefLessgo.before, middleware...)
 }
 
 // 在路由执行位置之后紧邻插入中间件队列
-func AfterUse(middleware ...MiddlewareConfig) {
+func AfterUse(middleware ...*MiddlewareConfig) {
 	DefLessgo.after = append(middleware, DefLessgo.after...)
 }
 
 // 第一批执行的中间件
-func PreUse(middleware ...MiddlewareConfig) {
+func PreUse(middleware ...*MiddlewareConfig) {
 	DefLessgo.prefix = append(DefLessgo.prefix, middleware...)
 }
 
 // 最后一批执行的中间件
-func SufUse(middleware ...MiddlewareConfig) {
+func SufUse(middleware ...*MiddlewareConfig) {
 	DefLessgo.suffix = append(middleware, DefLessgo.suffix...)
 }
 
@@ -291,13 +291,10 @@ func Branch(prefix, desc string, nodes ...*VirtRouter) *VirtRouter {
 // 配置路由操作(必须在init()中调用)
 func Leaf(prefix string, apiHandler *ApiHandler, middlewares ...*ApiMiddleware) *VirtRouter {
 	prefix = cleanPrefix(prefix)
-	ms := make([]MiddlewareConfig, len(middlewares))
+	ms := make([]*MiddlewareConfig, len(middlewares))
 	for i, m := range middlewares {
 		m.init()
-		ms[i] = MiddlewareConfig{
-			Name:   m.Name,
-			Config: m.defaultConfig,
-		}
+		ms[i] = m.NewMiddlewareConfig()
 	}
 	vr := &VirtRouter{
 		Id:          uuid.New().String(),
