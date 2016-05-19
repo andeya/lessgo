@@ -74,6 +74,7 @@ func main() {
 ```
 import (
     . "github.com/lessgo/lessgo"
+    "github.com/lessgo/demo/sysmodel/admin"
 )
 
 var IndexHandle = ApiHandler{
@@ -101,11 +102,24 @@ var IndexHandle = ApiHandler{
             map[string]interface{}{
                 "name":       ctx.FormValue("user"),
                 "password":   ctx.FormValue("password"),
-                "repeatfunc": repeatfunc,
+                "repeatfunc": admin.Login.Repeatfunc,
             },
         )
     },
 }.Reg()
+```
+
+- 一个简单的数据模型
+```
+import (
+    "strings"
+)
+type login struct{}
+var Login = login{}
+
+func (_ login) Repeatfunc(s string, count int) string {
+    return strings.Repeat(s, count)
+}
 ```
 
 - 一个简单的中间件
@@ -152,7 +166,7 @@ func init() {
 ![Lessgo Web Framework](https://github.com/lessgo/doc/raw/master/img/LessgoWebFramework.jpg)
 
 
-##项目目录组织
+##项目目录结构
 
 ```
 ─Project 项目开发目录
