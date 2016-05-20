@@ -29,7 +29,7 @@ import (
 type ApiMiddleware struct {
 	Name       string // 全局唯一
 	Desc       string
-	Config     interface{} // 当前配置，若希望使用参数，则Config不能为nil，至少为对应类型的空值
+	Config     interface{} // 初始配置，若希望使用参数，则Config不能为nil，至少为对应类型的空值
 	Middleware interface{} // 处理函数，类型参考上面注释
 	id         string      // 允许不同id相同name的中间件注册，但在name末尾追加"(2)"
 	dynamic    bool        // 是否可使用运行时动态配置

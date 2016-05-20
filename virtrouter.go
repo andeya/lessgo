@@ -30,31 +30,6 @@ type VirtRouter struct {
 	apiHandler *ApiHandler     `xorm:"-"` // 操作
 }
 
-type VirtRouterLock struct {
-	Md5 string `json:"Md5" xorm:"not null VARCHAR(500)"`
-}
-
-type virtRouterSlice []*VirtRouter
-
-func (vs virtRouterSlice) Len() int {
-	return len(vs)
-}
-
-func (vs virtRouterSlice) Less(i, j int) bool {
-	return vs[i].path <= vs[j].path
-}
-
-func (vs virtRouterSlice) Swap(i, j int) {
-	vs[i], vs[j] = vs[j], vs[i]
-}
-
-func (v *VirtRouter) Sort() {
-	sort.Sort(v.children)
-	for _, child := range v.children {
-		sort.Sort(child.children)
-	}
-}
-
 // 虚拟路由节点类型
 const (
 	ROOT int = iota
@@ -73,13 +48,387 @@ var (
 	notDynamicError = fmt.Errorf("The specified node is not dynamic, and therefore can not be modified.")
 )
 
+// 获取操作的请求方法列表（已排序）
+func (vr *VirtRouter) Methods() []string {
+	return vr.apiHandler.Methods()
+}
+
+// 操作的描述
+func (vr *VirtRouter) Description() string {
+	return vr.apiHandler.Desc
+}
+
+// 操作的参数说明列表的副本
+func (vr *VirtRouter) Params() []Param {
+	return vr.apiHandler.Params
+}
+
+// 子孙虚拟路由节点列表
+func (vr *VirtRouter) Progeny() []*VirtRouter {
+	vrs := []*VirtRouter{vr}
+	for _, novre := range vr.children {
+		vrs = append(vrs, novre.Progeny()...)
+	}
+	return vrs
+}
+
+// 虚拟路由节点path
+func (vr *VirtRouter) Path() string {
+	return vr.path
+}
+
+// 设置虚拟路由节点url前缀
+func (vr *VirtRouter) SetPrefix(prefix string) (err error) {
+	if !vr.Dynamic {
+		return notDynamicError
+	}
+	if lessgodb == nil {
+		goto label
+	}
+	_, err = lessgodb.Where("id=?", vr.Id).Cols("prefix").Update(&VirtRouter{Prefix: prefix})
+	if err != nil {
+		return
+	}
+label:
+	vr.Prefix = prefix
+	return
+}
+
+// 操作的参数匹配模式
+func (vr *VirtRouter) Suffix() string {
+	return vr.apiHandler.Suffix()
+}
+
+// 启用/禁用虚拟路由节点
+func (vr *VirtRouter) SetEnable(able bool) (err error) {
+	if !vr.Dynamic {
+		return notDynamicError
+	}
+	if lessgodb == nil {
+		goto label
+	}
+	_, err = lessgodb.Where("id=?", vr.Id).Cols("enable").Update(&VirtRouter{Enable: able})
+	if err != nil {
+		return
+	}
+label:
+	vr.Enable = able
+	return
+}
+
+// 配置中间件（仅在源码中使用）
+func (vr *VirtRouter) Use(middlewares ...*ApiMiddleware) *VirtRouter {
+	if vr.Dynamic {
+		Logger().Error("Specified node is dynamic, please use ResetUse(middlewares []string) (err error).")
+		return vr
+	}
+	l := len(middlewares)
+	if l == 0 {
+		return vr
+	}
+	_l := len(vr.Middlewares)
+	ms := make([]*MiddlewareConfig, _l+l)
+	copy(ms, vr.Middlewares)
+	for i, m := range middlewares {
+		m.init()
+		ms[i+_l] = m.NewMiddlewareConfig()
+	}
+	vr.Middlewares = ms
+	return vr
+}
+
+// 重置中间件
+func (vr *VirtRouter) ResetUse(middlewares []*MiddlewareConfig) (err error) {
+	if !vr.Dynamic {
+		return notDynamicError
+	}
+	if middlewares == nil {
+		middlewares = []*MiddlewareConfig{}
+	}
+	if lessgodb == nil {
+		goto label
+	}
+	_, err = lessgodb.Where("id=?", vr.Id).Cols("middlewares").Update(&VirtRouter{Middlewares: middlewares})
+	if err != nil {
+		return
+	}
+label:
+	vr.Middlewares = middlewares
+	return
+}
+
+// 为节点更换操作
+func (vr *VirtRouter) SetApiHandler(hid string) error {
+	if !vr.Dynamic {
+		return notDynamicError
+	}
+	vh := getApiHandler(hid)
+	if vh == nil {
+		return fmt.Errorf("Specified ApiHandler does not exist.")
+	}
+	vr.Hid = hid
+	vr.apiHandler = vh
+	vr.reset()
+	return nil
+}
+
+// 虚拟路由节点的父节点
+func (vr *VirtRouter) Parent() *VirtRouter {
+	return vr.parent
+}
+
+// 所有子节点的列表副本
+func (vr *VirtRouter) Children() []*VirtRouter {
+	cr := make([]*VirtRouter, len(vr.children))
+	copy(cr, vr.children)
+	return cr
+}
+
+// 添加子节点
+func (vr *VirtRouter) AddChild(virtRouter *VirtRouter) (err error) {
+	if !virtRouter.Dynamic {
+		return notDynamicError
+	}
+	return vr.addChild(virtRouter)
+}
+
+// 删除子节点
+func (vr *VirtRouter) DelChild(virtRouter *VirtRouter) (err error) {
+	if !virtRouter.Dynamic {
+		return notDynamicError
+	}
+	return vr.delChild(virtRouter)
+}
+
+// 删除自身
+func (vr *VirtRouter) Delete() (err error) {
+	if !vr.Dynamic {
+		return notDynamicError
+	}
+	return vr.delete()
+}
+
+// 添加子节点
+func (vr *VirtRouter) addChild(virtRouter *VirtRouter) (err error) {
+	if virtRouter == nil {
+		return fmt.Errorf("Can not add an empty node.")
+	}
+	if virtRouter.Type == ROOT {
+		return fmt.Errorf("Can not add an root node.")
+	}
+	virtRouter.Pid = vr.Id
+	virtRouter.parent = vr
+	if lessgodb == nil {
+		goto label
+	}
+	_, err = lessgodb.Insert(virtRouter)
+	if err != nil {
+		return
+	}
+label:
+	vr.children = append(vr.children, virtRouter)
+	virtRouter.reset()
+	addVirtRouter(virtRouter)
+	return nil
+}
+
+// 删除自身
+func (vr *VirtRouter) delete() error {
+	if vr.parent != nil {
+		vr.parent.delChild(vr)
+		return nil
+	}
+	return fmt.Errorf("Can not delete the root node.")
+}
+
+// 删除子节点
+func (vr *VirtRouter) delChild(virtRouter *VirtRouter) (err error) {
+	if virtRouter == nil {
+		return fmt.Errorf("Can not delete an empty node.")
+	}
+	var session *xorm.Session
+	nodes := virtRouter.Progeny()
+	if lessgodb == nil {
+		goto label
+	}
+	session = lessgodb.NewSession()
+	defer session.Close()
+	err = session.Begin()
+	if err != nil {
+		return err
+	}
+	for _, v := range nodes {
+		_, err = session.Delete(v)
+		if err != nil {
+			session.Rollback()
+			return
+		}
+	}
+	err = session.Commit()
+	if err != nil {
+		return
+	}
+label:
+	var exist bool
+	for i, child := range vr.children {
+		if child == virtRouter {
+			vr.children = append(vr.children[:i], vr.children[i+1:]...)
+			exist = true
+			break
+		}
+	}
+	if exist {
+		for _, node := range nodes {
+			delVirtRouter(node)
+		}
+		return nil
+	}
+	return fmt.Errorf("node %v does not have child node: %v.", vr.Description(), virtRouter.Description())
+}
+
+// 格式化路由
+func (vr *VirtRouter) reset() {
+	vr.resetPath()
+	if vr.parent != nil {
+		sort.Sort(vr.parent.children)
+	}
+	vr.sort()
+}
+
+// 根据父节点重置虚拟路由节点自身及其子节点path
+func (vr *VirtRouter) resetPath() {
+	var parentPath = "/"
+	if vr.parent != nil {
+		parentPath = vr.parent.path
+	}
+	var suffix string
+	if vr.apiHandler != nil {
+		suffix = vr.apiHandler.Suffix()
+	}
+	vr.path = pathpkg.Join("/", parentPath, vr.Prefix, suffix)
+	for _, child := range vr.children {
+		child.resetPath()
+	}
+}
+
+func (v *VirtRouter) sort() {
+	sort.Sort(v.children)
+	for _, child := range v.children {
+		child.sort()
+	}
+}
+
+// 注册真实路由
+func (vr *VirtRouter) route(group *Group) {
+	if !vr.Enable {
+		return
+	}
+	mws := getMiddlewareFuncs(vr.Middlewares)
+	prefix := pathpkg.Join("/", vr.Prefix, vr.apiHandler.Suffix())
+	prefix2 := pathpkg.Join("/", strings.TrimSuffix(vr.Prefix, "/index"), vr.apiHandler.Suffix())
+	hasIndex := prefix2 != prefix
+	switch vr.Type {
+	case GROUP:
+		var childGroup *Group
+		if hasIndex {
+			// "/index"分组会被默认为"/"
+			childGroup = group.Group(prefix2, mws...)
+		} else {
+			childGroup = group.Group(prefix, mws...)
+		}
+		for _, child := range vr.Children() {
+			child.route(childGroup)
+		}
+	case HANDLER:
+		if hasIndex {
+			group.Match(vr.Methods(), prefix2, vr.apiHandler.Handler, mws...)
+		}
+		group.Match(vr.Methods(), prefix, vr.apiHandler.Handler, mws...)
+	}
+}
+
+type VirtRouterLock struct {
+	Md5 string `json:"Md5" xorm:"not null VARCHAR(500)"`
+}
+
+type virtRouterSlice []*VirtRouter
+
+func (vs virtRouterSlice) Len() int {
+	return len(vs)
+}
+
+func (vs virtRouterSlice) Less(i, j int) bool {
+	return vs[i].path <= vs[j].path
+}
+
+func (vs virtRouterSlice) Swap(i, j int) {
+	vs[i], vs[j] = vs[j], vs[i]
+}
+
+// 快速返回指定id对于的虚拟路由节点
+func GetVirtRouter(id string) (*VirtRouter, bool) {
+	virtRouterLock.RLock()
+	defer virtRouterLock.RUnlock()
+	vr, ok := virtRouterMap[id]
+	return vr, ok
+}
+
+// 创建虚拟路由动态分组
+func NewGroupVirtRouter(prefix, desc string) *VirtRouter {
+	prefix = cleanPrefix(prefix)
+	ah := NilApiHandler(desc)
+	return &VirtRouter{
+		Id:          uuid.New().String(),
+		Type:        GROUP,
+		Prefix:      prefix,
+		Enable:      true,
+		Dynamic:     true,
+		apiHandler:  ah,
+		Middlewares: []*MiddlewareConfig{},
+		Hid:         ah.id,
+	}
+}
+
+// 创建虚拟路由动态操作
+func NewHandlerVirtRouter(prefix, hid string, middlewares ...*MiddlewareConfig) (*VirtRouter, error) {
+	prefix = strings.Split(prefix, "/:")[0]
+	vr := &VirtRouter{
+		Id:          uuid.New().String(),
+		Type:        HANDLER,
+		Prefix:      prefix,
+		Enable:      true,
+		Dynamic:     true,
+		Middlewares: middlewares,
+		Hid:         hid,
+	}
+	err := vr.SetApiHandler(hid)
+	return vr, err
+}
+
+// 创建虚拟路由根节点
+func newRootVirtRouter() *VirtRouter {
+	ah := NilApiHandler("root")
+	root := &VirtRouter{
+		Id:          uuid.New().String(),
+		Type:        ROOT,
+		Prefix:      "/",
+		Dynamic:     false,
+		Enable:      true,
+		apiHandler:  ah,
+		Middlewares: []*MiddlewareConfig{},
+		Hid:         ah.id,
+	}
+	root.reset()
+	return root
+}
+
 // 从数据库初始化虚拟路由
 func initVirtRouterFromDB() {
 	defer func() {
 		if p := recover(); p != nil {
 			Logger().Warn("Can only use source code routing: %v.", p)
 		}
-		DefLessgo.virtRouter.Sort()
+		DefLessgo.virtRouter.sort()
 	}()
 	lessgodb = DefaultDB()
 	var err error
@@ -253,358 +602,7 @@ func buildVirtRouter(vrs []*VirtRouter) *VirtRouter {
 	return root
 }
 
-// 创建虚拟路由根节点
-func newRootVirtRouter() *VirtRouter {
-	ah := NilApiHandler("root")
-	root := &VirtRouter{
-		Id:          uuid.New().String(),
-		Type:        ROOT,
-		Prefix:      "/",
-		Dynamic:     false,
-		Enable:      true,
-		apiHandler:  ah,
-		Middlewares: []*MiddlewareConfig{},
-		Hid:         ah.id,
-	}
-	root.reset()
-	return root
-}
-
-// 创建虚拟路由动态分组
-func NewGroupVirtRouter(prefix, desc string) *VirtRouter {
-	prefix = cleanPrefix(prefix)
-	ah := NilApiHandler(desc)
-	return &VirtRouter{
-		Id:          uuid.New().String(),
-		Type:        GROUP,
-		Prefix:      prefix,
-		Enable:      true,
-		Dynamic:     true,
-		apiHandler:  ah,
-		Middlewares: []*MiddlewareConfig{},
-		Hid:         ah.id,
-	}
-}
-
-// 创建虚拟路由动态操作
-func NewHandlerVirtRouter(prefix, hid string, middlewares ...*MiddlewareConfig) (*VirtRouter, error) {
-	prefix = strings.Split(prefix, "/:")[0]
-	vr := &VirtRouter{
-		Id:          uuid.New().String(),
-		Type:        HANDLER,
-		Prefix:      prefix,
-		Enable:      true,
-		Dynamic:     true,
-		Middlewares: middlewares,
-		Hid:         hid,
-	}
-	err := vr.SetApiHandler(hid)
-	return vr, err
-}
-
-// 快速返回指定id对于的虚拟路由节点
-func GetVirtRouter(id string) (*VirtRouter, bool) {
-	virtRouterLock.RLock()
-	defer virtRouterLock.RUnlock()
-	vr, ok := virtRouterMap[id]
-	return vr, ok
-}
-
-// 获取操作的请求方法列表（已排序）
-func (vr *VirtRouter) Methods() []string {
-	return vr.apiHandler.Methods()
-}
-
-// 操作的描述
-func (vr *VirtRouter) Description() string {
-	return vr.apiHandler.Desc
-}
-
-// 操作的参数说明列表的副本
-func (vr *VirtRouter) Params() []Param {
-	return vr.apiHandler.Params
-}
-
-// // 操作接受的响应内容类型
-// func (vr *VirtRouter) Produces() []string {
-// 	return vr.apiHandler.Produces
-// }
-
-// 子孙虚拟路由节点列表
-func (vr *VirtRouter) Progeny() []*VirtRouter {
-	vrs := []*VirtRouter{vr}
-	for _, novre := range vr.children {
-		vrs = append(vrs, novre.Progeny()...)
-	}
-	return vrs
-}
-
-// 虚拟路由节点path
-func (vr *VirtRouter) Path() string {
-	return vr.path
-}
-
-// 设置虚拟路由节点url前缀
-func (vr *VirtRouter) SetPrefix(prefix string) (err error) {
-	if !vr.Dynamic {
-		return notDynamicError
-	}
-	if lessgodb == nil {
-		goto label
-	}
-	_, err = lessgodb.Where("id=?", vr.Id).Cols("prefix").Update(&VirtRouter{Prefix: prefix})
-	if err != nil {
-		return
-	}
-label:
-	vr.Prefix = prefix
-	return
-}
-
-func (vr *VirtRouter) Suffix() string {
-	return vr.apiHandler.Suffix()
-}
-
-// 启用/禁用虚拟路由节点
-func (vr *VirtRouter) SetEnable(able bool) (err error) {
-	if !vr.Dynamic {
-		return notDynamicError
-	}
-	if lessgodb == nil {
-		goto label
-	}
-	_, err = lessgodb.Where("id=?", vr.Id).Cols("enable").Update(&VirtRouter{Enable: able})
-	if err != nil {
-		return
-	}
-label:
-	vr.Enable = able
-	return
-}
-
-// 配置中间件（仅在源码中使用）
-func (vr *VirtRouter) Use(middlewares ...*ApiMiddleware) *VirtRouter {
-	if vr.Dynamic {
-		Logger().Error("Specified node is dynamic, please use ResetUse(middlewares []string) (err error).")
-		return vr
-	}
-	l := len(middlewares)
-	if l == 0 {
-		return vr
-	}
-	_l := len(vr.Middlewares)
-	ms := make([]*MiddlewareConfig, _l+l)
-	copy(ms, vr.Middlewares)
-	for i, m := range middlewares {
-		m.init()
-		ms[i+_l] = m.NewMiddlewareConfig()
-	}
-	vr.Middlewares = ms
-	return vr
-}
-
-// 重置中间件
-func (vr *VirtRouter) ResetUse(middlewares []*MiddlewareConfig) (err error) {
-	if !vr.Dynamic {
-		return notDynamicError
-	}
-	if middlewares == nil {
-		middlewares = []*MiddlewareConfig{}
-	}
-	if lessgodb == nil {
-		goto label
-	}
-	_, err = lessgodb.Where("id=?", vr.Id).Cols("middlewares").Update(&VirtRouter{Middlewares: middlewares})
-	if err != nil {
-		return
-	}
-label:
-	vr.Middlewares = middlewares
-	return
-}
-
-// 为节点更换操作
-func (vr *VirtRouter) SetApiHandler(hid string) error {
-	if !vr.Dynamic {
-		return notDynamicError
-	}
-	vh := getApiHandler(hid)
-	if vh == nil {
-		return fmt.Errorf("Specified ApiHandler does not exist.")
-	}
-	vr.Hid = hid
-	vr.apiHandler = vh
-	vr.reset()
-	return nil
-}
-
-// 所有子节点的列表副本
-func (vr *VirtRouter) Children() []*VirtRouter {
-	cr := make([]*VirtRouter, len(vr.children))
-	copy(cr, vr.children)
-	return cr
-}
-
-// 添加子节点
-func (vr *VirtRouter) AddChild(virtRouter *VirtRouter) (err error) {
-	if !virtRouter.Dynamic {
-		return notDynamicError
-	}
-	return vr.addChild(virtRouter)
-}
-
-func (vr *VirtRouter) addChild(virtRouter *VirtRouter) (err error) {
-	if virtRouter == nil {
-		return fmt.Errorf("Can not add an empty node.")
-	}
-	if virtRouter.Type == ROOT {
-		return fmt.Errorf("Can not add an root node.")
-	}
-	virtRouter.Pid = vr.Id
-	virtRouter.parent = vr
-	if lessgodb == nil {
-		goto label
-	}
-	_, err = lessgodb.Insert(virtRouter)
-	if err != nil {
-		return
-	}
-label:
-	vr.children = append(vr.children, virtRouter)
-	virtRouter.reset()
-	addVirtRouter(virtRouter)
-	return nil
-}
-
-// 删除子节点
-func (vr *VirtRouter) DelChild(virtRouter *VirtRouter) (err error) {
-	if !virtRouter.Dynamic {
-		return notDynamicError
-	}
-	return vr.delChild(virtRouter)
-}
-
-func (vr *VirtRouter) delChild(virtRouter *VirtRouter) (err error) {
-	if virtRouter == nil {
-		return fmt.Errorf("Can not delete an empty node.")
-	}
-	var session *xorm.Session
-	nodes := virtRouter.Progeny()
-	if lessgodb == nil {
-		goto label
-	}
-	session = lessgodb.NewSession()
-	defer session.Close()
-	err = session.Begin()
-	if err != nil {
-		return err
-	}
-	for _, v := range nodes {
-		_, err = session.Delete(v)
-		if err != nil {
-			session.Rollback()
-			return
-		}
-	}
-	err = session.Commit()
-	if err != nil {
-		return
-	}
-label:
-	var exist bool
-	for i, child := range vr.children {
-		if child == virtRouter {
-			vr.children = append(vr.children[:i], vr.children[i+1:]...)
-			exist = true
-			break
-		}
-	}
-	if exist {
-		for _, node := range nodes {
-			delVirtRouter(node)
-		}
-		return nil
-	}
-	return fmt.Errorf("node %v does not have child node: %v.", vr.Description(), virtRouter.Description())
-}
-
-// 虚拟路由节点的父节点
-func (vr *VirtRouter) Parent() *VirtRouter {
-	return vr.parent
-}
-
-// 删除自身
-func (vr *VirtRouter) Delete() (err error) {
-	if !vr.Dynamic {
-		return notDynamicError
-	}
-	return vr.delete()
-}
-
-func (vr *VirtRouter) delete() error {
-	if vr.parent != nil {
-		vr.parent.delChild(vr)
-		return nil
-	}
-	return fmt.Errorf("Can not delete the root node.")
-}
-
-// 格式化路由
-func (vr *VirtRouter) reset() {
-	vr.resetPath()
-	vr.Sort()
-	if vr.parent != nil {
-		sort.Sort(vr.parent.children)
-	}
-}
-
-// 根据父节点重置虚拟路由节点自身及其子节点path
-func (vr *VirtRouter) resetPath() {
-	var parentPath = "/"
-	if vr.parent != nil {
-		parentPath = vr.parent.path
-	}
-	var suffix string
-	if vr.apiHandler != nil {
-		suffix = vr.apiHandler.Suffix()
-	}
-	vr.path = pathpkg.Join("/", parentPath, vr.Prefix, suffix)
-	for _, child := range vr.children {
-		child.reset()
-	}
-}
-
-/*
- * 注册真实路由
- */
-func (vr *VirtRouter) route(group *Group) {
-	if !vr.Enable {
-		return
-	}
-	mws := getMiddlewareFuncs(vr.Middlewares)
-	prefix := pathpkg.Join("/", vr.Prefix, vr.apiHandler.Suffix())
-	prefix2 := pathpkg.Join("/", strings.TrimSuffix(vr.Prefix, "/index"), vr.apiHandler.Suffix())
-	hasIndex := prefix2 != prefix
-	switch vr.Type {
-	case GROUP:
-		var childGroup *Group
-		if hasIndex {
-			// "/index"分组会被默认为"/"
-			childGroup = group.Group(prefix2, mws...)
-		} else {
-			childGroup = group.Group(prefix, mws...)
-		}
-		for _, child := range vr.Children() {
-			child.route(childGroup)
-		}
-	case HANDLER:
-		if hasIndex {
-			group.Match(vr.Methods(), prefix2, vr.apiHandler.Handler, mws...)
-		}
-		group.Match(vr.Methods(), prefix, vr.apiHandler.Handler, mws...)
-	}
-}
-
+// 注册路由
 func registerVirtRouter() {
 	if err := isExistMiddlewares(DefLessgo.before...); err != nil {
 		Logger().Error("Create/Recreate the router is faulty: %v", err)
@@ -640,6 +638,7 @@ func registerVirtRouter() {
 	}
 }
 
+// 重置路由节点
 func resetVirtRouter(oldId string, vr *VirtRouter) {
 	virtRouterLock.Lock()
 	defer virtRouterLock.Unlock()
@@ -647,6 +646,7 @@ func resetVirtRouter(oldId string, vr *VirtRouter) {
 	virtRouterMap[vr.Id] = vr
 }
 
+// 添加路由节点
 func addVirtRouter(vr *VirtRouter) bool {
 	virtRouterLock.RLock()
 	defer virtRouterLock.RUnlock()
@@ -657,12 +657,14 @@ func addVirtRouter(vr *VirtRouter) bool {
 	return true
 }
 
+// 删除路由节点
 func delVirtRouter(vr *VirtRouter) {
 	virtRouterLock.Lock()
 	defer virtRouterLock.Unlock()
 	delete(virtRouterMap, vr.Id)
 }
 
+// 格式化path前缀
 func cleanPrefix(prefix string) string {
 	prefix = strings.Split(prefix, ":")[0]
 	return pathpkg.Join("/", prefix)

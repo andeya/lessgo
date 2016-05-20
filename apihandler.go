@@ -10,11 +10,10 @@ import (
 
 type (
 	ApiHandler struct {
-		Desc    string   // 本操作的描述
-		Method  string   // 请求方法，"*"表示除"WS"外全部方法，多方法写法："GET|POST"或"GET POST"，冲突时优先级WS>GET>*
-		methods []string // 真实的请求方法列表
-		Params  []Param  // 参数说明列表，path参数类型的先后顺序与url中保持一致
-		// Produces []string            // 支持的响应内容类型，如["application/xml", "application/json"]
+		Desc    string              // 本操作的描述
+		Method  string              // 请求方法，"*"表示除"WS"外全部方法，多方法写法："GET|POST"或"GET POST"，冲突时优先级WS>GET>*
+		methods []string            // 真实的请求方法列表
+		Params  []Param             // 参数说明列表，path参数类型的先后顺序与url中保持一致
 		Handler func(Context) error // 操作
 
 		id     string // 操作的唯一标识符
