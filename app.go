@@ -153,6 +153,7 @@ const (
 	HeaderXXSSProtection          = "X-XSS-Protection"
 	HeaderXFrameOptions           = "X-Frame-Options"
 	HeaderContentSecurityPolicy   = "Content-Security-Policy"
+	HeaderXCSRFToken              = "X-CSRF-Token"
 )
 
 var (
@@ -291,7 +292,7 @@ func (e *Echo) DefaultHTTPErrorHandler(err error, c Context) {
 		}
 		c.String(code, msg)
 	}
-	e.logger.Debug("%v", err)
+	e.logger.Error("%v", err)
 }
 
 // SetHTTPErrorHandler registers a custom Echo.HTTPErrorHandler.
