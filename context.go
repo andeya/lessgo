@@ -16,6 +16,7 @@ import (
 
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
+	"github.com/lessgo/lessgo/utils"
 	"github.com/lessgo/lessgo/websocket"
 )
 
@@ -496,7 +497,7 @@ func (c *context) String(code int, s string) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMETextPlainCharsetUTF8)
 	c.freeSession()
 	c.response.WriteHeader(code)
-	_, err = c.response.Write([]byte(s))
+	_, err = c.response.Write(utils.String2Bytes(s))
 	return
 }
 
