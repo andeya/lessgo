@@ -101,7 +101,7 @@ func (a *ApiMiddleware) init() *ApiMiddleware {
 		b, err := json.MarshalIndent(a.Config, "", "  ")
 		if err == nil {
 			a.dynamic = true
-			a.configJSON = string(b)
+			a.configJSON = utils.Bytes2String(b)
 		}
 	}
 
@@ -142,7 +142,7 @@ func (a *ApiMiddleware) regetFunc(configJSONBytes []byte) (fn MiddlewareFunc, er
 			return a.Middleware.(Middleware).getMiddlewareFunc(config), err
 		}
 		err = fmt.Errorf("Middleware \"%s\" uses initial config, because the type of param is error:\ngot format -> %s,\nwant format -> %s.",
-			a.Name, string(configJSONBytes), a.configJSON)
+			a.Name, utils.Bytes2String(configJSONBytes), a.configJSON)
 	}
 	return a.Middleware.(Middleware).getMiddlewareFunc(a.Config), err
 }
@@ -175,7 +175,7 @@ func (m *MiddlewareConfig) SetConfig(configJSONBytes []byte) error {
 	defer m.lock.Unlock()
 	_, err := m.apiMiddleware.regetFunc(configJSONBytes)
 	if err == nil {
-		m.Config = string(configJSONBytes)
+		m.Config = utils.Bytes2String(configJSONBytes)
 	}
 	return err
 }

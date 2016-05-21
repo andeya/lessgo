@@ -489,7 +489,7 @@ func (c *context) HTML(code int, html string) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
 	c.freeSession()
 	c.response.WriteHeader(code)
-	_, err = c.response.Write([]byte(html))
+	_, err = c.response.Write(utils.String2Bytes(html))
 	return
 }
 
@@ -553,13 +553,13 @@ func (c *context) JSONP(code int, callback string, i interface{}) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMEApplicationJavaScriptCharsetUTF8)
 	c.freeSession()
 	c.response.WriteHeader(code)
-	if _, err = c.response.Write([]byte(callback + "(")); err != nil {
+	if _, err = c.response.Write(utils.String2Bytes(callback + "(")); err != nil {
 		return
 	}
 	if _, err = c.response.Write(b); err != nil {
 		return
 	}
-	_, err = c.response.Write([]byte(");"))
+	_, err = c.response.Write(utils.String2Bytes(");"))
 	return
 }
 
@@ -580,13 +580,13 @@ func (c *context) JSONPMsg(code int, callback string, msgcode int, info interfac
 	c.response.Header().Set(HeaderContentType, MIMEApplicationJavaScriptCharsetUTF8)
 	c.freeSession()
 	c.response.WriteHeader(code)
-	if _, err = c.response.Write([]byte(callback + "(")); err != nil {
+	if _, err = c.response.Write(utils.String2Bytes(callback + "(")); err != nil {
 		return
 	}
 	if _, err = c.response.Write(b); err != nil {
 		return
 	}
-	_, err = c.response.Write([]byte(");"))
+	_, err = c.response.Write(utils.String2Bytes(");"))
 	return
 }
 
@@ -605,7 +605,7 @@ func (c *context) XMLBlob(code int, b []byte) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMEApplicationXMLCharsetUTF8)
 	c.freeSession()
 	c.response.WriteHeader(code)
-	if _, err = c.response.Write([]byte(xml.Header)); err != nil {
+	if _, err = c.response.Write(utils.String2Bytes(xml.Header)); err != nil {
 		return
 	}
 	_, err = c.response.Write(b)

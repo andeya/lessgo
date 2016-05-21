@@ -356,7 +356,7 @@ func (bl *BeeLogger) Debug(format string, v ...interface{}) {
 
 // 简单实现io.Writer接口
 func (bl *BeeLogger) Write(p []byte) (n int, err error) {
-	bl.writeMsg(LevelSystem, string(p))
+	bl.writeMsg(LevelSystem, Bytes2String(p))
 	return len(p), nil
 }
 
