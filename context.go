@@ -718,6 +718,7 @@ func (c *context) init(rw http.ResponseWriter, req *http.Request) (err error) {
 	}
 	c.response.SetWriter(rw)
 	c.request.SetRequest(req)
+	c.store = make(store)
 	return err
 }
 
@@ -725,11 +726,11 @@ func (c *context) free() {
 	c.handler = notFoundHandler
 	c.netContext = nil
 	c.socket = nil
-	c.store = make(store)
+	c.store = nil
 	for i := len(c.pnames) - 1; i >= 0; i-- {
 		c.pvalues[i] = ""
 	}
-	c.pnames = []string{}
+	c.pnames = c.pnames[:0]
 	c.response.free()
 	c.request.free()
 }

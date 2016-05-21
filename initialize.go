@@ -38,8 +38,6 @@ func newLessgo() *lessgo {
 		apiMiddlewares: []*ApiMiddleware{},
 		before:         []*MiddlewareConfig{},
 		after:          []*MiddlewareConfig{},
-		prefix:         []*MiddlewareConfig{},
-		suffix:         []*MiddlewareConfig{},
 		virtRouter:     newRootVirtRouter(),
 	}
 
@@ -59,9 +57,6 @@ func newLessgo() *lessgo {
 
 	// 设置渲染接口
 	l.app.SetRenderer(NewPongo2Render(AppConfig.Debug))
-
-	// 设置大小写敏感
-	l.app.SetCaseSensitive(AppConfig.RouterCaseSensitive)
 
 	// 设置上传文件允许的最大尺寸
 	MaxMemory = AppConfig.MaxMemoryMB * MB
@@ -128,6 +123,19 @@ func registerStaticRouter() {
 	DefLessgo.app.Static("/sys", SYS_VIEW_DIR, filterTemplate(), autoHTMLSuffix)
 
 	DefLessgo.app.File("/favicon.ico", IMG_DIR+"/favicon.ico")
+}
+
+// 设置系统预设的中间件
+func registerMiddleware() {
+	PreUse(
+		&MiddlewareConfig{Name: "检查服务器是否启用"},
+		&MiddlewareConfig{Name: "检查是否为访问主页"},
+		&MiddlewareConfig{Name: "系统运行日志打印"},
+		&MiddlewareConfig{Name: "捕获运行时恐慌"},
+	)
+	if AppConfig.CrossDomain {
+		BeforeUse(&MiddlewareConfig{Name: "设置允许跨域"})
+	}
 }
 
 // 注册数据库服务

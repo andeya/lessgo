@@ -15,18 +15,17 @@ import (
 type (
 	// Config is the main struct for BConfig
 	Config struct {
-		AppName             string // Application name
-		Info                Info   // Application info
-		Debug               bool   // enable/disable debug mode.
-		CrossDomain         bool
-		RouterCaseSensitive bool  // 是否路由忽略大小写匹配，默认是 true，区分大小写
-		MaxMemoryMB         int64 // 文件上传默认内存缓存大小，单位MB
-		Listen              Listen
-		Session             SessionConfig
-		Log                 LogConfig
-		FileCache           FileCacheConfig
-		DefaultDB           string
-		DBList              map[string]DBConfig
+		AppName     string // Application name
+		Info        Info   // Application info
+		Debug       bool   // enable/disable debug mode.
+		CrossDomain bool
+		MaxMemoryMB int64 // 文件上传默认内存缓存大小，单位MB
+		Listen      Listen
+		Session     SessionConfig
+		Log         LogConfig
+		FileCache   FileCacheConfig
+		DefaultDB   string
+		DBList      map[string]DBConfig
 	}
 	Info struct {
 		Version           string
@@ -139,10 +138,9 @@ func initConfig() *Config {
 			License:           "MIT",
 			LicenseUrl:        "https://github.com/lessgo/lessgo/raw/master/doc/LICENSE",
 		},
-		Debug:               true,
-		CrossDomain:         false,
-		RouterCaseSensitive: false,
-		MaxMemoryMB:         64, // 64MB
+		Debug:       true,
+		CrossDomain: false,
+		MaxMemoryMB: 64, // 64MB
 		Listen: Listen{
 			Graceful:      false,
 			Address:       "0.0.0.0:8080",

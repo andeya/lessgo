@@ -38,7 +38,6 @@ type (
 		logger           logs.Logger
 		lock             sync.RWMutex
 		routerIndex      int
-		caseSensitive    bool
 		memoryCache      *MemoryCache
 		sessions         *session.Manager
 		server           *http.Server
@@ -201,13 +200,12 @@ var (
 // New creates an instance of Echo.
 func New() (e *Echo) {
 	e = &Echo{
-		server:        new(http.Server),
-		pristineHead:  headHandlerFunc,
-		head:          headHandlerFunc,
-		maxParam:      new(int),
-		logger:        logs.Global,
-		binder:        &binder{},
-		caseSensitive: true,
+		server:       new(http.Server),
+		pristineHead: headHandlerFunc,
+		head:         headHandlerFunc,
+		maxParam:     new(int),
+		logger:       logs.Global,
+		binder:       &binder{},
 	}
 	e.pool.New = func() interface{} {
 		return e.NewContext(new(Response), new(Request))
@@ -260,14 +258,6 @@ func (e *Echo) AddLogAdapter(adaptername string, config string) error {
 //logs.Logger returns the logger instance.
 func (e *Echo) Logger() logs.Logger {
 	return e.logger
-}
-
-func (e *Echo) SetCaseSensitive(sensitive bool) {
-	e.caseSensitive = sensitive
-}
-
-func (e *Echo) CaseSensitive() bool {
-	return e.caseSensitive
 }
 
 func (e *Echo) Sessions() *session.Manager {
@@ -490,10 +480,6 @@ func (e *Echo) add(method, path string, handler HandlerFunc, middleware ...Middl
 
 func (e *Echo) addwithlog(logprint bool, method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
 	path = joinpath(path, "")
-	// not case sensitive
-	if !e.caseSensitive {
-		path = strings.ToLower(path)
-	}
 	name := handlerName(handler)
 	e.router.Add(method, path, func(c Context) error {
 		h := handler
@@ -580,9 +566,6 @@ func (e *Echo) PutContext(c Context) {
 func (e *Echo) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
-	if !e.caseSensitive {
-		req.URL.Path = strings.ToLower(req.URL.Path)
-	}
 
 	c := e.pool.Get().(*context)
 	defer func() {

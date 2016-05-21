@@ -612,23 +612,13 @@ func registerVirtRouter() {
 		Logger().Error("Create/Recreate the router is faulty: %v", err)
 		return
 	}
-	if err := isExistMiddlewares(DefLessgo.prefix...); err != nil {
-		Logger().Error("Create/Recreate the router is faulty: %v", err)
-		return
-	}
-	if err := isExistMiddlewares(DefLessgo.suffix...); err != nil {
-		Logger().Error("Create/Recreate the router is faulty: %v", err)
-		return
-	}
-
 	// 从虚拟路由创建真实路由
 	DefLessgo.app.router = NewRouter(DefLessgo.app)
 	DefLessgo.app.middleware = []MiddlewareFunc{DefLessgo.app.router.Process}
+	DefLessgo.app.routerIndex = 0
 	DefLessgo.app.head = DefLessgo.app.pristineHead
 	DefLessgo.app.BeforeUse(getMiddlewareFuncs(DefLessgo.before)...)
 	DefLessgo.app.AfterUse(getMiddlewareFuncs(DefLessgo.after)...)
-	DefLessgo.app.PreUse(getMiddlewareFuncs(DefLessgo.prefix)...)
-	DefLessgo.app.SufUse(getMiddlewareFuncs(DefLessgo.suffix)...)
 	group := DefLessgo.app.Group(
 		DefLessgo.virtRouter.Prefix,
 		getMiddlewareFuncs(DefLessgo.virtRouter.Middlewares)...,

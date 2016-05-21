@@ -316,15 +316,6 @@ func init() {
 		Desc:       "根据配置信息设置允许跨域",
 		Middleware: CrossDomain,
 	}).init()
-
-	// 系统预设中间件
-	PreUse(
-		&MiddlewareConfig{Name: "检查服务器是否启用"},
-		&MiddlewareConfig{Name: "检查是否为访问主页"},
-		&MiddlewareConfig{Name: "系统运行日志打印"},
-		&MiddlewareConfig{Name: "捕获运行时恐慌"},
-		&MiddlewareConfig{Name: "设置允许跨域"},
-	)
 }
 
 // 检查服务器是否启用
@@ -350,6 +341,13 @@ func CheckHome(next HandlerFunc) HandlerFunc {
 // RequestLogger returns a middleware that logs HTTP requests.
 func RequestLogger(next HandlerFunc) HandlerFunc {
 	return func(c Context) (err error) {
+		if !c.App().Debug() {
+			if err := next(c); err != nil {
+				c.Error(err)
+			}
+			return nil
+		}
+
 		req := c.Request()
 		res := c.Response()
 
@@ -434,9 +432,7 @@ func Recover(confObject interface{}) MiddlewareFunc {
 
 // 设置允许跨域
 func CrossDomain(c Context) error {
-	if AppConfig.CrossDomain {
-		c.Response().Header().Set("Access-Control-Allow-Origin", "*")
-	}
+	c.Response().Header().Set("Access-Control-Allow-Origin", "*")
 	return nil
 }
 

@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -38,10 +37,8 @@ type (
 		apiMiddlewares []*ApiMiddleware
 
 		// 路由执行前后的中间件登记
-		before []*MiddlewareConfig //路由执行前中间件
-		after  []*MiddlewareConfig //路由执行后中间件
-		prefix []*MiddlewareConfig //第一批执行的中间件
-		suffix []*MiddlewareConfig //最后一批执行的中间件
+		before []*MiddlewareConfig //处理链中路由操作之前的中间件子链
+		after  []*MiddlewareConfig //处理链中路由操作之后的中间件子链
 
 		// 用于构建最终真实路由的虚拟路由；
 		// 初始值为源码中定义的路由，之后追加配置中定义的路由；
@@ -82,11 +79,7 @@ func Lessgo() *lessgo {
  * 设置主页
  */
 func SetHome(homeurl string) {
-	if DefLessgo.AppConfig.RouterCaseSensitive {
-		DefLessgo.home = homeurl
-	} else {
-		DefLessgo.home = strings.ToLower(homeurl)
-	}
+	DefLessgo.home = homeurl
 }
 
 /*
@@ -127,6 +120,8 @@ func ServerEnable() bool {
  * 运行服务
  */
 func Run() {
+	// 设置系统预设的中间件
+	registerMiddleware()
 	// 从数据库初始化虚拟路由
 	initVirtRouterFromDB()
 	// 重建路由
@@ -237,24 +232,24 @@ func ApiHandlerList() []*ApiHandler {
 	return DefLessgo.apiHandlers
 }
 
-// 在路由执行位置之前紧邻插入中间件队列
+// 添加到处理链最前端的中间件(子链)
+func PreUse(middleware ...*MiddlewareConfig) {
+	DefLessgo.before = append(middleware, DefLessgo.before...)
+}
+
+// 插入到处理链中路由操作前一位的中间件(子链)
 func BeforeUse(middleware ...*MiddlewareConfig) {
 	DefLessgo.before = append(DefLessgo.before, middleware...)
 }
 
-// 在路由执行位置之后紧邻插入中间件队列
+// 插入到处理链中路由操作后一位的中间件(子链)
 func AfterUse(middleware ...*MiddlewareConfig) {
 	DefLessgo.after = append(middleware, DefLessgo.after...)
 }
 
-// 第一批执行的中间件
-func PreUse(middleware ...*MiddlewareConfig) {
-	DefLessgo.prefix = append(DefLessgo.prefix, middleware...)
-}
-
-// 最后一批执行的中间件
+// 追加到处理链最末端的中间件(子链)
 func SufUse(middleware ...*MiddlewareConfig) {
-	DefLessgo.suffix = append(middleware, DefLessgo.suffix...)
+	DefLessgo.after = append(DefLessgo.after, middleware...)
 }
 
 // 从根路由开始配置路由(必须在init()中调用)
