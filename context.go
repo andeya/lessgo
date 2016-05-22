@@ -145,7 +145,7 @@ type (
 		Bind(interface{}) error
 
 		// Render renders a template with data and sends a text/html response with status
-		// code. Templates can be registered using `Echo.SetRenderer()`.
+		// code. Templates can be registered using `App.SetRenderer()`.
 		Render(int, string, interface{}) error
 
 		// HTML sends an HTTP response with status code.
@@ -198,11 +198,11 @@ type (
 		// SetHandler sets the matched handler by router.
 		SetHandler(HandlerFunc)
 
-		// Logger returns the `Logger` instance.
-		Logger() logs.Logger
+		// Log returns the `Logger` instance.
+		Log() logs.Logger
 
-		// App returns the `Echo` instance.
-		App() *Echo
+		// App returns the `App` instance.
+		App() *App
 
 		// ServeContent sends static content from `io.Reader` and handles caching
 		// via `If-Modified-Since` request header. It automatically sets `Content-Type`
@@ -227,7 +227,7 @@ type (
 		handler    HandlerFunc
 		cruSession session.Store
 		socket     *websocket.Conn
-		echo       *Echo
+		app        *App
 	}
 
 	store map[string]interface{}
@@ -433,7 +433,7 @@ func (c *context) SessionRegenerateID() {
 		return
 	}
 	c.cruSession.SessionRelease(c.Response().Writer())
-	c.cruSession = c.echo.sessions.SessionRegenerateID(c.Response().Writer(), c.Request().Request)
+	c.cruSession = c.app.sessions.SessionRegenerateID(c.Response().Writer(), c.Request().Request)
 }
 
 // DestroySession cleans session data and session cookie.
@@ -443,7 +443,7 @@ func (c *context) DestroySession() {
 	}
 	c.cruSession.Flush()
 	c.cruSession = nil
-	c.echo.sessions.SessionDestroy(c.Response().Writer(), c.Request().Request)
+	c.app.sessions.SessionDestroy(c.Response().Writer(), c.Request().Request)
 }
 
 func (c *context) Set(key string, val interface{}) {
@@ -467,15 +467,15 @@ func (c *context) Exists(key string) bool {
 }
 
 func (c *context) Bind(i interface{}) error {
-	return c.echo.binder.Bind(i, c)
+	return c.app.binder.Bind(i, c)
 }
 
 func (c *context) Render(code int, name string, data interface{}) (err error) {
-	if c.echo.renderer == nil {
+	if c.app.renderer == nil {
 		return ErrRendererNotRegistered
 	}
 	buf := new(bytes.Buffer)
-	if err = c.echo.renderer.Render(buf, name, data, c); err != nil {
+	if err = c.app.renderer.Render(buf, name, data, c); err != nil {
 		return
 	}
 	c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
@@ -503,7 +503,7 @@ func (c *context) String(code int, s string) (err error) {
 
 func (c *context) JSON(code int, i interface{}) (err error) {
 	var b []byte
-	if c.echo.Debug() {
+	if c.app.Debug() {
 		b, err = json.MarshalIndent(i, "", "  ")
 	} else {
 		b, err = json.Marshal(i)
@@ -520,7 +520,7 @@ func (c *context) JSONMsg(code int, msgcode int, info interface{}) (err error) {
 		Code: msgcode,
 		Info: info,
 	}
-	if c.echo.Debug() {
+	if c.app.Debug() {
 		b, err = json.MarshalIndent(i, "", "  ")
 	} else {
 		b, err = json.Marshal(i)
@@ -542,7 +542,7 @@ func (c *context) JSONBlob(code int, b []byte) (err error) {
 
 func (c *context) JSONP(code int, callback string, i interface{}) (err error) {
 	var b []byte
-	if c.echo.Debug() {
+	if c.app.Debug() {
 		b, err = json.MarshalIndent(i, "", "  ")
 	} else {
 		b, err = json.Marshal(i)
@@ -569,7 +569,7 @@ func (c *context) JSONPMsg(code int, callback string, msgcode int, info interfac
 		Code: msgcode,
 		Info: info,
 	}
-	if c.echo.Debug() {
+	if c.app.Debug() {
 		b, err = json.MarshalIndent(i, "", "  ")
 	} else {
 		b, err = json.Marshal(i)
@@ -592,7 +592,7 @@ func (c *context) JSONPMsg(code int, callback string, msgcode int, info interfac
 
 func (c *context) XML(code int, i interface{}) (err error) {
 	b, err := xml.Marshal(i)
-	if c.echo.Debug() {
+	if c.app.Debug() {
 		b, err = xml.MarshalIndent(i, "", "  ")
 	}
 	if err != nil {
@@ -613,8 +613,8 @@ func (c *context) XMLBlob(code int, b []byte) (err error) {
 }
 
 func (c *context) File(file string) error {
-	if c.echo.MemoryCacheEnable() {
-		f, fi, exist := c.echo.memoryCache.GetCacheFile(file)
+	if c.app.MemoryCacheEnable() {
+		f, fi, exist := c.app.memoryCache.GetCacheFile(file)
 		if !exist {
 			return ErrNotFound
 		}
@@ -664,11 +664,11 @@ func (c *context) Redirect(code int, url string) error {
 }
 
 func (c *context) Error(err error) {
-	c.echo.httpErrorHandler(err, c)
+	c.app.internalServerErrorHandler(err, c)
 }
 
-func (c *context) App() *Echo {
-	return c.echo
+func (c *context) App() *App {
+	return c.app
 }
 
 func (c *context) Handler() HandlerFunc {
@@ -679,8 +679,8 @@ func (c *context) SetHandler(h HandlerFunc) {
 	c.handler = h
 }
 
-func (c *context) Logger() logs.Logger {
-	return c.echo.logger
+func (c *context) Log() logs.Logger {
+	return Log
 }
 
 func (c *context) ServeContent(content io.ReadSeeker, name string, modtime time.Time) error {
@@ -709,8 +709,8 @@ func (c *context) freeSession() {
 }
 
 func (c *context) init(rw http.ResponseWriter, req *http.Request) (err error) {
-	if c.echo.sessions != nil {
-		c.cruSession, err = c.echo.sessions.SessionStart(rw, req)
+	if c.app.sessions != nil {
+		c.cruSession, err = c.app.sessions.SessionStart(rw, req)
 		if err != nil {
 			c.NoContent(503)
 			return err
@@ -723,7 +723,7 @@ func (c *context) init(rw http.ResponseWriter, req *http.Request) (err error) {
 }
 
 func (c *context) free() {
-	c.handler = notFoundHandler
+	c.handler = c.app.notFoundHandler
 	c.netContext = nil
 	c.socket = nil
 	c.store = nil

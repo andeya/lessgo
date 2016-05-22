@@ -98,17 +98,17 @@ func setApiHandler(vh *ApiHandler) {
 	apiHandlerLock.Lock()
 	defer apiHandlerLock.Unlock()
 	apiHandlerMap[vh.id] = vh
-	for i, vh2 := range DefLessgo.apiHandlers {
+	for i, vh2 := range lessgo.apiHandlers {
 		if vh.Id() < vh2.Id() {
-			list := make([]*ApiHandler, len(DefLessgo.apiHandlers)+1)
-			copy(list, DefLessgo.apiHandlers[:i])
+			list := make([]*ApiHandler, len(lessgo.apiHandlers)+1)
+			copy(list, lessgo.apiHandlers[:i])
 			list[i] = vh
-			copy(list[i+1:], DefLessgo.apiHandlers[i:])
-			DefLessgo.apiHandlers = list
+			copy(list[i+1:], lessgo.apiHandlers[i:])
+			lessgo.apiHandlers = list
 			return
 		}
 	}
-	DefLessgo.apiHandlers = append(DefLessgo.apiHandlers, vh)
+	lessgo.apiHandlers = append(lessgo.apiHandlers, vh)
 }
 
 func (a *ApiHandler) initParamsAndSuffix() {
@@ -148,7 +148,7 @@ func (a *ApiHandler) initMethod() {
 		if strings.Contains(a.Method, ANY) {
 			a.methods = methods[:]
 		} else {
-			Logger().Fatal("ApiHandler \"%v\"'s method can't be %v. ", a.Desc, a.Method)
+			Log.Fatal("ApiHandler \"%v\"'s method can't be %v. ", a.Desc, a.Method)
 		}
 	}
 }

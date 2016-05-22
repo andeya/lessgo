@@ -47,7 +47,7 @@ func (resp *Response) Header() http.Header {
 // used to send error codes.
 func (resp *Response) WriteHeader(code int) {
 	if resp.committed {
-		Logger().Warn("response already committed")
+		Log.Warn("response already committed")
 		return
 	}
 	resp.status = code

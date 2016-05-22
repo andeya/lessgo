@@ -12,7 +12,31 @@ import (
 	"github.com/lessgo/lessgo/utils/uuid"
 )
 
-// 虚拟路由
+// 单独注册的静态文件虚拟路由(无法在Root()下使用，暂不支持运行时修改)
+type VirtFile struct {
+	Path        string
+	File        string
+	Middlewares []*MiddlewareConfig
+}
+
+// 从单独静态文件虚拟路由注册真实路由
+func (this *VirtFile) route() {
+	lessgo.App.file(this.Path, this.File, getMiddlewareFuncs(this.Middlewares)...)
+}
+
+// 单独注册的静态目录虚拟路由(无法在Root()下使用，暂不支持运行时修改)
+type VirtStatic struct {
+	Prefix      string
+	Root        string
+	Middlewares []*MiddlewareConfig
+}
+
+// 从单独静态目录虚拟路由注册真实路由
+func (this *VirtStatic) route() {
+	lessgo.App.static(this.Prefix, this.Root, getMiddlewareFuncs(this.Middlewares)...)
+}
+
+// 虚拟路由(在Root()下使用，支持运行时修改)
 type VirtRouter struct {
 	Id          string              `json:"id" xorm:"not null pk VARCHAR(36)"`   // UUID
 	Pid         string              `json:"pid" xorm:"VARCHAR(36)"`              // 父节点id
@@ -48,7 +72,7 @@ var (
 	notDynamicError = fmt.Errorf("The specified node is not dynamic, and therefore can not be modified.")
 )
 
-// 获取操作的请求方法列表（已排序）
+// 获取操作的请求方法列表(已排序)
 func (vr *VirtRouter) Methods() []string {
 	return vr.apiHandler.Methods()
 }
@@ -116,10 +140,10 @@ label:
 	return
 }
 
-// 配置中间件（仅在源码中使用）
+// 配置中间件(仅在源码中使用)
 func (vr *VirtRouter) Use(middlewares ...*ApiMiddleware) *VirtRouter {
 	if vr.Dynamic {
-		Logger().Error("Specified node is dynamic, please use ResetUse(middlewares []string) (err error).")
+		Log.Error("Specified node is dynamic, please use ResetUse(middlewares []string) (err error).")
 		return vr
 	}
 	l := len(middlewares)
@@ -319,7 +343,7 @@ func (v *VirtRouter) sort() {
 }
 
 // 注册真实路由
-func (vr *VirtRouter) route(group *Group) {
+func (vr *VirtRouter) route(g *Group) {
 	if !vr.Enable {
 		return
 	}
@@ -332,18 +356,18 @@ func (vr *VirtRouter) route(group *Group) {
 		var childGroup *Group
 		if hasIndex {
 			// "/index"分组会被默认为"/"
-			childGroup = group.Group(prefix2, mws...)
+			childGroup = g.group(prefix2, mws...)
 		} else {
-			childGroup = group.Group(prefix, mws...)
+			childGroup = g.group(prefix, mws...)
 		}
 		for _, child := range vr.Children() {
 			child.route(childGroup)
 		}
 	case HANDLER:
 		if hasIndex {
-			group.Match(vr.Methods(), prefix2, vr.apiHandler.Handler, mws...)
+			g.match(vr.Methods(), prefix2, vr.apiHandler.Handler, mws...)
 		}
-		group.Match(vr.Methods(), prefix, vr.apiHandler.Handler, mws...)
+		g.match(vr.Methods(), prefix, vr.apiHandler.Handler, mws...)
 	}
 }
 
@@ -426,20 +450,20 @@ func newRootVirtRouter() *VirtRouter {
 func initVirtRouterFromDB() {
 	defer func() {
 		if p := recover(); p != nil {
-			Logger().Warn("Can only use source code routing: %v.", p)
+			Log.Warn("Can only use source code routing: %v.", p)
 		}
-		DefLessgo.virtRouter.sort()
+		lessgo.virtRouter.sort()
 	}()
 	lessgodb = DefaultDB()
 	var err error
 	if err = lessgodb.Ping(); err != nil {
-		Logger().Warn("Can only use source code routing: [dbPing] %v.", err)
+		Log.Warn("Can only use source code routing: [dbPing] %v.", err)
 		return
 	}
 	vrlock := new(VirtRouterLock)
 	err = lessgodb.Sync2(vrlock)
 	if err != nil {
-		Logger().Error("Can only use source code routing: [vr-dbSync] %v.", err)
+		Log.Error("Can only use source code routing: [vr-dbSync] %v.", err)
 		return
 	}
 	vr := new(VirtRouter)
@@ -449,21 +473,21 @@ func initVirtRouterFromDB() {
 		if exist || err != nil {
 			err = lessgodb.DropTables(vr)
 			if err != nil {
-				Logger().Error("Can only use source code routing: [vr-dbDrop] %v.", err)
+				Log.Error("Can only use source code routing: [vr-dbDrop] %v.", err)
 				return
 			}
 		}
 	}
 	err = lessgodb.Sync2(vr)
 	if err != nil {
-		Logger().Error("Can only use source code routing: [vr-dbSync] %v.", err)
+		Log.Error("Can only use source code routing: [vr-dbSync] %v.", err)
 		return
 	}
 	session := lessgodb.NewSession()
 	defer session.Close()
 	err = session.Begin()
 	if err != nil {
-		Logger().Error("Can only use source code routing: [db-begin] %v.", err)
+		Log.Error("Can only use source code routing: [db-begin] %v.", err)
 		return
 	}
 
@@ -475,18 +499,18 @@ func initVirtRouterFromDB() {
 		if err != nil {
 			session.Rollback()
 			vrlock.Md5 = ""
-			Logger().Error("Can only use source code routing: [md5-dbInsert] %v.", err)
+			Log.Error("Can only use source code routing: [md5-dbInsert] %v.", err)
 			return
 		}
 
 		err = dbReset(session)
 		if err != nil {
-			Logger().Error("Can only use source code routing: [info-dbInsert] %v.", err)
+			Log.Error("Can only use source code routing: [info-dbInsert] %v.", err)
 			return
 		}
 		err = session.Commit()
 		if err != nil {
-			Logger().Error("Can only use source code routing: [dbCommit] %v.", err)
+			Log.Error("Can only use source code routing: [dbCommit] %v.", err)
 		}
 
 	} else if vrlock.Md5 != Md5 {
@@ -497,7 +521,7 @@ func initVirtRouterFromDB() {
 		if err != nil {
 			session.Rollback()
 			vrlock.Md5 = ""
-			Logger().Error("Can only use source code routing: [md5-dbUpdate] %v.", err)
+			Log.Error("Can only use source code routing: [md5-dbUpdate] %v.", err)
 			return
 		}
 
@@ -505,29 +529,29 @@ func initVirtRouterFromDB() {
 		err = session.Find(&dbInfo)
 		if err != nil {
 			session.Rollback()
-			Logger().Error("Can only use source code routing: [info-dbFind] %v.", err)
+			Log.Error("Can only use source code routing: [info-dbFind] %v.", err)
 			return
 		}
 		if len(dbInfo) > 0 {
 			// 构建历史版本的虚拟路由树
 			dbRootVirtRouter := buildVirtRouter(dbInfo)
-			merge(DefLessgo.virtRouter, dbRootVirtRouter)
+			merge(lessgo.virtRouter, dbRootVirtRouter)
 			virtRouterLock.Lock()
 			defer virtRouterLock.Unlock()
 			virtRouterMap = map[string]*VirtRouter{}
-			vrs := DefLessgo.virtRouter.Progeny()
+			vrs := lessgo.virtRouter.Progeny()
 			for _, vr := range vrs {
 				virtRouterMap[vr.Id] = vr
 			}
 		}
 		err = dbReset(session)
 		if err != nil {
-			Logger().Error("Can only use source code routing: [info-dbInsert] %v.", err)
+			Log.Error("Can only use source code routing: [info-dbInsert] %v.", err)
 			return
 		}
 		err = session.Commit()
 		if err != nil {
-			Logger().Error("Can only use source code routing: [dbCommit] %v.", err)
+			Log.Error("Can only use source code routing: [dbCommit] %v.", err)
 		}
 
 	} else {
@@ -537,7 +561,7 @@ func initVirtRouterFromDB() {
 		err = session.Find(&dbInfo)
 		if err != nil {
 			session.Rollback()
-			Logger().Error("Can only use source code routing: [info-dbFind] %v.", err)
+			Log.Error("Can only use source code routing: [info-dbFind] %v.", err)
 			return
 		}
 		if len(dbInfo) == 0 {
@@ -545,16 +569,16 @@ func initVirtRouterFromDB() {
 		}
 		err = session.Commit()
 		if err != nil {
-			Logger().Error("Can only use source code routing: [dbCommit] %v.", err)
+			Log.Error("Can only use source code routing: [dbCommit] %v.", err)
 		}
 		// 从配置信息构建虚拟路由树
-		DefLessgo.virtRouter = buildVirtRouter(dbInfo)
+		lessgo.virtRouter = buildVirtRouter(dbInfo)
 	}
 }
 
 // 重建数据库中虚拟路由配置信息
 func dbReset(session *xorm.Session) (err error) {
-	nodes := DefLessgo.virtRouter.Progeny()
+	nodes := lessgo.virtRouter.Progeny()
 	_, err = session.Insert(&nodes)
 	if err != nil {
 		session.Rollback()
@@ -600,32 +624,6 @@ func buildVirtRouter(vrs []*VirtRouter) *VirtRouter {
 	}
 	root.reset()
 	return root
-}
-
-// 注册路由
-func registerVirtRouter() {
-	if err := isExistMiddlewares(DefLessgo.before...); err != nil {
-		Logger().Error("Create/Recreate the router is faulty: %v", err)
-		return
-	}
-	if err := isExistMiddlewares(DefLessgo.after...); err != nil {
-		Logger().Error("Create/Recreate the router is faulty: %v", err)
-		return
-	}
-	// 从虚拟路由创建真实路由
-	DefLessgo.app.router = NewRouter(DefLessgo.app)
-	DefLessgo.app.middleware = []MiddlewareFunc{DefLessgo.app.router.Process}
-	DefLessgo.app.routerIndex = 0
-	DefLessgo.app.head = DefLessgo.app.pristineHead
-	DefLessgo.app.BeforeUse(getMiddlewareFuncs(DefLessgo.before)...)
-	DefLessgo.app.AfterUse(getMiddlewareFuncs(DefLessgo.after)...)
-	group := DefLessgo.app.Group(
-		DefLessgo.virtRouter.Prefix,
-		getMiddlewareFuncs(DefLessgo.virtRouter.Middlewares)...,
-	)
-	for _, child := range DefLessgo.virtRouter.Children() {
-		child.route(group)
-	}
 }
 
 // 重置路由节点

@@ -1,12 +1,12 @@
 package lessgo
 
 type (
-	// Router is the registry of all registered routes for an `Echo` instance for
+	// Router is the registry of all registered routes for an `App` instance for
 	// request matching and URL path parameter parsing.
 	Router struct {
 		tree   *node
-		routes []Route
-		echo   *Echo
+		routes map[string]Route
+		app    *App
 	}
 	node struct {
 		kind          kind
@@ -39,19 +39,19 @@ const (
 	akind
 )
 
-// NewRouter returns a new Router instance.
-func NewRouter(e *Echo) *Router {
+// newRouter returns a new Router instance.
+func newRouter(a *App) *Router {
 	return &Router{
 		tree: &node{
 			methodHandler: new(methodHandler),
 		},
-		routes: []Route{},
-		echo:   e,
+		routes: make(map[string]Route),
+		app:    a,
 	}
 }
 
-// Process implements `echo.MiddlewareFunc` which makes router a middleware.
-func (r *Router) Process(next HandlerFunc) HandlerFunc {
+// process implements `app.MiddlewareFunc` which makes router a middleware.
+func (r *Router) process(next HandlerFunc) HandlerFunc {
 	return func(c Context) error {
 		r.Find(c.Request().Method, c.Request().URL.Path, c)
 		if err := c.Handler()(c); err != nil {
@@ -61,8 +61,8 @@ func (r *Router) Process(next HandlerFunc) HandlerFunc {
 	}
 }
 
-// Add registers a new route for method and path with matching handler.
-func (r *Router) Add(method, path string, h HandlerFunc, e *Echo) {
+// add registers a new route for method and path with matching handler.
+func (r *Router) add(method, path string, h HandlerFunc, e *App) {
 	ppath := path        // Pristine path
 	pnames := []string{} // Param names
 
@@ -94,7 +94,7 @@ func (r *Router) Add(method, path string, h HandlerFunc, e *Echo) {
 	r.insert(method, path, h, skind, ppath, pnames, e)
 }
 
-func (r *Router) insert(method, path string, h HandlerFunc, t kind, ppath string, pnames []string, e *Echo) {
+func (r *Router) insert(method, path string, h HandlerFunc, t kind, ppath string, pnames []string, e *App) {
 	// Adjust max param
 	l := len(pnames)
 	if *e.maxParam < l {
@@ -103,7 +103,7 @@ func (r *Router) insert(method, path string, h HandlerFunc, t kind, ppath string
 
 	cn := r.tree // Current node as root
 	if cn == nil {
-		panic("echo ⇛ invalid method")
+		panic("app ⇛ invalid method")
 	}
 	search := path
 
@@ -179,6 +179,15 @@ func (r *Router) insert(method, path string, h HandlerFunc, t kind, ppath string
 		}
 		return
 	}
+}
+
+func (r *Router) checkMethodNotAllowed(n *node) HandlerFunc {
+	for _, m := range methods {
+		if h := n.findHandler(m); h != nil {
+			return r.app.methodNotAllowedHandler
+		}
+	}
+	return nil
 }
 
 func newNode(t kind, pre string, p *node, c children, mh *methodHandler, ppath string, pnames []string) *node {
@@ -283,23 +292,14 @@ func (n *node) findClosestByKind(t kind) (x *node) {
 	return n.parent.findClosestByKind(t)
 }
 
-func (n *node) checkMethodNotAllowed() HandlerFunc {
-	for _, m := range methods {
-		if h := n.findHandler(m); h != nil {
-			return methodNotAllowedHandler
-		}
-	}
-	return nil
-}
-
 // Find lookup a handler registed for method and path. It also parses URL for path
 // parameters and load them into context.
 //
 // For performance:
 //
-// - Get context from `Echo#GetContext()`
+// - Get context from `App#GetContext()`
 // - Reset it `Context#Reset()`
-// - Return it `Echo#PutContext()`.
+// - Return it `App#PutContext()`.
 func (r *Router) Find(method, path string, context Context) {
 	cn := r.tree // Current node as root
 
@@ -412,34 +412,35 @@ func (r *Router) Find(method, path string, context Context) {
 	}
 
 End:
-	context.SetHandler(cn.findHandler(method))
 	context.SetPath(cn.ppath)
 	context.setParamNames(cn.pnames)
 
+	// 200 OK
+	// Log.Warn("0000000000000000000000000000000000000000000000000")
+	context.SetHandler(cn.findHandler(method))
+	if context.Handler() != nil {
+		return
+	}
+
 	// NOTE: Slow zone...
-	if context.Handler() == nil {
-		context.SetHandler(cn.checkMethodNotAllowed())
-		if context.Handler() != nil {
-			return
-		}
-		defer func() {
-			if context.Handler() == nil {
-				context.SetHandler(notFoundHandler)
-			}
-		}()
-		// Dig further for any, might have an empty value for *, e.g.
-		// serving a directory. Issue #207.
-		if cn = cn.findClosestByKind(akind); cn == nil {
-			return
-		}
-		if h := cn.findHandler(method); h != nil {
-			context.SetHandler(h)
-		} else {
-			context.SetHandler(cn.checkMethodNotAllowed())
+	// 405 Method Not Allowed
+	// Log.Warn("1111111111111111111111111111111111111111111111111111111111111")
+	context.SetHandler(r.checkMethodNotAllowed(cn))
+
+	// Dig further for any, might have an empty value for *, e.g. serving a directory.
+	if cn = cn.findChildByKind(akind); cn != nil {
+		// Log.Warn("222222222222222222222222222222222222222222222222222222")
+		context.SetHandler(cn.findHandler(method))
+		if context.Handler() == nil {
+			// Log.Warn("3333333333333333333333333333333333333333333333333333333")
+			context.SetHandler(r.checkMethodNotAllowed(cn))
 		}
 		context.SetPath(cn.ppath)
 		context.setParamNames(cn.pnames)
+		pvalues[len(cn.pnames)-1] = ""
 	}
-
-	return
+	if context.Handler() == nil {
+		// Log.Warn("44444444444444444444444444444444444444444444444444444")
+		context.SetHandler(r.app.notFoundHandler)
+	}
 }

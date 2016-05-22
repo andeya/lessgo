@@ -7,14 +7,13 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/lessgo/lessgo/config"
+	confpkg "github.com/lessgo/lessgo/config"
 	"github.com/lessgo/lessgo/logs"
-	"github.com/lessgo/lessgo/session"
 )
 
 type (
 	// Config is the main struct for BConfig
-	Config struct {
+	config struct {
 		AppName     string // Application name
 		Info        Info   // Application info
 		Debug       bool   // enable/disable debug mode.
@@ -119,15 +118,8 @@ const (
 	DEFAULTDB_SECTION = "defaultdb"
 )
 
-var (
-	// AppConfig is the instance of Config, store the config information from file
-	AppConfig = initConfig()
-	// GlobalSessions is the instance for the session manager
-	GlobalSessions *session.Manager
-)
-
-func initConfig() *Config {
-	return &Config{
+func newConfig() *config {
+	return &config{
 		AppName: "lessgo",
 		Info: Info{
 			Version:     "0.4.0",
@@ -195,17 +187,16 @@ func initConfig() *Config {
 	}
 }
 
-func LoadAppConfig() (err error) {
-	fname := APPCONFIG_FILE
-	iniconf, err := config.NewConfig("ini", fname)
+func (this *config) LoadMainConfig(fname string) (err error) {
+	iniconf, err := confpkg.NewConfig("ini", fname)
 	if err == nil {
 		os.Remove(fname)
-		readSingleConfig("system", AppConfig, iniconf)
-		readSingleConfig("filecache", &AppConfig.FileCache, iniconf)
-		readSingleConfig("info", &AppConfig.Info, iniconf)
-		readSingleConfig("listen", &AppConfig.Listen, iniconf)
-		readSingleConfig("log", &AppConfig.Log, iniconf)
-		readSingleConfig("session", &AppConfig.Session, iniconf)
+		readSingleConfig("system", Config, iniconf)
+		readSingleConfig("filecache", &this.FileCache, iniconf)
+		readSingleConfig("info", &this.Info, iniconf)
+		readSingleConfig("listen", &this.Listen, iniconf)
+		readSingleConfig("log", &this.Log, iniconf)
+		readSingleConfig("session", &this.Session, iniconf)
 	}
 	os.MkdirAll(filepath.Dir(fname), 0777)
 	f, err := os.Create(fname)
@@ -213,40 +204,39 @@ func LoadAppConfig() (err error) {
 		return err
 	}
 	f.Close()
-	iniconf, err = config.NewConfig("ini", fname)
+	iniconf, err = confpkg.NewConfig("ini", fname)
 	if err != nil {
 		return err
 	}
-	writeSingleConfig("system", AppConfig, iniconf)
-	writeSingleConfig("filecache", &AppConfig.FileCache, iniconf)
-	writeSingleConfig("info", &AppConfig.Info, iniconf)
-	writeSingleConfig("listen", &AppConfig.Listen, iniconf)
-	writeSingleConfig("log", &AppConfig.Log, iniconf)
-	writeSingleConfig("session", &AppConfig.Session, iniconf)
+	writeSingleConfig("system", Config, iniconf)
+	writeSingleConfig("filecache", &this.FileCache, iniconf)
+	writeSingleConfig("info", &this.Info, iniconf)
+	writeSingleConfig("listen", &this.Listen, iniconf)
+	writeSingleConfig("log", &this.Log, iniconf)
+	writeSingleConfig("session", &this.Session, iniconf)
 
 	return iniconf.SaveConfigFile(fname)
 }
 
-func LoadDBConfig() (err error) {
-	fname := DBCONFIG_FILE
-	iniconf, err := config.NewConfig("ini", fname)
+func (this *config) LoadDBConfig(fname string) (err error) {
+	iniconf, err := confpkg.NewConfig("ini", fname)
 	if err == nil {
 		os.Remove(fname)
-		sections := iniconf.(*config.IniConfigContainer).Sections()
+		sections := iniconf.(*confpkg.IniConfigContainer).Sections()
 		if len(sections) > 0 {
-			AppConfig.DefaultDB = ""
-			defDB := AppConfig.DBList["lessgo"]
-			delete(AppConfig.DBList, "lessgo")
+			this.DefaultDB = ""
+			defDB := this.DBList["lessgo"]
+			delete(this.DBList, "lessgo")
 			for _, section := range sections {
 				dbconfig := defDB
 				readSingleConfig(section, &dbconfig, iniconf)
 				if strings.ToLower(section) == DEFAULTDB_SECTION {
-					AppConfig.DefaultDB = dbconfig.Name
+					this.DefaultDB = dbconfig.Name
 				}
-				AppConfig.DBList[dbconfig.Name] = dbconfig
+				this.DBList[dbconfig.Name] = dbconfig
 			}
-			if AppConfig.DefaultDB == "" {
-				AppConfig.DefaultDB = iniconf.DefaultString(sections[0]+"::name", defDB.Name)
+			if this.DefaultDB == "" {
+				this.DefaultDB = iniconf.DefaultString(sections[0]+"::name", defDB.Name)
 			}
 		}
 	}
@@ -257,12 +247,12 @@ func LoadDBConfig() (err error) {
 		return err
 	}
 	f.Close()
-	iniconf, err = config.NewConfig("ini", fname)
+	iniconf, err = confpkg.NewConfig("ini", fname)
 	if err != nil {
 		return err
 	}
-	for _, dbconfig := range AppConfig.DBList {
-		if AppConfig.DefaultDB == dbconfig.Name {
+	for _, dbconfig := range this.DBList {
+		if this.DefaultDB == dbconfig.Name {
 			writeSingleConfig(DEFAULTDB_SECTION, &dbconfig, iniconf)
 		} else {
 			writeSingleConfig(dbconfig.Name, &dbconfig, iniconf)
@@ -272,7 +262,7 @@ func LoadDBConfig() (err error) {
 	return iniconf.SaveConfigFile(fname)
 }
 
-func readSingleConfig(section string, p interface{}, iniconf config.Configer) {
+func readSingleConfig(section string, p interface{}, iniconf confpkg.Configer) {
 	pt := reflect.TypeOf(p)
 	if pt.Kind() != reflect.Ptr {
 		return
@@ -328,7 +318,7 @@ func readSingleConfig(section string, p interface{}, iniconf config.Configer) {
 	}
 }
 
-func writeSingleConfig(section string, p interface{}, iniconf config.Configer) {
+func writeSingleConfig(section string, p interface{}, iniconf confpkg.Configer) {
 	pt := reflect.TypeOf(p)
 	if pt.Kind() != reflect.Ptr {
 		return

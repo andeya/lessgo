@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/logs/color"
 	"github.com/lessgo/lessgo/utils"
 )
@@ -200,7 +199,7 @@ func (m *MiddlewareConfig) middlewareFunc() MiddlewareFunc {
 	}
 	fn, err := m.apiMiddleware.regetFunc([]byte(m.Config))
 	if err != nil {
-		Logger().Error(err.Error())
+		Log.Error(err.Error())
 	}
 	return fn
 }
@@ -241,17 +240,17 @@ func setApiMiddleware(a *ApiMiddleware) {
 	apiMiddlewareLock.Lock()
 	defer apiMiddlewareLock.Unlock()
 	apiMiddlewareMap[a.Name] = a
-	for i, a2 := range DefLessgo.apiMiddlewares {
+	for i, a2 := range lessgo.apiMiddlewares {
 		if a.Name < a2.Name {
-			list := make([]*ApiMiddleware, len(DefLessgo.apiMiddlewares)+1)
-			copy(list, DefLessgo.apiMiddlewares[:i])
+			list := make([]*ApiMiddleware, len(lessgo.apiMiddlewares)+1)
+			copy(list, lessgo.apiMiddlewares[:i])
 			list[i] = a
-			copy(list[i+1:], DefLessgo.apiMiddlewares[i:])
-			DefLessgo.apiMiddlewares = list
+			copy(list[i+1:], lessgo.apiMiddlewares[i:])
+			lessgo.apiMiddlewares = list
 			return
 		}
 	}
-	DefLessgo.apiMiddlewares = append(DefLessgo.apiMiddlewares, a)
+	lessgo.apiMiddlewares = append(lessgo.apiMiddlewares, a)
 }
 
 // 检查中间件是否存在
@@ -316,6 +315,18 @@ func init() {
 		Desc:       "根据配置信息设置允许跨域",
 		Middleware: CrossDomain,
 	}).init()
+
+	(&ApiMiddleware{
+		Name:       "过滤前端模板",
+		Desc:       "过滤前端模板，不允许直接访问",
+		Middleware: FilterTemplate(),
+	}).init()
+
+	(&ApiMiddleware{
+		Name:       "智能追加.html后缀",
+		Desc:       "静态路由时智能追加\".html\"后缀",
+		Middleware: AutoHTMLSuffix,
+	}).init()
 }
 
 // 检查服务器是否启用
@@ -374,7 +385,7 @@ func RequestLogger(next HandlerFunc) HandlerFunc {
 			code = color.Cyan(n)
 		}
 
-		logs.Debug("%s | %s | %s | %s | %s | %d", req.RealRemoteAddr(), method, path, code, stop.Sub(start), size)
+		Log.Debug("%s | %s | %s | %s | %s | %d", req.RealRemoteAddr(), method, path, code, stop.Sub(start), size)
 		return nil
 	}
 }
@@ -420,7 +431,7 @@ func Recover(confObject interface{}) MiddlewareFunc {
 					stack := make([]byte, config.StackSize)
 					length := runtime.Stack(stack, !config.DisableStackAll)
 					if !config.DisablePrintStack {
-						c.Logger().Error("[%s] %s %s", color.Red("PANIC RECOVER"), err, stack[:length])
+						Log.Error("[%s] %s %s", color.Red("PANIC RECOVER"), err, stack[:length])
 					}
 					c.Error(err)
 				}
@@ -437,7 +448,7 @@ func CrossDomain(c Context) error {
 }
 
 // 过滤前端模板，不允许直接访问
-func filterTemplate() MiddlewareFunc {
+func FilterTemplate() MiddlewareFunc {
 	return func(next HandlerFunc) HandlerFunc {
 		return func(c Context) (err error) {
 			ext := path.Ext(c.Request().URL.Path)
@@ -450,7 +461,7 @@ func filterTemplate() MiddlewareFunc {
 }
 
 // 静态路由时智能追加".html"后缀
-func autoHTMLSuffix(next HandlerFunc) HandlerFunc {
+func AutoHTMLSuffix(next HandlerFunc) HandlerFunc {
 	return func(c Context) (err error) {
 		p := c.Request().URL.Path
 		if p[len(p)-1] != '/' {

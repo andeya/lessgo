@@ -81,11 +81,11 @@ func (r *Request) QueryParams() map[string][]string {
 func (r *Request) FormParams() map[string][]string {
 	if strings.HasPrefix(r.Header.Get(HeaderContentType), MIMEMultipartForm) {
 		if err := r.ParseMultipartForm(MaxMemory); err != nil {
-			Logger().Error("%v", err)
+			Log.Error("%v", err)
 		}
 	} else {
 		if err := r.ParseForm(); err != nil {
-			Logger().Error("%v", err)
+			Log.Error("%v", err)
 		}
 	}
 	return map[string][]string(r.Request.Form)

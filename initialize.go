@@ -12,26 +12,25 @@ import (
 	"github.com/go-xorm/xorm"
 
 	"github.com/lessgo/lessgo/dbservice"
-	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
 	"github.com/lessgo/lessgo/utils"
 )
 
-func newLessgo() *lessgo {
+func newLessgo() *Lessgo {
 	printInfo()
-	err := LoadAppConfig()
+	err := Config.LoadMainConfig(APPCONFIG_FILE)
 	if err != nil {
 		fmt.Println(err)
 	}
-	err = LoadDBConfig()
+	err = Config.LoadDBConfig(DBCONFIG_FILE)
 	if err != nil {
 		fmt.Println(err)
 	}
 	registerMime()
 
-	l := &lessgo{
-		app:            New(),
-		AppConfig:      AppConfig,
+	l := &Lessgo{
+		App:            newApp(),
+		config:         Config,
 		home:           "/",
 		serverEnable:   true,
 		apiHandlers:    []*ApiHandler{},
@@ -41,39 +40,40 @@ func newLessgo() *lessgo {
 		virtRouter:     newRootVirtRouter(),
 	}
 
-	// 初始化日志
-	l.app.Logger().SetMsgChan(AppConfig.Log.AsyncChan)
-	l.app.SetLogLevel(AppConfig.Log.Level)
+	// 初始化全局日志
+	Log.SetMsgChan(Config.Log.AsyncChan)
+	Log.SetLevel(Config.Log.Level)
 
 	// 设置运行模式
-	l.app.SetDebug(AppConfig.Debug)
+	l.App.SetDebug(Config.Debug)
 
 	// 设置静态资源缓存
-	l.app.SetMemoryCache(NewMemoryCache(
-		AppConfig.FileCache.SingleFileAllowMB*MB,
-		AppConfig.FileCache.MaxCapMB*MB,
-		time.Duration(AppConfig.FileCache.CacheSecond)*time.Second),
+	l.App.SetMemoryCache(NewMemoryCache(
+		Config.FileCache.SingleFileAllowMB*MB,
+		Config.FileCache.MaxCapMB*MB,
+		time.Duration(Config.FileCache.CacheSecond)*time.Second),
 	)
 
 	// 设置渲染接口
-	l.app.SetRenderer(NewPongo2Render(AppConfig.Debug))
+	l.App.SetRenderer(NewPongo2Render(Config.Debug))
 
 	// 设置上传文件允许的最大尺寸
-	MaxMemory = AppConfig.MaxMemoryMB * MB
+	MaxMemory = Config.MaxMemoryMB * MB
 
 	// 配置数据库
 	l.dbService = registerDBService()
 
-	// 初始化全局session
-	err = registerSession()
+	// 初始化sessions管理实例
+	sessions, err := newSessions()
 	if err != nil {
-		l.app.Logger().Error("Failed to create GlobalSessions: %v.", err)
+		Log.Error("Failed to create sessions: %v.", err)
 	}
-	if GlobalSessions == nil {
-		l.app.Logger().Sys("Session is disable.")
+	if sessions == nil {
+		Log.Sys("Session is disable.")
 	} else {
-		l.app.SetSessions(GlobalSessions)
-		l.app.Logger().Sys("Session is enable.")
+		go sessions.GC()
+		l.App.setSessions(sessions)
+		Log.Sys("Session is enable.")
 	}
 
 	return l
@@ -89,43 +89,27 @@ func registerMime() {
 	}
 }
 
-func registerSession() (err error) {
-	if !AppConfig.Session.SessionOn {
-		GlobalSessions = nil
+func newSessions() (sessions *session.Manager, err error) {
+	if !Config.Session.SessionOn {
 		return
 	}
 	conf := map[string]interface{}{
-		"cookieName":              AppConfig.Session.SessionName,
-		"gclifetime":              AppConfig.Session.SessionGCMaxLifetime,
-		"providerConfig":          filepath.ToSlash(AppConfig.Session.SessionProviderConfig),
-		"secure":                  AppConfig.Listen.EnableHTTPS,
-		"enableSetCookie":         AppConfig.Session.SessionAutoSetCookie,
-		"domain":                  AppConfig.Session.SessionDomain,
-		"cookieLifeTime":          AppConfig.Session.SessionCookieLifeTime,
-		"enableSidInHttpHeader":   AppConfig.Session.EnableSidInHttpHeader,
-		"sessionNameInHttpHeader": AppConfig.Session.SessionNameInHttpHeader,
-		"enableSidInUrlQuery":     AppConfig.Session.EnableSidInUrlQuery,
+		"cookieName":              Config.Session.SessionName,
+		"gclifetime":              Config.Session.SessionGCMaxLifetime,
+		"providerConfig":          filepath.ToSlash(Config.Session.SessionProviderConfig),
+		"secure":                  Config.Listen.EnableHTTPS,
+		"enableSetCookie":         Config.Session.SessionAutoSetCookie,
+		"domain":                  Config.Session.SessionDomain,
+		"cookieLifeTime":          Config.Session.SessionCookieLifeTime,
+		"enableSidInHttpHeader":   Config.Session.EnableSidInHttpHeader,
+		"sessionNameInHttpHeader": Config.Session.SessionNameInHttpHeader,
+		"enableSidInUrlQuery":     Config.Session.EnableSidInUrlQuery,
 	}
 	confBytes, _ := json.Marshal(conf)
-	GlobalSessions, err = session.NewManager(AppConfig.Session.SessionProvider, string(confBytes))
-	if err != nil {
-		return
-	}
-	go GlobalSessions.GC()
-	return
+	return session.NewManager(Config.Session.SessionProvider, string(confBytes))
 }
 
-// 注册固定的静态文件与目录
-func registerStaticRouter() {
-	DefLessgo.app.Static("/uploads", UPLOADS_DIR, autoHTMLSuffix)
-	DefLessgo.app.Static("/static", STATIC_DIR, filterTemplate(), autoHTMLSuffix)
-	DefLessgo.app.Static("/biz", BIZ_VIEW_DIR, filterTemplate(), autoHTMLSuffix)
-	DefLessgo.app.Static("/sys", SYS_VIEW_DIR, filterTemplate(), autoHTMLSuffix)
-
-	DefLessgo.app.File("/favicon.ico", IMG_DIR+"/favicon.ico")
-}
-
-// 设置系统预设的中间件
+// 添加系统预设的中间件
 func registerMiddleware() {
 	PreUse(
 		&MiddlewareConfig{Name: "检查服务器是否启用"},
@@ -133,9 +117,18 @@ func registerMiddleware() {
 		&MiddlewareConfig{Name: "系统运行日志打印"},
 		&MiddlewareConfig{Name: "捕获运行时恐慌"},
 	)
-	if AppConfig.CrossDomain {
+	if Config.CrossDomain {
 		BeforeUse(&MiddlewareConfig{Name: "设置允许跨域"})
 	}
+}
+
+// 添加系统预设的静态虚拟路由
+func registerStaticRouter() {
+	File("/favicon.ico", IMG_DIR+"/favicon.ico")
+	Static("/uploads", UPLOADS_DIR, &MiddlewareConfig{Name: "智能追加.html后缀"})
+	Static("/static", STATIC_DIR, &MiddlewareConfig{Name: "过滤前端模板"}, &MiddlewareConfig{Name: "智能追加.html后缀"})
+	Static("/biz", BIZ_VIEW_DIR, &MiddlewareConfig{Name: "过滤前端模板"}, &MiddlewareConfig{Name: "智能追加.html后缀"})
+	Static("/sys", SYS_VIEW_DIR, &MiddlewareConfig{Name: "过滤前端模板"}, &MiddlewareConfig{Name: "智能追加.html后缀"})
 }
 
 // 注册数据库服务
@@ -143,14 +136,14 @@ func registerDBService() *dbservice.DBService {
 	dbService := &dbservice.DBService{
 		List: map[string]*xorm.Engine{},
 	}
-	for _, conf := range AppConfig.DBList {
+	for _, conf := range Config.DBList {
 		engine, err := xorm.NewEngine(conf.Driver, conf.ConnString)
 		if err != nil {
-			logs.Error("%v\n", err)
+			Log.Error("%v\n", err)
 			continue
 		}
-		logger := dbservice.NewILogger(AppConfig.Log.AsyncChan, AppConfig.Log.Level, conf.Name)
-		logger.BeeLogger.EnableFuncCallDepth(AppConfig.Debug)
+		logger := dbservice.NewILogger(Config.Log.AsyncChan, Config.Log.Level, conf.Name)
+		logger.BeeLogger.EnableFuncCallDepth(Config.Debug)
 
 		engine.SetLogger(logger)
 		engine.SetMaxOpenConns(conf.MaxOpenConns)
@@ -189,14 +182,14 @@ func registerDBService() *dbservice.DBService {
 			os.MkdirAll(filepath.Dir(conf.ConnString), 0777)
 			f, err := os.Create(conf.ConnString)
 			if err != nil {
-				logs.Global.Error("%v", err)
+				Log.Error("%v", err)
 			} else {
 				f.Close()
 			}
 		}
 
 		dbService.List[conf.Name] = engine
-		if AppConfig.DefaultDB == conf.Name {
+		if Config.DefaultDB == conf.Name {
 			dbService.Default = engine
 		}
 	}
