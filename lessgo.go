@@ -7,6 +7,7 @@ Author2: https://github.com/changyu72
 package lessgo
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path"
@@ -36,8 +37,8 @@ type Lessgo struct {
 	apiMiddlewares []*ApiMiddleware
 
 	// 路由执行前后的中间件登记
-	before      []*MiddlewareConfig //处理链中路由操作之前的中间件子链
-	after       []*MiddlewareConfig //处理链中路由操作之后的中间件子链
+	virtBefore  []*MiddlewareConfig //处理链中路由操作之前的中间件子链
+	virtAfter   []*MiddlewareConfig //处理链中路由操作之后的中间件子链
 	virtStatics []*VirtStatic       //单独注册的静态目录虚拟路由(无法在Root()下使用)
 	virtFiles   []*VirtFile         //单独注册的静态文件虚拟路由(无法在Root()下使用)
 	// 用于构建最终真实路由的虚拟路由；
@@ -191,31 +192,6 @@ func Middlewares() []*ApiMiddleware {
 	return lessgo.apiMiddlewares
 }
 
-// 自动转换某些允许的函数为中间件函数.
-func WrapMiddleware(h interface{}) MiddlewareFunc {
-	var x HandlerFunc
-	switch t := h.(type) {
-	case MiddlewareFunc:
-		return t
-	case func(HandlerFunc) HandlerFunc:
-		return MiddlewareFunc(t)
-	case HandlerFunc:
-		x = t
-	case func(Context) error:
-		x = HandlerFunc(t)
-	default:
-		panic("[" + utils.ObjectName(h) + "] can not be converted to MiddlewareFunc.")
-	}
-	return func(next HandlerFunc) HandlerFunc {
-		return func(c Context) error {
-			if err := x(c); err != nil {
-				return err
-			}
-			return next(c)
-		}
-	}
-}
-
 // 返回当前虚拟的路由列表(不含单独注册的静态路由VirtFiles/VirtStatics)
 func VirtRoutes() []*VirtRouter {
 	return lessgo.virtRouter.Progeny()
@@ -247,41 +223,71 @@ func ApiHandlerList() []*ApiHandler {
 }
 
 // 添加到处理链最前端的中间件(子链)
-func PreUse(middleware ...*MiddlewareConfig) {
-	lessgo.before = append(middleware, lessgo.before...)
+func PreUse(middlewares ...interface{}) error {
+	ms, err := WrapMiddlewareConfigs(middlewares)
+	if err != nil {
+		return err
+	}
+	lessgo.virtBefore = append(ms, lessgo.virtBefore...)
+	return nil
 }
 
 // 插入到处理链中路由操作前一位的中间件(子链)
-func BeforeUse(middleware ...*MiddlewareConfig) {
-	lessgo.before = append(lessgo.before, middleware...)
+func BeforeUse(middlewares ...interface{}) error {
+	ms, err := WrapMiddlewareConfigs(middlewares)
+	if err != nil {
+		return err
+	}
+	lessgo.virtBefore = append(lessgo.virtBefore, ms...)
+	return nil
 }
 
 // 插入到处理链中路由操作后一位的中间件(子链)
-func AfterUse(middleware ...*MiddlewareConfig) {
-	lessgo.after = append(middleware, lessgo.after...)
+func AfterUse(middlewares ...interface{}) error {
+	ms, err := WrapMiddlewareConfigs(middlewares)
+	if err != nil {
+		return err
+	}
+	lessgo.virtAfter = append(ms, lessgo.virtAfter...)
+	return nil
 }
 
 // 追加到处理链最末端的中间件(子链)
-func SufUse(middleware ...*MiddlewareConfig) {
-	lessgo.after = append(lessgo.after, middleware...)
+func SufUse(middlewares ...interface{}) error {
+	ms, err := WrapMiddlewareConfigs(middlewares)
+	if err != nil {
+		return err
+	}
+	lessgo.virtAfter = append(lessgo.virtAfter, ms...)
+	return nil
 }
 
 // 单独注册静态文件虚拟路由VirtFile(无法在Root()下使用)
-func File(path, file string, middleware ...*MiddlewareConfig) {
+func File(path, file string, middlewares ...interface{}) error {
+	ms, err := WrapMiddlewareConfigs(middlewares)
+	if err != nil {
+		return err
+	}
 	lessgo.virtFiles = append(lessgo.virtFiles, &VirtFile{
 		Path:        path,
 		File:        file,
-		Middlewares: middleware,
+		Middlewares: ms,
 	})
+	return nil
 }
 
 // 单独注册静态目录虚拟路由VirtStatic(无法在Root()下使用)
-func Static(prefix, root string, middleware ...*MiddlewareConfig) {
+func Static(prefix, root string, middlewares ...interface{}) error {
+	ms, err := WrapMiddlewareConfigs(middlewares)
+	if err != nil {
+		return err
+	}
 	lessgo.virtStatics = append(lessgo.virtStatics, &VirtStatic{
 		Prefix:      prefix,
 		Root:        root,
-		Middlewares: middleware,
+		Middlewares: ms,
 	})
+	return nil
 }
 
 // 创建静态目录服务的操作(用于在Root()下)
@@ -343,15 +349,60 @@ func Leaf(prefix string, apiHandler *ApiHandler, middlewares ...*ApiMiddleware) 
 	return vr
 }
 
+// 自动转换某些允许的函数为中间件函数.
+func WrapMiddleware(h interface{}) MiddlewareFunc {
+	var x HandlerFunc
+	switch t := h.(type) {
+	case MiddlewareFunc:
+		return t
+	case func(HandlerFunc) HandlerFunc:
+		return MiddlewareFunc(t)
+	case HandlerFunc:
+		x = t
+	case func(Context) error:
+		x = HandlerFunc(t)
+	default:
+		panic("[" + utils.ObjectName(h) + "] can not be converted to MiddlewareFunc.")
+	}
+	return func(next HandlerFunc) HandlerFunc {
+		return func(c Context) error {
+			if err := x(c); err != nil {
+				return err
+			}
+			return next(c)
+		}
+	}
+}
+
+// 自动转换某些允许的对象为中间件配置类型.
+func WrapMiddlewareConfigs(middlewares []interface{}) ([]*MiddlewareConfig, error) {
+	ms := make([]*MiddlewareConfig, len(middlewares))
+	for i, o := range middlewares {
+		switch m := o.(type) {
+		case *MiddlewareConfig:
+			ms[i] = m
+		case MiddlewareConfig:
+			ms[i] = &m
+		case *ApiMiddleware:
+			ms[i] = m.init().NewMiddlewareConfig()
+		case ApiMiddleware:
+			ms[i] = m.init().NewMiddlewareConfig()
+		default:
+			return ms, errors.New("[" + utils.ObjectName(m) + "] can not be converted to *MiddlewareConfig.")
+		}
+	}
+	return ms, nil
+}
+
 // 重建底层真实路由
 func ReregisterRouter() {
 	var err error
 	// 检查路由操作执行前后，中间件配置的可用性
-	if err = isExistMiddlewares(lessgo.before...); err != nil {
+	if err = isExistMiddlewares(lessgo.virtBefore...); err != nil {
 		Log.Error("Create/Recreate the router is faulty: %v", err)
 		return
 	}
-	if err = isExistMiddlewares(lessgo.after...); err != nil {
+	if err = isExistMiddlewares(lessgo.virtAfter...); err != nil {
 		Log.Error("Create/Recreate the router is faulty: %v", err)
 		return
 	}
@@ -374,8 +425,8 @@ func ReregisterRouter() {
 
 	// 从虚拟路由创建真实路由
 	lessgo.App.cleanRouter()
-	lessgo.App.beforeUse(getMiddlewareFuncs(lessgo.before)...)
-	lessgo.App.afterUse(getMiddlewareFuncs(lessgo.after)...)
+	lessgo.App.beforeUse(getMiddlewareFuncs(lessgo.virtBefore)...)
+	lessgo.App.afterUse(getMiddlewareFuncs(lessgo.virtAfter)...)
 	group := lessgo.App.group(
 		lessgo.virtRouter.Prefix,
 		getMiddlewareFuncs(lessgo.virtRouter.Middlewares)...,

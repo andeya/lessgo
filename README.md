@@ -87,10 +87,10 @@ var Index = ApiHandler{
     Handler: func(c Context) error {
         // 测试读取cookie
         id, err := c.Request().Cookie("name")
-        c.Logger().Info("cookie中的%v: %#v (%v)", "name", id, err)
+        c.Log().Info("cookie中的%v: %#v (%v)", "name", id, err)
 
         // 测试session
-        c.Logger().Info("从session读取上次请求的输入: %#v", c.GetSession("info"))
+        c.Log().Info("从session读取上次请求的输入: %#v", c.GetSession("info"))
 
         c.SetSession("info", map[string]interface{}{
             "user":     c.FormValue("user"),
@@ -129,7 +129,7 @@ var ShowHeader = lessgo.ApiMiddleware{
     Desc:          "显示Header测试",
     Config: nil,
     Middleware: func(c lessgo.Context) error {
-        logs.Info("测试中间件-显示Header：%v", c.Request().Header)
+        c.Log().Info("测试中间件-显示Header：%v", c.Request().Header)
         return nil
     },
 }.Reg()

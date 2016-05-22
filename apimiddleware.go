@@ -190,12 +190,29 @@ func (m *MiddlewareConfig) CheckDynamic() bool {
 	return bol
 }
 
+// 检查是否为有效配置
+func (m *MiddlewareConfig) CheckValid() bool {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	a := getApiMiddleware(m.Name)
+	if a != nil {
+		if m.apiMiddleware == a || m.apiMiddleware == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // 获取中间件操作函数
 func (m *MiddlewareConfig) middlewareFunc() MiddlewareFunc {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if m.apiMiddleware == nil {
 		m.apiMiddleware = getApiMiddleware(m.Name)
+		if m.apiMiddleware == nil {
+			Log.Error("ApiMiddleware %s is not exist.", m.Name)
+			return nil
+		}
 	}
 	fn, err := m.apiMiddleware.regetFunc([]byte(m.Config))
 	if err != nil {
@@ -280,115 +297,76 @@ func getMiddlewareFuncs(configs []*MiddlewareConfig) []MiddlewareFunc {
 /*
  * system middleware
  */
-func init() {
-	(&ApiMiddleware{
-		Name:       "检查服务器是否启用",
-		Desc:       "检查服务器是否启用",
-		Middleware: CheckServer,
-	}).init()
 
-	(&ApiMiddleware{
-		Name:       "检查是否为访问主页",
-		Desc:       "检查是否为访问主页",
-		Middleware: CheckHome,
-	}).init()
-
-	(&ApiMiddleware{
-		Name:       "系统运行日志打印",
-		Desc:       "RequestLogger returns a middleware that logs HTTP requests.",
-		Middleware: RequestLogger,
-	}).init()
-
-	(&ApiMiddleware{
-		Name: "捕获运行时恐慌",
-		Desc: "Recover returns a middleware which recovers from panics anywhere in the chain and handles the control to the centralized HTTPErrorHandler.",
-		Config: RecoverConfig{
-			StackSize:         4 << 10, // 4 KB
-			DisableStackAll:   false,
-			DisablePrintStack: false,
-		},
-		Middleware: Recover,
-	}).init()
-
-	(&ApiMiddleware{
-		Name:       "设置允许跨域",
-		Desc:       "根据配置信息设置允许跨域",
-		Middleware: CrossDomain,
-	}).init()
-
-	(&ApiMiddleware{
-		Name:       "过滤前端模板",
-		Desc:       "过滤前端模板，不允许直接访问",
-		Middleware: FilterTemplate(),
-	}).init()
-
-	(&ApiMiddleware{
-		Name:       "智能追加.html后缀",
-		Desc:       "静态路由时智能追加\".html\"后缀",
-		Middleware: AutoHTMLSuffix,
-	}).init()
-}
-
-// 检查服务器是否启用
-func CheckServer(next HandlerFunc) HandlerFunc {
-	return func(c Context) error {
-		if !ServerEnable() {
-			return c.NoContent(http.StatusServiceUnavailable)
+var CheckServer = ApiMiddleware{
+	Name: "检查服务器是否启用",
+	Desc: "检查服务器是否启用",
+	Middleware: func(next HandlerFunc) HandlerFunc {
+		return func(c Context) error {
+			if !ServerEnable() {
+				return c.NoContent(http.StatusServiceUnavailable)
+			}
+			return next(c)
 		}
-		return next(c)
-	}
-}
+	},
+}.Reg()
 
-// 检查是否为访问主页
-func CheckHome(next HandlerFunc) HandlerFunc {
-	return func(c Context) error {
-		if c.Request().URL.Path == "/" {
-			c.Request().URL.Path = GetHome()
+var CheckHome = ApiMiddleware{
+	Name: "检查是否为访问主页",
+	Desc: "检查是否为访问主页",
+	Middleware: func(next HandlerFunc) HandlerFunc {
+		return func(c Context) error {
+			if c.Request().URL.Path == "/" {
+				c.Request().URL.Path = GetHome()
+			}
+			return next(c)
 		}
-		return next(c)
-	}
-}
+	},
+}.Reg()
 
-// RequestLogger returns a middleware that logs HTTP requests.
-func RequestLogger(next HandlerFunc) HandlerFunc {
-	return func(c Context) (err error) {
-		if !c.App().Debug() {
+var RequestLogger = ApiMiddleware{
+	Name: "系统运行日志打印",
+	Desc: "RequestLogger returns a middleware that logs HTTP requests.",
+	Middleware: func(next HandlerFunc) HandlerFunc {
+		return func(c Context) (err error) {
+			if !c.App().Debug() {
+				if err := next(c); err != nil {
+					c.Error(err)
+				}
+				return nil
+			}
+
+			req := c.Request()
+			res := c.Response()
+
+			start := time.Now()
 			if err := next(c); err != nil {
 				c.Error(err)
 			}
+			stop := time.Now()
+			method := req.Method
+			path := req.URL.Path
+			if path == "" {
+				path = "/"
+			}
+			size := res.Size()
+
+			n := res.Status()
+			code := color.Green(n)
+			switch {
+			case n >= 500:
+				code = color.Red(n)
+			case n >= 400:
+				code = color.Yellow(n)
+			case n >= 300:
+				code = color.Cyan(n)
+			}
+
+			Log.Debug("%s | %s | %s | %s | %s | %d", req.RealRemoteAddr(), method, path, code, stop.Sub(start), size)
 			return nil
 		}
-
-		req := c.Request()
-		res := c.Response()
-
-		start := time.Now()
-		if err := next(c); err != nil {
-			c.Error(err)
-		}
-		stop := time.Now()
-		method := req.Method
-		path := req.URL.Path
-		if path == "" {
-			path = "/"
-		}
-		size := res.Size()
-
-		n := res.Status()
-		code := color.Green(n)
-		switch {
-		case n >= 500:
-			code = color.Red(n)
-		case n >= 400:
-			code = color.Yellow(n)
-		case n >= 300:
-			code = color.Cyan(n)
-		}
-
-		Log.Debug("%s | %s | %s | %s | %s | %d", req.RealRemoteAddr(), method, path, code, stop.Sub(start), size)
-		return nil
-	}
-}
+	},
+}.Reg()
 
 type (
 	// RecoverConfig defines the config for recover middleware.
@@ -408,48 +386,59 @@ type (
 	}
 )
 
-// RecoverWithConfig returns a recover middleware from config.
-// See `Recover()`.
-func Recover(confObject interface{}) MiddlewareFunc {
-	config := confObject.(RecoverConfig)
-	// Defaults
-	if config.StackSize == 0 {
-		config.StackSize = 4 << 10
-	}
-
-	return func(next HandlerFunc) HandlerFunc {
-		return func(c Context) error {
-			defer func() {
-				if r := recover(); r != nil {
-					var err error
-					switch r := r.(type) {
-					case error:
-						err = r
-					default:
-						err = fmt.Errorf("%v", r)
-					}
-					stack := make([]byte, config.StackSize)
-					length := runtime.Stack(stack, !config.DisableStackAll)
-					if !config.DisablePrintStack {
-						Log.Error("[%s] %s %s", color.Red("PANIC RECOVER"), err, stack[:length])
-					}
-					c.Error(err)
-				}
-			}()
-			return next(c)
+var Recover = ApiMiddleware{
+	Name: "捕获运行时恐慌",
+	Desc: "Recover returns a middleware which recovers from panics anywhere in the chain and handles the control to the centralized HTTPErrorHandler.",
+	Config: RecoverConfig{
+		StackSize:         4 << 10, // 4 KB
+		DisableStackAll:   false,
+		DisablePrintStack: false,
+	},
+	Middleware: func(confObject interface{}) MiddlewareFunc {
+		config := confObject.(RecoverConfig)
+		// Defaults
+		if config.StackSize == 0 {
+			config.StackSize = 4 << 10
 		}
-	}
-}
 
-// 设置允许跨域
-func CrossDomain(c Context) error {
-	c.Response().Header().Set("Access-Control-Allow-Origin", "*")
-	return nil
-}
+		return func(next HandlerFunc) HandlerFunc {
+			return func(c Context) error {
+				defer func() {
+					if r := recover(); r != nil {
+						var err error
+						switch r := r.(type) {
+						case error:
+							err = r
+						default:
+							err = fmt.Errorf("%v", r)
+						}
+						stack := make([]byte, config.StackSize)
+						length := runtime.Stack(stack, !config.DisableStackAll)
+						if !config.DisablePrintStack {
+							Log.Error("[%s] %s %s", color.Red("PANIC RECOVER"), err, stack[:length])
+						}
+						c.Error(err)
+					}
+				}()
+				return next(c)
+			}
+		}
+	},
+}.Reg()
 
-// 过滤前端模板，不允许直接访问
-func FilterTemplate() MiddlewareFunc {
-	return func(next HandlerFunc) HandlerFunc {
+var CrossDomain = ApiMiddleware{
+	Name: "设置允许跨域",
+	Desc: "根据配置信息设置允许跨域",
+	Middleware: func(c Context) error {
+		c.Response().Header().Set("Access-Control-Allow-Origin", "*")
+		return nil
+	},
+}.Reg()
+
+var FilterTemplate = ApiMiddleware{
+	Name: "过滤前端模板",
+	Desc: "过滤前端模板，不允许直接访问",
+	Middleware: func(next HandlerFunc) HandlerFunc {
 		return func(c Context) (err error) {
 			ext := path.Ext(c.Request().URL.Path)
 			if len(ext) >= 4 && ext[:4] == TPL_EXT {
@@ -457,20 +446,23 @@ func FilterTemplate() MiddlewareFunc {
 			}
 			return next(c)
 		}
-	}
-}
+	},
+}.Reg()
 
-// 静态路由时智能追加".html"后缀
-func AutoHTMLSuffix(next HandlerFunc) HandlerFunc {
-	return func(c Context) (err error) {
-		p := c.Request().URL.Path
-		if p[len(p)-1] != '/' {
-			ext := path.Ext(p)
-			if ext == "" || ext[0] != '.' {
-				c.Request().URL.Path = strings.TrimSuffix(p, ext) + STATIC_HTML_EXT + ext
-				c.ParamValues()[0] += STATIC_HTML_EXT
+var AutoHTMLSuffix = ApiMiddleware{
+	Name: "智能追加.html后缀",
+	Desc: "静态路由时智能追加\".html\"后缀",
+	Middleware: func(next HandlerFunc) HandlerFunc {
+		return func(c Context) (err error) {
+			p := c.Request().URL.Path
+			if p[len(p)-1] != '/' {
+				ext := path.Ext(p)
+				if ext == "" || ext[0] != '.' {
+					c.Request().URL.Path = strings.TrimSuffix(p, ext) + STATIC_HTML_EXT + ext
+					c.ParamValues()[0] += STATIC_HTML_EXT
+				}
 			}
+			return next(c)
 		}
-		return next(c)
-	}
-}
+	},
+}.Reg()

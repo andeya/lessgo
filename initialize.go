@@ -35,8 +35,10 @@ func newLessgo() *Lessgo {
 		serverEnable:   true,
 		apiHandlers:    []*ApiHandler{},
 		apiMiddlewares: []*ApiMiddleware{},
-		before:         []*MiddlewareConfig{},
-		after:          []*MiddlewareConfig{},
+		virtBefore:     []*MiddlewareConfig{},
+		virtAfter:      []*MiddlewareConfig{},
+		virtStatics:    []*VirtStatic{},
+		virtFiles:      []*VirtFile{},
 		virtRouter:     newRootVirtRouter(),
 	}
 
@@ -125,10 +127,10 @@ func registerMiddleware() {
 // 添加系统预设的静态虚拟路由
 func registerStaticRouter() {
 	File("/favicon.ico", IMG_DIR+"/favicon.ico")
-	Static("/uploads", UPLOADS_DIR, &MiddlewareConfig{Name: "智能追加.html后缀"})
-	Static("/static", STATIC_DIR, &MiddlewareConfig{Name: "过滤前端模板"}, &MiddlewareConfig{Name: "智能追加.html后缀"})
-	Static("/biz", BIZ_VIEW_DIR, &MiddlewareConfig{Name: "过滤前端模板"}, &MiddlewareConfig{Name: "智能追加.html后缀"})
-	Static("/sys", SYS_VIEW_DIR, &MiddlewareConfig{Name: "过滤前端模板"}, &MiddlewareConfig{Name: "智能追加.html后缀"})
+	Static("/uploads", UPLOADS_DIR, AutoHTMLSuffix)
+	Static("/static", STATIC_DIR, FilterTemplate, AutoHTMLSuffix)
+	Static("/biz", BIZ_VIEW_DIR, FilterTemplate, AutoHTMLSuffix)
+	Static("/sys", SYS_VIEW_DIR, FilterTemplate, AutoHTMLSuffix)
 }
 
 // 注册数据库服务
