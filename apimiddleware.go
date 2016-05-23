@@ -329,7 +329,7 @@ var RequestLogger = ApiMiddleware{
 	Desc: "RequestLogger returns a middleware that logs HTTP requests.",
 	Middleware: func(next HandlerFunc) HandlerFunc {
 		return func(c Context) (err error) {
-			if !c.App().Debug() {
+			if !Debug() {
 				if err := next(c); err != nil {
 					c.Error(err)
 				}

@@ -191,7 +191,6 @@ var (
 	// 请求的操作发生错误后的默认处理
 	// 500 Internal Server Error
 	defaultInternalServerErrorHandler = func(err error, c Context) {
-		app := c.App()
 		if !c.Response().Committed() {
 			code := http.StatusInternalServerError
 			msg := http.StatusText(code)
@@ -199,7 +198,7 @@ var (
 				code = he.Code
 				msg = he.Message
 			}
-			if app.debug {
+			if Debug() {
 				msg = err.Error()
 			}
 			c.String(code, msg)
@@ -211,12 +210,9 @@ var (
 // New creates an instance of App.
 func newApp() (this *App) {
 	this = &App{
-		chainHandler:               chainEndHandler,
-		maxParam:                   new(int),
-		binder:                     &binder{},
-		notFoundHandler:            defaultNotFoundHandler,
-		methodNotAllowedHandler:    defaultMethodNotAllowedHandler,
-		internalServerErrorHandler: defaultInternalServerErrorHandler,
+		chainHandler: chainEndHandler,
+		maxParam:     new(int),
+		binder:       &binder{},
 	}
 	this.ctxPool.New = func() interface{} {
 		return this.newContext(new(Response), new(Request))
@@ -541,7 +537,6 @@ func (this *App) newContext(resp *Response, req *Request) Context {
 	return &context{
 		request:  req,
 		response: resp,
-		app:      this,
 		pvalues:  make([]string, *this.maxParam),
 		store:    make(store),
 		handler:  this.notFoundHandler,

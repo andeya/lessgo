@@ -69,6 +69,9 @@ var (
 	// 初始化全局Lessgo实例
 	lessgo = newLessgo()
 
+	// 初始化全局App实例
+	app = newApp()
+
 	// 全局配置实例
 	Config = newConfig()
 
@@ -131,55 +134,55 @@ func GetDB(name string) (*xorm.Engine, bool) {
 
 // Session管理平台实例
 func Sessions() *session.Manager {
-	return lessgo.App.Sessions()
+	return app.Sessions()
 }
 
 // 设置请求的url不存在时的默认操作(内部有默认实现)
 // 404 Not Found
 func SetNotFound(fn func(Context) error) {
-	lessgo.App.SetNotFound(fn)
+	app.SetNotFound(fn)
 }
 
 // 设置请求的url存在但方法不被允许时的默认操作(内部有默认实现)
 // 405 Method Not Allowed
 func SetMethodNotAllowed(fn func(Context) error) {
-	lessgo.App.SetMethodNotAllowed(fn)
+	app.SetMethodNotAllowed(fn)
 }
 
 // 设置请求的操作发生错误后的默认处理(内部有默认实现)
 // 500 Internal Server Error
 func SetInternalServerError(fn func(error, Context)) {
-	lessgo.App.SetInternalServerError(fn)
+	app.SetInternalServerError(fn)
 }
 
 // 设置捆绑数据处理接口(内部有默认实现)
 func SetBinder(b Binder) {
-	lessgo.App.SetBinder(b)
+	app.SetBinder(b)
 }
 
 // 设置html模板处理接口(内部有默认实现)
 func SetRenderer(r Renderer) {
-	lessgo.App.SetRenderer(r)
+	app.SetRenderer(r)
 }
 
 // 判断当前是否为调试模式
 func Debug() bool {
-	return lessgo.App.Debug()
+	return app.Debug()
 }
 
 // 设置运行模式
 func SetDebug(on bool) {
-	lessgo.App.SetDebug(on)
+	app.SetDebug(on)
 }
 
 // 设置文件内存缓存功能(内部有默认实现)
 func SetMemoryCache(m *MemoryCache) {
-	lessgo.App.SetMemoryCache(m)
+	app.SetMemoryCache(m)
 }
 
 // 判断是否开启了文件内存缓存功能
 func MemoryCacheEnable() bool {
-	return lessgo.App.MemoryCacheEnable()
+	return app.MemoryCacheEnable()
 }
 
 // 获取已注册的操作列表
@@ -209,7 +212,7 @@ func VirtStatics() []*VirtStatic {
 
 // 返回底层注册的路由列表(全部真实注册的路由)
 func RealRoutes() []Route {
-	return lessgo.App.RealRoutes()
+	return app.RealRoutes()
 }
 
 // 虚拟路由根节点
@@ -458,14 +461,14 @@ func ReregisterRouter() {
 	}
 
 	// 阻塞所有产生的请求
-	lessgo.App.lock.Lock()
-	defer lessgo.App.lock.Unlock()
+	app.lock.Lock()
+	defer app.lock.Unlock()
 
 	// 从虚拟路由创建真实路由
-	lessgo.App.cleanRouter()
-	lessgo.App.beforeUse(getMiddlewareFuncs(lessgo.virtBefore)...)
-	lessgo.App.afterUse(getMiddlewareFuncs(lessgo.virtAfter)...)
-	group := lessgo.App.group(
+	app.cleanRouter()
+	app.beforeUse(getMiddlewareFuncs(lessgo.virtBefore)...)
+	app.afterUse(getMiddlewareFuncs(lessgo.virtAfter)...)
+	group := app.group(
 		lessgo.virtRouter.Prefix,
 		getMiddlewareFuncs(lessgo.virtRouter.Middlewares)...,
 	)
@@ -485,6 +488,9 @@ func ReregisterRouter() {
 
 // 运行服务
 func Run() {
+	// 尝试设置系统默认通用操作
+	tryRegisterDefaultHandler()
+
 	// 添加系统预设的路由操作前的中间件
 	registerBefore()
 
@@ -533,7 +539,7 @@ func Run() {
 	Log.Sys("> %s listening and serving %s on %v (%s-mode) %v", Config.AppName, protocol, Config.Listen.Address, mode, graceful)
 
 	// 启动服务
-	lessgo.App.run(
+	app.run(
 		Config.Listen.Address,
 		tlsCertfile,
 		tlsKeyfile,

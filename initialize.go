@@ -29,7 +29,7 @@ func newLessgo() *Lessgo {
 	registerMime()
 
 	l := &Lessgo{
-		App:            newApp(),
+		App:            app,
 		config:         Config,
 		home:           "/",
 		serverEnable:   true,
@@ -109,6 +109,19 @@ func newSessions() (sessions *session.Manager, err error) {
 	}
 	confBytes, _ := json.Marshal(conf)
 	return session.NewManager(Config.Session.SessionProvider, string(confBytes))
+}
+
+// 尝试设置系统默认通用操作
+func tryRegisterDefaultHandler() {
+	if lessgo.notFoundHandler == nil {
+		SetNotFound(defaultNotFoundHandler)
+	}
+	if lessgo.methodNotAllowedHandler == nil {
+		SetMethodNotAllowed(defaultMethodNotAllowedHandler)
+	}
+	if lessgo.internalServerErrorHandler == nil {
+		SetInternalServerError(defaultInternalServerErrorHandler)
+	}
 }
 
 // 添加系统预设的路由操作前的中间件

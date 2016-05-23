@@ -21,7 +21,7 @@ type VirtFile struct {
 
 // 从单独静态文件虚拟路由注册真实路由
 func (this *VirtFile) route() {
-	lessgo.App.file(this.Path, this.File, getMiddlewareFuncs(this.Middlewares)...)
+	app.file(this.Path, this.File, getMiddlewareFuncs(this.Middlewares)...)
 }
 
 // 单独注册的静态目录虚拟路由(无法在Root()下使用，暂不支持运行时修改)
@@ -33,7 +33,7 @@ type VirtStatic struct {
 
 // 从单独静态目录虚拟路由注册真实路由
 func (this *VirtStatic) route() {
-	lessgo.App.static(this.Prefix, this.Root, getMiddlewareFuncs(this.Middlewares)...)
+	app.static(this.Prefix, this.Root, getMiddlewareFuncs(this.Middlewares)...)
 }
 
 // 虚拟路由(在Root()下使用，支持运行时修改)
