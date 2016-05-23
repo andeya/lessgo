@@ -45,8 +45,15 @@ func (b *binder) Bind(i interface{}, c Context) (err error) {
 }
 
 func (b *binder) bindForm(ptr interface{}, form map[string][]string) error {
-	typ := reflect.TypeOf(ptr).Elem()
-	val := reflect.ValueOf(ptr).Elem()
+	typ := reflect.TypeOf(ptr)
+	val := reflect.ValueOf(ptr)
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+		if typ.Kind() != reflect.Struct {
+			return errors.New("When \"Content-Type=application/x-www-form-urlencoded\" or \"Content-Type=multipart/form-data\", \"Bind()\"'s param must be \"struct\".")
+		}
+		val = val.Elem()
+	}
 
 	for i := 0; i < typ.NumField(); i++ {
 		typeField := typ.Field(i)
