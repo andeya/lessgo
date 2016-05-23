@@ -8,6 +8,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -79,7 +80,7 @@ type (
 
 		// QueryParams returns the query parameters as map.
 		// It is an alias for `engine.URL#QueryParams()`.
-		QueryParams() map[string][]string
+		QueryParams() url.Values
 
 		// FormValue returns the form field value for the provided name. It is an
 		// alias for `engine.Request#FormValue()`.
@@ -87,7 +88,7 @@ type (
 
 		// FormParams returns the form parameters as map.
 		// It is an alias for `engine.Request#FormParams()`.
-		FormParams() map[string][]string
+		FormParams() url.Values
 
 		// FormFile returns the multipart form file for the provided name. It is an
 		// alias for `engine.Request#FormFile()`.
@@ -360,7 +361,7 @@ func (c *context) QueryParam(name string) string {
 	return c.request.QueryParam(name)
 }
 
-func (c *context) QueryParams() map[string][]string {
+func (c *context) QueryParams() url.Values {
 	return c.request.QueryParams()
 }
 
@@ -368,7 +369,7 @@ func (c *context) FormValue(name string) string {
 	return c.request.FormValue(name)
 }
 
-func (c *context) FormParams() map[string][]string {
+func (c *context) FormParams() url.Values {
 	return c.request.FormParams()
 }
 

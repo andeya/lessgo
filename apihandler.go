@@ -23,12 +23,37 @@ type (
 	}
 	Param struct {
 		Name     string      // 参数名
-		In       string      // 参数出现位置formData、query、path、body、header
+		In       string      // 参数出现位置
 		Required bool        // 是否必填
 		Format   interface{} // 参数值示例(至少为相应go基础类型空值)
 		Desc     string      // 参数描述
 	}
 )
+
+/*
+ * 关于参数的说明
+ * 一、数据结构主要用于固定格式的服务器响应结构，适用于多个接口可能返回相同的数据结构，编辑保存后相关所有的引用都会变更。
+ * 支持的数据类型说明如下：
+ * 1、string:字符串类型
+ * 2、array:数组类型，子项只能是支持的数据类型中的一种，不能添加多个
+ * 3、object:对象类型，只支持一级属性，不支持嵌套，嵌套可以通过在属性中引入ref类型的对象或自定义数据格式
+ * 4、int:短整型
+ * 5、long:长整型
+ * 6、float:浮点型
+ * 7、double:浮点型
+ * 8、decimal:精确到比较高的浮点型
+ * 9、ref:引用类型，即引用定义好的数据结构
+ *
+ * 二、参数位置
+ *    body：http请求body
+ *    cookie：本地cookie
+ *    formData：表单参数
+ *    header：http请求header
+ *    path：http请求url,如getInfo/{userId}
+ *    query：http请求拼接，如getInfo?userId={userId}
+ * 三、参数类型
+ *    自定义：目前仅支持自定义json格式，仅当"参数位置"为“body"有效
+ */
 
 var (
 	apiHandlerMap  = map[string]*ApiHandler{}

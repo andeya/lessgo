@@ -56,8 +56,8 @@ func (r *Request) RealRemoteAddr() string {
 	return r.realRemoteAddr
 }
 
-func (r *Request) ContentLength() int {
-	return int(r.Request.ContentLength)
+func (r *Request) ContentLength() int64 {
+	return r.Request.ContentLength
 }
 
 func (r *Request) SetBody(reader io.Reader) {
@@ -71,14 +71,14 @@ func (r *Request) QueryParam(name string) string {
 	return r.query.Get(name)
 }
 
-func (r *Request) QueryParams() map[string][]string {
+func (r *Request) QueryParams() url.Values {
 	if r.query == nil {
 		r.query = r.URL.Query()
 	}
-	return map[string][]string(r.query)
+	return r.query
 }
 
-func (r *Request) FormParams() map[string][]string {
+func (r *Request) FormParams() url.Values {
 	if strings.HasPrefix(r.Header.Get(HeaderContentType), MIMEMultipartForm) {
 		if err := r.ParseMultipartForm(MaxMemory); err != nil {
 			Log.Error("%v", err)
@@ -88,7 +88,7 @@ func (r *Request) FormParams() map[string][]string {
 			Log.Error("%v", err)
 		}
 	}
-	return map[string][]string(r.Request.Form)
+	return r.Request.Form
 }
 
 func (r *Request) MultipartForm() (*multipart.Form, error) {

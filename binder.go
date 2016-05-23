@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -37,24 +38,23 @@ func (b *binder) Bind(i interface{}, c Context) (err error) {
 			err = NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 	case strings.HasPrefix(ctype, MIMEApplicationForm), strings.HasPrefix(ctype, MIMEMultipartForm):
-		if err = b.bindForm(i, req.FormParams()); err != nil {
+		typ := reflect.TypeOf(i)
+		val := reflect.ValueOf(i)
+		if typ.Kind() == reflect.Ptr {
+			typ = typ.Elem()
+			if typ.Kind() != reflect.Struct {
+				return NewHTTPError(http.StatusBadRequest, "When \"Content-Type: "+ctype+"\", \"Bind()\"'s param must be \"struct\".")
+			}
+			val = val.Elem()
+		}
+		if err = b.bindForm(typ, val, req.FormParams()); err != nil {
 			err = NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 	}
 	return
 }
 
-func (b *binder) bindForm(ptr interface{}, form map[string][]string) error {
-	typ := reflect.TypeOf(ptr)
-	val := reflect.ValueOf(ptr)
-	if typ.Kind() == reflect.Ptr {
-		typ = typ.Elem()
-		if typ.Kind() != reflect.Struct {
-			return errors.New("When \"Content-Type=application/x-www-form-urlencoded\" or \"Content-Type=multipart/form-data\", \"Bind()\"'s param must be \"struct\".")
-		}
-		val = val.Elem()
-	}
-
+func (b *binder) bindForm(typ reflect.Type, val reflect.Value, form url.Values) error {
 	for i := 0; i < typ.NumField(); i++ {
 		typeField := typ.Field(i)
 		structField := val.Field(i)
@@ -66,9 +66,12 @@ func (b *binder) bindForm(ptr interface{}, form map[string][]string) error {
 
 		if inputFieldName == "" {
 			inputFieldName = typeField.Name
-			// If "form" tag is nil, we inspect if the field is a struct.
+			// If "form" tag is nil, we inspect if the field is a struct or *struct.
+			if structFieldKind == reflect.Ptr {
+				structField = structField.Elem()
+			}
 			if structFieldKind == reflect.Struct {
-				err := b.bindForm(structField.Addr().Interface(), form)
+				err := b.bindForm(structField.Type(), structField, form)
 				if err != nil {
 					return err
 				}
