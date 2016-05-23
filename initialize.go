@@ -111,8 +111,8 @@ func newSessions() (sessions *session.Manager, err error) {
 	return session.NewManager(Config.Session.SessionProvider, string(confBytes))
 }
 
-// 添加系统预设的中间件
-func registerMiddleware() {
+// 添加系统预设的路由操作前的中间件
+func registerBefore() {
 	PreUse(
 		&MiddlewareConfig{Name: "检查服务器是否启用"},
 		&MiddlewareConfig{Name: "检查是否为访问主页"},
@@ -124,13 +124,22 @@ func registerMiddleware() {
 	}
 }
 
-// 添加系统预设的静态虚拟路由
-func registerStaticRouter() {
-	File("/favicon.ico", IMG_DIR+"/favicon.ico")
+// 添加系统预设的路由操作后的中间件
+func registerAfter() {
+
+}
+
+// 添加系统预设的静态目录虚拟路由
+func registerStatics() {
 	Static("/uploads", UPLOADS_DIR, AutoHTMLSuffix)
 	Static("/static", STATIC_DIR, FilterTemplate, AutoHTMLSuffix)
 	Static("/biz", BIZ_VIEW_DIR, FilterTemplate, AutoHTMLSuffix)
 	Static("/sys", SYS_VIEW_DIR, FilterTemplate, AutoHTMLSuffix)
+}
+
+// 添加系统预设的静态文件虚拟路由
+func registerFiles() {
+	File("/favicon.ico", IMG_DIR+"/favicon.ico")
 }
 
 // 注册数据库服务

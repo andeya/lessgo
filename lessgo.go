@@ -268,6 +268,13 @@ func File(path, file string, middlewares ...interface{}) error {
 	if err != nil {
 		return err
 	}
+	for _, v := range lessgo.virtFiles {
+		if v.Path == path {
+			v.File = file
+			v.Middlewares = ms
+			return nil
+		}
+	}
 	lessgo.virtFiles = append(lessgo.virtFiles, &VirtFile{
 		Path:        path,
 		File:        file,
@@ -282,12 +289,43 @@ func Static(prefix, root string, middlewares ...interface{}) error {
 	if err != nil {
 		return err
 	}
+	for _, v := range lessgo.virtStatics {
+		if v.Prefix == prefix {
+			v.Root = root
+			v.Middlewares = ms
+			return nil
+		}
+	}
 	lessgo.virtStatics = append(lessgo.virtStatics, &VirtStatic{
 		Prefix:      prefix,
 		Root:        root,
 		Middlewares: ms,
 	})
 	return nil
+}
+
+// 清空用户添加到处理链中路由操作前的所有中间件(子链)
+func ResetBefore() {
+	lessgo.virtBefore = lessgo.virtBefore[:0]
+	registerBefore()
+}
+
+// 清空用户添加到处理链中路由操作后的所有中间件(子链)
+func ResetAfter() {
+	lessgo.virtAfter = lessgo.virtAfter[:0]
+	registerAfter()
+}
+
+// 清空用户单独注册静态目录虚拟路由VirtFile
+func ResetStatics() {
+	lessgo.virtStatics = lessgo.virtStatics[:0]
+	registerStatics()
+}
+
+// 清空用户单独注册静态文件虚拟路由VirtFile
+func ResetFiles() {
+	lessgo.virtFiles = lessgo.virtFiles[:0]
+	registerFiles()
 }
 
 // 创建静态目录服务的操作(用于在Root()下)
@@ -447,12 +485,21 @@ func ReregisterRouter() {
 
 // 运行服务
 func Run() {
-	// 添加系统预设的中间件
-	registerMiddleware()
-	// 添加系统预设的静态虚拟路由
-	registerStaticRouter()
+	// 添加系统预设的路由操作前的中间件
+	registerBefore()
+
+	// 添加系统预设的路由操作后的中间件
+	registerAfter()
+
+	// 添加系统预设的静态目录虚拟路由
+	registerStatics()
+
+	// 添加系统预设的静态文件虚拟路由
+	registerFiles()
+
 	// 从数据库初始化虚拟路由
 	initVirtRouterFromDB()
+
 	// 重建路由
 	ReregisterRouter()
 
