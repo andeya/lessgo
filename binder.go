@@ -14,14 +14,14 @@ import (
 type (
 	// Binder is the interface that wraps the Bind method.
 	Binder interface {
-		Bind(interface{}, Context) error
+		Bind(interface{}, *Context) error
 	}
 
 	binder struct{}
 )
 
-func (b *binder) Bind(i interface{}, c Context) (err error) {
-	req := c.Request()
+func (b *binder) Bind(i interface{}, c *Context) (err error) {
+	req := c.request
 	ctype := req.Header.Get(HeaderContentType)
 	if req.Body == nil {
 		err = NewHTTPError(http.StatusBadRequest, "request body can't be empty")
@@ -47,7 +47,7 @@ func (b *binder) Bind(i interface{}, c Context) (err error) {
 			}
 			val = val.Elem()
 		}
-		if err = b.bindForm(typ, val, req.FormParams()); err != nil {
+		if err = b.bindForm(typ, val, c.FormParams()); err != nil {
 			err = NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 	}

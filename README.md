@@ -39,7 +39,7 @@ Lessgo是一款Go语言开发的简单、稳定、高效、灵活的 web开发�
 
 ```sh
 go get -u github.com/lessgo/lessgo
-go get -u github.com/lessgo/lessgoext
+go get -u github.com/lessgo/lessgoext/...
 ```
 
 ##框架构成
@@ -55,6 +55,9 @@ go get -u github.com/lessgo/lessgoext
 import (
     "github.com/lessgo/lessgo"
     "github.com/lessgo/lessgoext/swagger"
+
+    _ "github.com/lessgo/lessgoext/dbservice/xorm"
+    // _ "github.com/lessgo/lessgoext/dbservice/gorm"
 
     _ "github.com/lessgo/demo/middleware"
     _ "github.com/lessgo/demo/router"
@@ -79,29 +82,29 @@ import (
 
 var Index = ApiHandler{
     Desc:   "后台管理登录操作",
-    Method: "POST|PUT",
+    Method: "GET|PUT",
     Params: []Param{
-        {"user", "formData", true, "henry", "用户名"},
-        {"password", "formData", true, "12345678", "密码"},
+        {"user", "path", true, "henry", "用户名"},
+        {"password", "path", true, "12345678", "密码"},
     },
-    Handler: func(c Context) error {
+    Handler: func(c *Context) error {
         // 测试读取cookie
-        id, err := c.Request().Cookie("name")
-        c.Log().Info("cookie中的%v: %#v (%v)", "name", id, err)
+        id, err := c.Request().Cookie(Config.Session.SessionName)
+        c.Log().Info("cookie中的%v: %#v (%v)", Config.Session.SessionName, id, err)
 
         // 测试session
         c.Log().Info("从session读取上次请求的输入: %#v", c.GetSession("info"))
 
         c.SetSession("info", map[string]interface{}{
-            "user":     c.FormValue("user"),
-            "password": c.FormValue("password"),
+            "user":     c.Param("user"),
+            "password": c.Param("password"),
         })
 
         return c.Render(200,
             "sysview/admin/login/index.tpl",
             map[string]interface{}{
-                "name":       c.FormValue("user"),
-                "password":   c.FormValue("password"),
+                "name":       c.Param("user"),
+                "password":   c.Param("password"),
                 "repeatfunc": admin.Login.Repeatfunc,
             },
         )
@@ -125,10 +128,10 @@ func (_ login) Repeatfunc(s string, count int) string {
 - 一个简单的中间件
 ```
 var ShowHeader = lessgo.ApiMiddleware{
-    Name:          "显示Header",
-    Desc:          "显示Header测试",
+    Name:   "显示Header",
+    Desc:   "显示Header测试",
     Config: nil,
-    Middleware: func(c lessgo.Context) error {
+    Middleware: func(c *lessgo.Context) error {
         c.Log().Info("测试中间件-显示Header：%v", c.Request().Header)
         return nil
     },

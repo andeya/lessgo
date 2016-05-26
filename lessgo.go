@@ -15,10 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-xorm/xorm"
-
 	_ "github.com/lessgo/lessgo/_fixture"
-	"github.com/lessgo/lessgo/dbservice"
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
 	"github.com/lessgo/lessgo/utils"
@@ -28,7 +25,6 @@ import (
 type Lessgo struct {
 	*App
 	*config
-	dbService *dbservice.DBService
 
 	//全局操作列表
 	apiHandlers []*ApiHandler
@@ -79,7 +75,7 @@ var (
 	Log = func() logs.Logger {
 		l := logs.NewLogger(1000)
 		l.AddAdapter("console", "")
-		l.AddAdapter("file", `{"filename":"logger/lessgo.log"}`)
+		l.AddAdapter("file", `{"filename":"`+LOG_FILE+`"}`)
 		return l
 	}()
 
@@ -122,16 +118,6 @@ func DisableServer() {
 	lessgo.lock.Unlock()
 }
 
-// 获取默认数据库引擎
-func DefaultDB() *xorm.Engine {
-	return lessgo.dbService.DefaultDB()
-}
-
-// 获取指定数据库引擎
-func GetDB(name string) (*xorm.Engine, bool) {
-	return lessgo.dbService.GetDB(name)
-}
-
 // Session管理平台实例
 func Sessions() *session.Manager {
 	return app.Sessions()
@@ -139,19 +125,19 @@ func Sessions() *session.Manager {
 
 // 设置请求的url不存在时的默认操作(内部有默认实现)
 // 404 Not Found
-func SetNotFound(fn func(Context) error) {
+func SetNotFound(fn func(*Context) error) {
 	app.SetNotFound(fn)
 }
 
 // 设置请求的url存在但方法不被允许时的默认操作(内部有默认实现)
 // 405 Method Not Allowed
-func SetMethodNotAllowed(fn func(Context) error) {
+func SetMethodNotAllowed(fn func(*Context) error) {
 	app.SetMethodNotAllowed(fn)
 }
 
 // 设置请求的操作发生错误后的默认处理(内部有默认实现)
 // 500 Internal Server Error
-func SetInternalServerError(fn func(error, Context)) {
+func SetInternalServerError(fn func(c *Context, err error, rcv interface{})) {
 	app.SetInternalServerError(fn)
 }
 
@@ -333,7 +319,7 @@ func ResetFiles() {
 
 // 创建静态目录服务的操作(用于在Root()下)
 func StaticFunc(root string) HandlerFunc {
-	return func(c Context) error {
+	return func(c *Context) error {
 		return c.File(path.Join(root, c.P(0)))
 	}
 }
@@ -400,13 +386,13 @@ func WrapMiddleware(h interface{}) MiddlewareFunc {
 		return MiddlewareFunc(t)
 	case HandlerFunc:
 		x = t
-	case func(Context) error:
+	case func(*Context) error:
 		x = HandlerFunc(t)
 	default:
 		panic("[" + utils.ObjectName(h) + "] can not be converted to MiddlewareFunc.")
 	}
 	return func(next HandlerFunc) HandlerFunc {
-		return func(c Context) error {
+		return func(c *Context) error {
 			if err := x(c); err != nil {
 				return err
 			}
@@ -472,7 +458,7 @@ func ReregisterRouter() {
 		lessgo.virtRouter.Prefix,
 		getMiddlewareFuncs(lessgo.virtRouter.Middlewares)...,
 	)
-	for _, child := range lessgo.virtRouter.Children() {
+	for _, child := range lessgo.virtRouter.Children {
 		child.route(group)
 	}
 
@@ -504,7 +490,7 @@ func Run() {
 	registerFiles()
 
 	// 从数据库初始化虚拟路由
-	initVirtRouterFromDB()
+	initVirtRouterConfig()
 
 	// 重建路由
 	ReregisterRouter()

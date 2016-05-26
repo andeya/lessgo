@@ -24,7 +24,7 @@ func NewPongo2Render(debug bool) *Pongo2Render {
 }
 
 // Render should render the template to the io.Writer.
-func (p *Pongo2Render) Render(w io.Writer, filename string, data interface{}, c Context) error {
+func (p *Pongo2Render) Render(w io.Writer, filename string, data interface{}, c *Context) error {
 	var (
 		template *pongo2.Template
 		data2    = pongo2.Context{}

@@ -17,6 +17,7 @@ import (
 
 	"github.com/lessgo/lessgo/grace"
 	"github.com/lessgo/lessgo/logs"
+	"github.com/lessgo/lessgo/logs/color"
 	"github.com/lessgo/lessgo/session"
 	"github.com/lessgo/lessgo/websocket"
 )
@@ -24,21 +25,18 @@ import (
 type (
 	// App is the top-level framework instancthis.
 	App struct {
-		debug                      bool
-		router                     *Router
-		routerIndex                int
-		maxParam                   *int
-		chainNodes                 []MiddlewareFunc
-		chainHandler               HandlerFunc
-		notFoundHandler            HandlerFunc
-		methodNotAllowedHandler    HandlerFunc
-		internalServerErrorHandler func(error, Context)
-		sessions                   *session.Manager
-		binder                     Binder
-		renderer                   Renderer
-		memoryCache                *MemoryCache
-		ctxPool                    sync.Pool
-		lock                       sync.RWMutex
+		debug        bool
+		router       *Router
+		routes       map[string]Route
+		routerIndex  int
+		chainNodes   []MiddlewareFunc
+		chainHandler HandlerFunc
+		sessions     *session.Manager
+		binder       Binder
+		renderer     Renderer
+		memoryCache  *MemoryCache
+		ctxPool      sync.Pool
+		lock         sync.RWMutex
 	}
 
 	// Route contains a handler and information for matching against requests.
@@ -49,7 +47,7 @@ type (
 	}
 
 	// HandlerFunc defines a function to server HTTP requests.
-	HandlerFunc func(Context) error
+	HandlerFunc func(*Context) error
 
 	// MiddlewareFunc defines a function to process middleware.
 	MiddlewareFunc func(HandlerFunc) HandlerFunc
@@ -61,7 +59,7 @@ type (
 
 	// Renderer is the interface that wraps the Render function.
 	Renderer interface {
-		Render(io.Writer, string, interface{}, Context) error
+		Render(io.Writer, string, interface{}, *Context) error
 	}
 )
 
@@ -165,6 +163,7 @@ var (
 	ErrUnauthorized                = NewHTTPError(http.StatusUnauthorized)
 	ErrMethodNotAllowed            = NewHTTPError(http.StatusMethodNotAllowed)
 	ErrStatusRequestEntityTooLarge = NewHTTPError(http.StatusRequestEntityTooLarge)
+	ErrStatusInternalServerError   = NewHTTPError(http.StatusInternalServerError)
 	ErrRendererNotRegistered       = errors.New("renderer not registered")
 	ErrInvalidRedirectCode         = errors.New("invalid redirect status code")
 	ErrCookieNotFound              = errors.New("cookie not found")
@@ -172,38 +171,48 @@ var (
 
 var (
 	// 请求处理链的最末端(最后被调用的空操作)
-	chainEndHandler = HandlerFunc(func(c Context) error {
+	chainEndHandler = HandlerFunc(func(c *Context) error {
 		return nil
 	})
 
 	// 请求的url不存在时的默认操作
 	// 404 Not Found
-	defaultNotFoundHandler = func(c Context) error {
+	defaultNotFoundHandler = func(c *Context) error {
 		return ErrNotFound
 	}
 
 	// 请求的url存在但方法不被允许时的默认操作
 	// 405 Method Not Allowed
-	defaultMethodNotAllowedHandler = func(c Context) error {
+	defaultMethodNotAllowedHandler = func(c *Context) error {
 		return ErrMethodNotAllowed
 	}
 
 	// 请求的操作发生错误后的默认处理
 	// 500 Internal Server Error
-	defaultInternalServerErrorHandler = func(err error, c Context) {
+	defaultInternalServerErrorHandler = func(c *Context, err error, rcv interface{}) {
+		code := http.StatusInternalServerError
+		msg := http.StatusText(code)
+		if rcv != nil {
+			msg = fmt.Sprint(rcv)
+			stack := make([]byte, 4<<10) //4KB
+			length := runtime.Stack(stack, true)
+			Log.Error("[%s] %s %s", color.Red("PANIC RECOVER"), msg, stack[:length])
+
+		} else if err != nil {
+			switch e := err.(type) {
+			case *HTTPError:
+				code = e.Code
+				msg = e.Message
+			case error:
+				if Debug() {
+					msg = e.Error()
+				}
+			}
+			Log.Error("%v", err)
+		}
 		if !c.Response().Committed() {
-			code := http.StatusInternalServerError
-			msg := http.StatusText(code)
-			if he, ok := err.(*HTTPError); ok {
-				code = he.Code
-				msg = he.Message
-			}
-			if Debug() {
-				msg = err.Error()
-			}
 			c.String(code, msg)
 		}
-		Log.Error("%v", err)
 	}
 )
 
@@ -211,15 +220,18 @@ var (
 func newApp() (this *App) {
 	this = &App{
 		chainHandler: chainEndHandler,
-		maxParam:     new(int),
 		binder:       &binder{},
 	}
+
 	this.ctxPool.New = func() interface{} {
-		return this.newContext(new(Response), new(Request))
+		return this.newContext(new(Response), new(http.Request))
 	}
-	this.router = newRouter(this)
+
+	this.router = newRouter()
+
 	this.chainNodes = []MiddlewareFunc{this.router.process}
 	this.resetChain()
+
 	this.SetDebug(true)
 	return
 }
@@ -232,16 +244,16 @@ func (this *App) Sessions() *session.Manager {
 	return this.sessions
 }
 
-func (this *App) SetInternalServerError(fn func(error, Context)) {
-	this.internalServerErrorHandler = fn
+func (this *App) SetNotFound(fn func(*Context) error) {
+	this.router.NotFound = HandlerFunc(fn)
 }
 
-func (this *App) SetMethodNotAllowed(fn func(Context) error) {
-	this.methodNotAllowedHandler = HandlerFunc(fn)
+func (this *App) SetMethodNotAllowed(fn func(*Context) error) {
+	this.router.MethodNotAllowed = HandlerFunc(fn)
 }
 
-func (this *App) SetNotFound(fn func(Context) error) {
-	this.notFoundHandler = HandlerFunc(fn)
+func (this *App) SetInternalServerError(fn func(*Context, error, interface{})) {
+	this.router.ErrorPanicHandler = fn
 }
 
 // SetBinder registers a custom binder. It's invoked by `Context#Bind()`.
@@ -284,10 +296,10 @@ func (this *App) SetMemoryCache(m *MemoryCache) {
 
 // 返回当前真实注册的路由列表
 func (this *App) RealRoutes() []Route {
-	count := len(this.router.routes)
+	count := len(this.routes)
 	keys := make([]string, count)
 	routes := make([]Route, count)
-	m := this.router.routes
+	m := this.routes
 	i := 0
 	for k := range m {
 		keys[i] = k
@@ -303,24 +315,22 @@ func (this *App) RealRoutes() []Route {
 // ServeHTTP implements `http.Handler` interface, which serves HTTP requests.
 func (this *App) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	this.lock.RLock()
-	defer this.lock.RUnlock()
-
-	c := this.ctxPool.Get().(*context)
+	var err error
+	var c = this.ctxPool.Get().(*Context)
 	defer func() {
+		rcv := recover()
+		if rcv != nil || err != nil {
+			this.router.ErrorPanicHandler(c, err, rcv)
+		}
 		c.free()
 		this.ctxPool.Put(c)
+		this.lock.RUnlock()
 	}()
-	var err error
 	if err = c.init(rw, req); err != nil {
-		this.internalServerErrorHandler(err, c)
 		return
 	}
-
 	// Execute chain
-	if err = this.chainHandler(c); err != nil {
-		this.internalServerErrorHandler(err, c)
-		return
-	}
+	err = this.chainHandler(c)
 }
 
 // Run starts the HTTP server.
@@ -411,7 +421,8 @@ func (this *App) afterUse(middleware ...MiddlewareFunc) {
 }
 
 func (this *App) cleanRouter() {
-	this.router = newRouter(this)
+	this.router.trees = make(map[string]*node)
+	this.routes = make(map[string]Route)
 	this.chainNodes = []MiddlewareFunc{this.router.process}
 	this.routerIndex = 0
 	this.chainHandler = chainEndHandler
@@ -433,15 +444,15 @@ func (this *App) group(prefix string, middleware ...MiddlewareFunc) (g *Group) {
 // static registers a new route with path prefix to serve static files from the
 // provided root directory.
 func (this *App) static(prefix, root string, middleware ...MiddlewareFunc) {
-	this.addwithlog(false, GET, prefix+"*", func(c Context) error {
+	this.addwithlog(false, GET, prefix+"/*filepath", func(c *Context) error {
 		return c.File(path.Join(root, c.P(0))) // Param `_`
 	}, middleware...)
-	Log.Sys("| %-7s | %-30s | %v", GET, prefix+"*", root)
+	Log.Sys("| %-7s | %-30s | %v", GET, prefix+"/*filepath", root)
 }
 
 // file registers a new route with path to serve a static filthis.
 func (this *App) file(path, file string, middleware ...MiddlewareFunc) {
-	this.addwithlog(false, GET, path, HandlerFunc(func(c Context) error {
+	this.addwithlog(false, GET, path, HandlerFunc(func(c *Context) error {
 		return c.File(file)
 	}), middleware...)
 	Log.Sys("| %-7s | %-30s | %v", GET, path, file)
@@ -462,14 +473,14 @@ func (this *App) match(methods []string, path string, handler HandlerFunc, middl
 
 // webSocket adds a webSocket route > handler to the router.
 func (this *App) webSocket(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
-	this.addwithlog(false, GET, path, HandlerFunc(func(c Context) error {
+	this.addwithlog(false, GET, path, HandlerFunc(func(c *Context) error {
 		websocket.Handler(func(ws *websocket.Conn) {
 			c.SetSocket(ws)
 			err := handler(c)
 			if err != nil {
-				Log.Warn("WebSocket: [%v]%v", c.Request().RealRemoteAddr(), err)
+				Log.Warn("WebSocket: [%v]%v", c.RealRemoteAddr(), err)
 			}
-		}).ServeHTTP(c.Response().Writer(), c.Request().Request)
+		}).ServeHTTP(c.Response().Writer(), c.request)
 		return nil
 	}), middleware...)
 	Log.Sys("| %-7s | %-30s | %v", WS, path, handlerName(handler))
@@ -487,11 +498,11 @@ func (this *App) addwithlog(logprint bool, method, path string, handler HandlerF
 	for i := len(middleware) - 1; i >= 0; i-- {
 		h = middleware[i](h)
 	}
-	this.router.add(method, path, func(c Context) error {
+	this.router.Handle(method, path, func(c *Context) error {
 		return h(c)
-	}, this)
+	})
 
-	this.router.routes[method+path] = Route{
+	this.routes[method+path] = Route{
 		Method:  method,
 		Path:    path,
 		Handler: name,
@@ -508,7 +519,7 @@ func (this *App) uri(handler HandlerFunc, params ...interface{}) string {
 	ln := len(params)
 	n := 0
 	name := handlerName(handler)
-	for _, r := range this.router.routes {
+	for _, r := range this.routes {
 		if r.Handler == name {
 			for i, l := 0, len(r.Path); i < l; i++ {
 				if r.Path[i] == ':' && n < ln {
@@ -533,25 +544,25 @@ func (this *App) url(h HandlerFunc, params ...interface{}) string {
 }
 
 // newContext returns a Context instancthis.
-func (this *App) newContext(resp *Response, req *Request) Context {
-	return &context{
+func (this *App) newContext(resp *Response, req *http.Request) *Context {
+	return &Context{
 		request:  req,
 		response: resp,
-		pvalues:  make([]string, *this.maxParam),
+		pvalues:  nil,
+		pnames:   nil,
 		store:    make(store),
-		handler:  this.notFoundHandler,
 	}
 }
 
 // getContext returns `Context` from the sync.Pool. You must return the context by
 // calling `putContext()`.
-func (this *App) getContext() Context {
-	return this.ctxPool.Get().(Context)
+func (this *App) getContext() *Context {
+	return this.ctxPool.Get().(*Context)
 }
 
 // putContext returns `Context` instance back to the sync.Pool. You must call it after
 // `getContext()`.
-func (this *App) putContext(c Context) {
+func (this *App) putContext(c *Context) {
 	this.ctxPool.Put(c)
 }
 

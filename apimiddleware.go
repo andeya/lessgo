@@ -302,7 +302,7 @@ var CheckServer = ApiMiddleware{
 	Name: "检查服务器是否启用",
 	Desc: "检查服务器是否启用",
 	Middleware: func(next HandlerFunc) HandlerFunc {
-		return func(c Context) error {
+		return func(c *Context) error {
 			if !ServerEnable() {
 				return c.NoContent(http.StatusServiceUnavailable)
 			}
@@ -315,7 +315,7 @@ var CheckHome = ApiMiddleware{
 	Name: "检查是否为访问主页",
 	Desc: "检查是否为访问主页",
 	Middleware: func(next HandlerFunc) HandlerFunc {
-		return func(c Context) error {
+		return func(c *Context) error {
 			if c.Request().URL.Path == "/" {
 				c.Request().URL.Path = GetHome()
 			}
@@ -328,7 +328,7 @@ var RequestLogger = ApiMiddleware{
 	Name: "系统运行日志打印",
 	Desc: "RequestLogger returns a middleware that logs HTTP requests.",
 	Middleware: func(next HandlerFunc) HandlerFunc {
-		return func(c Context) (err error) {
+		return func(c *Context) (err error) {
 			if !Debug() {
 				if err := next(c); err != nil {
 					c.Error(err)
@@ -336,22 +336,19 @@ var RequestLogger = ApiMiddleware{
 				return nil
 			}
 
-			req := c.Request()
-			res := c.Response()
-
 			start := time.Now()
 			if err := next(c); err != nil {
 				c.Error(err)
 			}
 			stop := time.Now()
-			method := req.Method
-			path := req.URL.Path
+			method := c.request.Method
+			path := c.request.URL.Path
 			if path == "" {
 				path = "/"
 			}
-			size := res.Size()
+			size := c.response.Size()
 
-			n := res.Status()
+			n := c.response.Status()
 			code := color.Green(n)
 			switch {
 			case n >= 500:
@@ -362,7 +359,7 @@ var RequestLogger = ApiMiddleware{
 				code = color.Cyan(n)
 			}
 
-			Log.Debug("%s | %s | %s | %s | %s | %d", req.RealRemoteAddr(), method, path, code, stop.Sub(start), size)
+			Log.Debug("%s | %s | %s | %s | %s | %d", c.RealRemoteAddr(), method, path, code, stop.Sub(start), size)
 			return nil
 		}
 	},
@@ -402,7 +399,7 @@ var Recover = ApiMiddleware{
 		}
 
 		return func(next HandlerFunc) HandlerFunc {
-			return func(c Context) error {
+			return func(c *Context) error {
 				defer func() {
 					if r := recover(); r != nil {
 						var err error
@@ -429,7 +426,7 @@ var Recover = ApiMiddleware{
 var CrossDomain = ApiMiddleware{
 	Name: "设置允许跨域",
 	Desc: "根据配置信息设置允许跨域",
-	Middleware: func(c Context) error {
+	Middleware: func(c *Context) error {
 		c.Response().Header().Set("Access-Control-Allow-Origin", "*")
 		return nil
 	},
@@ -439,7 +436,7 @@ var FilterTemplate = ApiMiddleware{
 	Name: "过滤前端模板",
 	Desc: "过滤前端模板，不允许直接访问",
 	Middleware: func(next HandlerFunc) HandlerFunc {
-		return func(c Context) (err error) {
+		return func(c *Context) (err error) {
 			ext := path.Ext(c.Request().URL.Path)
 			if len(ext) >= 4 && ext[:4] == TPL_EXT {
 				return c.NoContent(http.StatusForbidden)
@@ -453,7 +450,7 @@ var AutoHTMLSuffix = ApiMiddleware{
 	Name: "智能追加.html后缀",
 	Desc: "静态路由时智能追加\".html\"后缀",
 	Middleware: func(next HandlerFunc) HandlerFunc {
-		return func(c Context) (err error) {
+		return func(c *Context) (err error) {
 			p := c.Request().URL.Path
 			if p[len(p)-1] != '/' {
 				ext := path.Ext(p)

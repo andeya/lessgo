@@ -6,15 +6,17 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/lessgo/lessgo/utils"
 )
 
 type (
 	ApiHandler struct {
-		Desc    string              // 本操作的描述
-		Method  string              // 请求方法，"*"表示除"WS"外全部方法，多方法写法："GET|POST"或"GET POST"，冲突时优先级WS>GET>*
-		methods []string            // 真实的请求方法列表
-		Params  []Param             // 参数说明列表，path参数类型的先后顺序与url中保持一致
-		Handler func(Context) error // 操作
+		Desc    string               // 本操作的描述
+		Method  string               // 请求方法，"*"表示除"WS"外全部方法，多方法写法："GET|POST"或"GET POST"，冲突时优先级WS>GET>*
+		methods []string             // 真实的请求方法列表
+		Params  []Param              // 参数说明列表，path参数类型的先后顺序与url中保持一致
+		Handler func(*Context) error // 操作
 
 		id     string // 操作的唯一标识符
 		suffix string // 路由节点的url参数后缀
@@ -179,7 +181,7 @@ func (a *ApiHandler) initMethod() {
 }
 
 func (a *ApiHandler) initId() {
-	add := "[" + a.suffix + "][" + a.Desc + "]" + "[" + a.Method + "]"
+	add := "[" + a.suffix + "]" + "[" + a.Method + "]"
 	v := reflect.ValueOf(a.Handler)
 	t := v.Type()
 	if t.Kind() == reflect.Func {
@@ -187,4 +189,5 @@ func (a *ApiHandler) initId() {
 	} else {
 		a.id = t.String() + add
 	}
+	a.id = utils.MakeHash(a.id)
 }

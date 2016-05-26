@@ -12,7 +12,7 @@ import (
 )
 
 type (
-	// Config is the main struct for BConfig
+	// Config is the main struct for Config
 	config struct {
 		AppName     string // Application name
 		Info        Info   // Application info
@@ -23,8 +23,6 @@ type (
 		Session     SessionConfig
 		Log         LogConfig
 		FileCache   FileCacheConfig
-		DefaultDB   string
-		DBList      map[string]DBConfig
 	}
 	Info struct {
 		Version           string
@@ -69,23 +67,6 @@ type (
 		SingleFileAllowMB int64 // 允许的最大文件，单位MB
 		MaxCapMB          int64 // 最大缓存总量，单位MB
 	}
-	// DataBase connection Config
-	DBConfig struct {
-		Name         string
-		Driver       string // Driver：mssql | odbc(mssql) | mysql | mymysql | postgres | sqlite3 | oci8 | goracle
-		ConnString   string
-		MaxOpenConns int
-		MaxIdleConns int
-		TableFix     string // 表命名空间是前缀还是后缀：prefix | suffix
-		TableSpace   string // 表命名空间
-		TableSnake   bool   // 表名使用snake风格或保持不变
-		ColumnFix    string // 列命名空间是前缀还是后缀：prefix | suffix
-		ColumnSpace  string // 列命名空间
-		ColumnSnake  bool   // 列名使用snake风格或保持不变
-		DisableCache bool
-		ShowExecTime bool
-		ShowSql      bool
-	}
 )
 
 // 项目固定目录文件名称
@@ -110,12 +91,10 @@ const (
 	TPL_EXT         = ".tpl"
 	STATIC_HTML_EXT = ".html"
 
-	CONFIG_DIR     = "config"
-	APPCONFIG_FILE = CONFIG_DIR + "/app.config"
-	DBCONFIG_FILE  = CONFIG_DIR + "/db.config"
-
-	DATABASE_DIR      = "database"
-	DEFAULTDB_SECTION = "defaultdb"
+	CONFIG_DIR        = "config"
+	APPCONFIG_FILE    = CONFIG_DIR + "/app.config"
+	ROUTERCONFIG_FILE = CONFIG_DIR + "/virtrouter.config"
+	LOG_FILE          = "logger/lessgo.log"
 )
 
 func newConfig() *config {
@@ -165,25 +144,6 @@ func newConfig() *config {
 			Level:     logs.DEBUG,
 			AsyncChan: 1000,
 		},
-		DefaultDB: "lessgo",
-		DBList: map[string]DBConfig{
-			"lessgo": {
-				Name:         "lessgo",
-				Driver:       "sqlite3",
-				ConnString:   DATABASE_DIR + "/sqlite.db",
-				MaxOpenConns: 1,
-				MaxIdleConns: 1,
-				TableFix:     "prefix",
-				TableSpace:   "",
-				TableSnake:   true,
-				ColumnFix:    "prefix",
-				ColumnSpace:  "",
-				ColumnSnake:  true,
-				DisableCache: false,
-				ShowExecTime: false,
-				ShowSql:      false,
-			},
-		},
 	}
 }
 
@@ -191,12 +151,12 @@ func (this *config) LoadMainConfig(fname string) (err error) {
 	iniconf, err := confpkg.NewConfig("ini", fname)
 	if err == nil {
 		os.Remove(fname)
-		readSingleConfig("system", Config, iniconf)
-		readSingleConfig("filecache", &this.FileCache, iniconf)
-		readSingleConfig("info", &this.Info, iniconf)
-		readSingleConfig("listen", &this.Listen, iniconf)
-		readSingleConfig("log", &this.Log, iniconf)
-		readSingleConfig("session", &this.Session, iniconf)
+		ReadSingleConfig("system", Config, iniconf)
+		ReadSingleConfig("filecache", &this.FileCache, iniconf)
+		ReadSingleConfig("info", &this.Info, iniconf)
+		ReadSingleConfig("listen", &this.Listen, iniconf)
+		ReadSingleConfig("log", &this.Log, iniconf)
+		ReadSingleConfig("session", &this.Session, iniconf)
 	}
 	os.MkdirAll(filepath.Dir(fname), 0777)
 	f, err := os.Create(fname)
@@ -208,61 +168,17 @@ func (this *config) LoadMainConfig(fname string) (err error) {
 	if err != nil {
 		return err
 	}
-	writeSingleConfig("system", Config, iniconf)
-	writeSingleConfig("filecache", &this.FileCache, iniconf)
-	writeSingleConfig("info", &this.Info, iniconf)
-	writeSingleConfig("listen", &this.Listen, iniconf)
-	writeSingleConfig("log", &this.Log, iniconf)
-	writeSingleConfig("session", &this.Session, iniconf)
+	WriteSingleConfig("system", Config, iniconf)
+	WriteSingleConfig("filecache", &this.FileCache, iniconf)
+	WriteSingleConfig("info", &this.Info, iniconf)
+	WriteSingleConfig("listen", &this.Listen, iniconf)
+	WriteSingleConfig("log", &this.Log, iniconf)
+	WriteSingleConfig("session", &this.Session, iniconf)
 
 	return iniconf.SaveConfigFile(fname)
 }
 
-func (this *config) LoadDBConfig(fname string) (err error) {
-	iniconf, err := confpkg.NewConfig("ini", fname)
-	if err == nil {
-		os.Remove(fname)
-		sections := iniconf.(*confpkg.IniConfigContainer).Sections()
-		if len(sections) > 0 {
-			this.DefaultDB = ""
-			defDB := this.DBList["lessgo"]
-			delete(this.DBList, "lessgo")
-			for _, section := range sections {
-				dbconfig := defDB
-				readSingleConfig(section, &dbconfig, iniconf)
-				if strings.ToLower(section) == DEFAULTDB_SECTION {
-					this.DefaultDB = dbconfig.Name
-				}
-				this.DBList[dbconfig.Name] = dbconfig
-			}
-			if this.DefaultDB == "" {
-				this.DefaultDB = iniconf.DefaultString(sections[0]+"::name", defDB.Name)
-			}
-		}
-	}
-
-	os.MkdirAll(filepath.Dir(fname), 0777)
-	f, err := os.Create(fname)
-	if err != nil {
-		return err
-	}
-	f.Close()
-	iniconf, err = confpkg.NewConfig("ini", fname)
-	if err != nil {
-		return err
-	}
-	for _, dbconfig := range this.DBList {
-		if this.DefaultDB == dbconfig.Name {
-			writeSingleConfig(DEFAULTDB_SECTION, &dbconfig, iniconf)
-		} else {
-			writeSingleConfig(dbconfig.Name, &dbconfig, iniconf)
-		}
-	}
-
-	return iniconf.SaveConfigFile(fname)
-}
-
-func readSingleConfig(section string, p interface{}, iniconf confpkg.Configer) {
+func ReadSingleConfig(section string, p interface{}, iniconf confpkg.Configer) {
 	pt := reflect.TypeOf(p)
 	if pt.Kind() != reflect.Ptr {
 		return
@@ -318,7 +234,7 @@ func readSingleConfig(section string, p interface{}, iniconf confpkg.Configer) {
 	}
 }
 
-func writeSingleConfig(section string, p interface{}, iniconf confpkg.Configer) {
+func WriteSingleConfig(section string, p interface{}, iniconf confpkg.Configer) {
 	pt := reflect.TypeOf(p)
 	if pt.Kind() != reflect.Ptr {
 		return

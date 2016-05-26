@@ -1,14 +1,17 @@
 package lessgo
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
 	pathpkg "path"
 	"sort"
 	"strings"
 	"sync"
 
-	"github.com/go-xorm/xorm"
-
+	"github.com/lessgo/lessgo/utils"
 	"github.com/lessgo/lessgo/utils/uuid"
 )
 
@@ -38,20 +41,18 @@ func (this *VirtStatic) route() {
 
 // 虚拟路由(在Root()下使用，支持运行时修改)
 type VirtRouter struct {
-	Id          string              `json:"id" xorm:"not null pk VARCHAR(36)"`   // UUID
-	Pid         string              `json:"pid" xorm:"VARCHAR(36)"`              // 父节点id
-	Type        int                 `json:"type" xorm:"not null TINYINT(1)"`     // 操作类型: 根目录/路由分组/操作
-	Prefix      string              `json:"prefix" xorm:"not null VARCHAR(500)"` // 路由节点的url前缀(不含参数)
-	Middlewares []*MiddlewareConfig `json:"middlewares" xorm:"TEXT json"`        // 中间件列表 (允许运行时修改)
-	Enable      bool                `json:"enable" xorm:"not null TINYINT(1)"`   // 是否启用当前路由节点
-	Dynamic     bool                `json:"dynamic" xorm:"not null TINYINT(1)"`  // 是否动态追加的节点
-	Hid         string              `json:"hid" xorm:"not null VARCHAR(500)"`    // 操作ApiHandler.id
+	Id          string              `json:"id""`         // UUID
+	Type        int                 `json:"type""`       // 操作类型: 根目录/路由分组/操作
+	Prefix      string              `json:"prefix"`      // 路由节点的url前缀(不含参数)
+	Middlewares []*MiddlewareConfig `json:"middlewares"` // 中间件列表 (允许运行时修改)
+	Enable      bool                `json:"enable"`      // 是否启用当前路由节点
+	Dynamic     bool                `json:"dynamic"`     // 是否动态追加的节点
+	Hid         string              `json:"hid"`         // 操作ApiHandler.id
+	Children    virtRouterSlice     `json:"children"`    // 子节点
+	Parent      *VirtRouter         `json:"-"`           // 父节点
 
-	path       string          `xorm:"-"` // 路由匹配模式
-	prefixPath string          `xorm:"-"` // 路由节点的url前缀的固定路径部分
-	parent     *VirtRouter     `xorm:"-"` // 父节点
-	children   virtRouterSlice `xorm:"-"` // 子节点
-	apiHandler *ApiHandler     `xorm:"-"` // 操作
+	path       string      `json:"-"` // 路由匹配模式
+	apiHandler *ApiHandler `json:"-"` // 操作
 }
 
 // 虚拟路由节点类型
@@ -62,8 +63,6 @@ const (
 )
 
 var (
-	// 数据库引擎
-	lessgodb *xorm.Engine
 	// 虚拟路由记录表，便于快速查找路由节点
 	virtRouterMap  = map[string]*VirtRouter{}
 	virtRouterLock sync.RWMutex
@@ -90,7 +89,7 @@ func (vr *VirtRouter) Params() []Param {
 // 子孙虚拟路由节点列表
 func (vr *VirtRouter) Progeny() []*VirtRouter {
 	vrs := []*VirtRouter{vr}
-	for _, novre := range vr.children {
+	for _, novre := range vr.Children {
 		vrs = append(vrs, novre.Progeny()...)
 	}
 	return vrs
@@ -106,15 +105,15 @@ func (vr *VirtRouter) SetPrefix(prefix string) (err error) {
 	if !vr.Dynamic {
 		return notDynamicError
 	}
-	if lessgodb == nil {
-		goto label
-	}
-	_, err = lessgodb.Where("id=?", vr.Id).Cols("prefix").Update(&VirtRouter{Prefix: prefix})
-	if err != nil {
-		return
-	}
-label:
+	_orgin := vr.Prefix
 	vr.Prefix = prefix
+	vr.reset()
+	err = saveVirtRouterConfig()
+	if err != nil {
+		// 数据回滚
+		vr.Prefix = _orgin
+		vr.reset()
+	}
 	return
 }
 
@@ -128,19 +127,19 @@ func (vr *VirtRouter) SetEnable(able bool) (err error) {
 	if !vr.Dynamic {
 		return notDynamicError
 	}
-	if lessgodb == nil {
-		goto label
-	}
-	_, err = lessgodb.Where("id=?", vr.Id).Cols("enable").Update(&VirtRouter{Enable: able})
-	if err != nil {
-		return
-	}
-label:
+	_orgin := vr.Enable
 	vr.Enable = able
+	err = saveVirtRouterConfig()
+	if err != nil {
+		// 数据回滚
+		vr.Enable = _orgin
+	}
 	return
 }
 
-// 配置中间件(仅在源码中使用)
+// 配置中间件(仅在源码中使用)，
+// 因为源码路由书写格式需要，仅允许返回*VirtRouter一个参数，
+// 而动态配置时需要有error反馈因此，该方法仅限源码中使用。
 func (vr *VirtRouter) Use(middlewares ...*ApiMiddleware) *VirtRouter {
 	if vr.Dynamic {
 		Log.Error("Specified node is dynamic, please use ResetUse(middlewares []string) (err error).")
@@ -169,20 +168,18 @@ func (vr *VirtRouter) ResetUse(middlewares []*MiddlewareConfig) (err error) {
 	if middlewares == nil {
 		middlewares = []*MiddlewareConfig{}
 	}
-	if lessgodb == nil {
-		goto label
-	}
-	_, err = lessgodb.Where("id=?", vr.Id).Cols("middlewares").Update(&VirtRouter{Middlewares: middlewares})
-	if err != nil {
-		return
-	}
-label:
+	_orgin := vr.Middlewares
 	vr.Middlewares = middlewares
+	err = saveVirtRouterConfig()
+	if err != nil {
+		// 数据回滚
+		vr.Middlewares = _orgin
+	}
 	return
 }
 
 // 为节点更换操作
-func (vr *VirtRouter) SetApiHandler(hid string) error {
+func (vr *VirtRouter) SetApiHandler(hid string) (err error) {
 	if !vr.Dynamic {
 		return notDynamicError
 	}
@@ -190,25 +187,23 @@ func (vr *VirtRouter) SetApiHandler(hid string) error {
 	if vh == nil {
 		return fmt.Errorf("Specified ApiHandler does not exist.")
 	}
+
+	_hid := vr.Hid
+	_vh := vr.apiHandler
 	vr.Hid = hid
 	vr.apiHandler = vh
 	vr.reset()
-	return nil
+	err = saveVirtRouterConfig()
+	if err != nil {
+		// 数据回滚
+		vr.Hid = _hid
+		vr.apiHandler = _vh
+		vr.reset()
+	}
+	return
 }
 
-// 虚拟路由节点的父节点
-func (vr *VirtRouter) Parent() *VirtRouter {
-	return vr.parent
-}
-
-// 所有子节点的列表副本
-func (vr *VirtRouter) Children() []*VirtRouter {
-	cr := make([]*VirtRouter, len(vr.children))
-	copy(cr, vr.children)
-	return cr
-}
-
-// 添加子节点
+// 添加子节点(仅限动态配置时使用)
 func (vr *VirtRouter) AddChild(virtRouter *VirtRouter) (err error) {
 	if !virtRouter.Dynamic {
 		return notDynamicError
@@ -216,7 +211,7 @@ func (vr *VirtRouter) AddChild(virtRouter *VirtRouter) (err error) {
 	return vr.addChild(virtRouter)
 }
 
-// 删除子节点
+// 删除子节点(仅限动态配置时使用)
 func (vr *VirtRouter) DelChild(virtRouter *VirtRouter) (err error) {
 	if !virtRouter.Dynamic {
 		return notDynamicError
@@ -224,7 +219,7 @@ func (vr *VirtRouter) DelChild(virtRouter *VirtRouter) (err error) {
 	return vr.delChild(virtRouter)
 }
 
-// 删除自身
+// 删除自身(仅限动态配置时使用)
 func (vr *VirtRouter) Delete() (err error) {
 	if !vr.Dynamic {
 		return notDynamicError
@@ -240,26 +235,26 @@ func (vr *VirtRouter) addChild(virtRouter *VirtRouter) (err error) {
 	if virtRouter.Type == ROOT {
 		return fmt.Errorf("Can not add an root node.")
 	}
-	virtRouter.Pid = vr.Id
-	virtRouter.parent = vr
-	if lessgodb == nil {
-		goto label
-	}
-	_, err = lessgodb.Insert(virtRouter)
-	if err != nil {
-		return
-	}
-label:
-	vr.children = append(vr.children, virtRouter)
+
+	virtRouter.Parent = vr
+	children := vr.Children
+	vr.Children = append(vr.Children, virtRouter)
 	virtRouter.reset()
-	addVirtRouter(virtRouter)
-	return nil
+	err = saveVirtRouterConfig()
+	if err != nil {
+		// 数据回滚
+		vr.Children = children
+		virtRouter.reset()
+	} else {
+		addVirtRouter(virtRouter)
+	}
+	return
 }
 
 // 删除自身
 func (vr *VirtRouter) delete() error {
-	if vr.parent != nil {
-		vr.parent.delChild(vr)
+	if vr.Parent != nil {
+		vr.Parent.delChild(vr)
 		return nil
 	}
 	return fmt.Errorf("Can not delete the root node.")
@@ -270,39 +265,25 @@ func (vr *VirtRouter) delChild(virtRouter *VirtRouter) (err error) {
 	if virtRouter == nil {
 		return fmt.Errorf("Can not delete an empty node.")
 	}
-	var session *xorm.Session
-	nodes := virtRouter.Progeny()
-	if lessgodb == nil {
-		goto label
-	}
-	session = lessgodb.NewSession()
-	defer session.Close()
-	err = session.Begin()
-	if err != nil {
-		return err
-	}
-	for _, v := range nodes {
-		_, err = session.Delete(v)
-		if err != nil {
-			session.Rollback()
-			return
-		}
-	}
-	err = session.Commit()
-	if err != nil {
-		return
-	}
-label:
 	var exist bool
-	for i, child := range vr.children {
+	for i, child := range vr.Children {
 		if child == virtRouter {
-			vr.children = append(vr.children[:i], vr.children[i+1:]...)
-			exist = true
+			children := make([]*VirtRouter, len(vr.Children))
+			copy(children, vr.Children)
+			vr.Children = append(vr.Children[:i], vr.Children[i+1:]...)
+			err = saveVirtRouterConfig()
+			if err != nil {
+				// 数据回滚
+				vr.Children = children
+				return
+			} else {
+				exist = true
+			}
 			break
 		}
 	}
 	if exist {
-		for _, node := range nodes {
+		for _, node := range virtRouter.Progeny() {
 			delVirtRouter(node)
 		}
 		return nil
@@ -310,34 +291,81 @@ label:
 	return fmt.Errorf("node %v does not have child node: %v.", vr.Description(), virtRouter.Description())
 }
 
-// 格式化路由
-func (vr *VirtRouter) reset() {
-	vr.resetPath()
-	if vr.parent != nil {
-		sort.Sort(vr.parent.children)
-	}
-	vr.sort()
+// 对从配置文件读来的路由进行部分字段的初始化
+func (vr *VirtRouter) initFromConfig() *VirtRouter {
+	vr.init()
+	return vr
 }
 
-// 根据父节点重置虚拟路由节点自身及其子节点path
-func (vr *VirtRouter) resetPath() {
+// 初始化虚拟路由树
+func (vr *VirtRouter) init() {
+	vr.apiHandler = getApiHandler(vr.Hid)
+
+	if vr.apiHandler == nil {
+		if vr.Type != HANDLER {
+			vr.apiHandler = NilApiHandler("?")
+
+		} else {
+			parent := vr.Parent
+			if parent == nil {
+				return
+			}
+
+			for i, child := range parent.Children {
+				if child == vr {
+					parent.Children = append(parent.Children[:i], parent.Children[i+1:]...)
+					return
+				}
+			}
+			return
+		}
+	}
+
 	var parentPath = "/"
-	if vr.parent != nil {
-		parentPath = vr.parent.path
+	if vr.Parent != nil {
+		parentPath = vr.Parent.path
 	}
 	var suffix string
 	if vr.apiHandler != nil {
 		suffix = vr.apiHandler.Suffix()
 	}
 	vr.path = pathpkg.Join("/", parentPath, vr.Prefix, suffix)
-	for _, child := range vr.children {
+	sort.Sort(vr.Children)
+	for _, child := range vr.Children {
+		child.Parent = vr
+		child.init()
+	}
+}
+
+// 格式化路由
+// 根据父节点重置虚拟路由节点自身及其子节点path
+// 根据path排序同级节点
+func (vr *VirtRouter) reset() {
+	vr.resetPath()
+	if vr.Parent != nil {
+		sort.Sort(vr.Parent.Children)
+	}
+	vr.sort()
+}
+
+func (vr *VirtRouter) resetPath() {
+	var parentPath = "/"
+	if vr.Parent != nil {
+		parentPath = vr.Parent.path
+	}
+	var suffix string
+	if vr.apiHandler != nil {
+		suffix = vr.apiHandler.Suffix()
+	}
+	vr.path = pathpkg.Join("/", parentPath, vr.Prefix, suffix)
+	for _, child := range vr.Children {
 		child.resetPath()
 	}
 }
 
 func (v *VirtRouter) sort() {
-	sort.Sort(v.children)
-	for _, child := range v.children {
+	sort.Sort(v.Children)
+	for _, child := range v.Children {
 		child.sort()
 	}
 }
@@ -360,7 +388,7 @@ func (vr *VirtRouter) route(g *Group) {
 		} else {
 			childGroup = g.group(prefix, mws...)
 		}
-		for _, child := range vr.Children() {
+		for _, child := range vr.Children {
 			child.route(childGroup)
 		}
 	case HANDLER:
@@ -371,8 +399,59 @@ func (vr *VirtRouter) route(g *Group) {
 	}
 }
 
-type VirtRouterLock struct {
-	Md5 string `json:"Md5" xorm:"not null VARCHAR(500)"`
+// 虚拟路由配置文件数据结构
+type virtRouterConfig struct {
+	Md5        string      `json:"md5"`
+	VirtRouter *VirtRouter `json:"virtrouter"`
+}
+
+// 标记源码路由初始化完成
+var canSaveVirtRouterConfig bool
+
+// 读取虚拟路由配置
+func readVirtRouterConfig() (md5 string, vr *VirtRouter, err error) {
+	f, err := os.OpenFile(ROUTERCONFIG_FILE, os.O_CREATE|os.O_RDONLY, 0777)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	b, err := ioutil.ReadAll(f)
+	if err != nil {
+		return
+	}
+	if !bytes.Contains(b, utils.String2Bytes("{")) {
+		return "", nil, nil
+	}
+	vrc := virtRouterConfig{}
+	err = json.Unmarshal(b, &vrc)
+	if err != nil {
+		return
+	}
+	return vrc.Md5, vrc.VirtRouter, err
+}
+
+// 保存虚拟路由配置到配置文件
+func saveVirtRouterConfig() (err error) {
+	if !canSaveVirtRouterConfig {
+		// 源码路由初始化未完成时不做保存操作
+		return nil
+	}
+	f, err := os.OpenFile(ROUTERCONFIG_FILE, os.O_CREATE|os.O_WRONLY, 0777)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	b, err := json.MarshalIndent(virtRouterConfig{
+		Md5:        Md5,
+		VirtRouter: lessgo.virtRouter,
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	f.Write(b)
+	return err
 }
 
 type virtRouterSlice []*VirtRouter
@@ -446,192 +525,87 @@ func newRootVirtRouter() *VirtRouter {
 	return root
 }
 
-// 从数据库初始化虚拟路由
-func initVirtRouterFromDB() {
+// 从配置文件初始化虚拟路由
+func initVirtRouterConfig() {
+	md5, vr, err := readVirtRouterConfig()
+	if err != nil {
+		Log.Error("Read the config/virtrouter.config failed: %v.", err)
+		return
+	}
+
+	// 重新运行程序
+	if md5 == Md5 {
+		if vr != nil {
+			lessgo.virtRouter = vr.initFromConfig()
+		}
+		return
+	}
+
 	defer func() {
-		if p := recover(); p != nil {
-			Log.Warn("Can only use source code routing: %v.", p)
+		// 标记源码路由初始化完成
+		canSaveVirtRouterConfig = true
+		// 覆盖保存配置
+		err := saveVirtRouterConfig()
+		if err != nil {
+			Log.Error("Save the config/virtrouter.config failed: %v.", err)
 		}
-		lessgo.virtRouter.sort()
 	}()
-	lessgodb = DefaultDB()
-	var err error
-	if err = lessgodb.Ping(); err != nil {
-		Log.Warn("Can only use source code routing: [dbPing] %v.", err)
-		return
-	}
-	vrlock := new(VirtRouterLock)
-	err = lessgodb.Sync2(vrlock)
-	if err != nil {
-		Log.Error("Can only use source code routing: [vr-dbSync] %v.", err)
-		return
-	}
-	vr := new(VirtRouter)
-	has, err := lessgodb.Get(vrlock)
-	if vrlock.Md5 != Md5 {
-		exist, err := lessgodb.IsTableExist(vr)
-		if exist || err != nil {
-			err = lessgodb.DropTables(vr)
-			if err != nil {
-				Log.Error("Can only use source code routing: [vr-dbDrop] %v.", err)
-				return
-			}
-		}
-	}
-	err = lessgodb.Sync2(vr)
-	if err != nil {
-		Log.Error("Can only use source code routing: [vr-dbSync] %v.", err)
-		return
-	}
-	session := lessgodb.NewSession()
-	defer session.Close()
-	err = session.Begin()
-	if err != nil {
-		Log.Error("Can only use source code routing: [db-begin] %v.", err)
+
+	// 第一次运行程序
+	if md5 == "" {
 		return
 	}
 
-	if !has {
-
-		// 首次运行当前软件时
-		vrlock.Md5 = Md5
-		_, err = session.Insert(vrlock)
-		if err != nil {
-			session.Rollback()
-			vrlock.Md5 = ""
-			Log.Error("Can only use source code routing: [md5-dbInsert] %v.", err)
-			return
-		}
-
-		err = dbReset(session)
-		if err != nil {
-			Log.Error("Can only use source code routing: [info-dbInsert] %v.", err)
-			return
-		}
-		err = session.Commit()
-		if err != nil {
-			Log.Error("Can only use source code routing: [dbCommit] %v.", err)
-		}
-
-	} else if vrlock.Md5 != Md5 {
-
-		// 软件重新编译后再次运行时
-		vrlock.Md5 = Md5
-		_, err = session.Update(vrlock)
-		if err != nil {
-			session.Rollback()
-			vrlock.Md5 = ""
-			Log.Error("Can only use source code routing: [md5-dbUpdate] %v.", err)
-			return
-		}
-
-		var dbInfo []*VirtRouter
-		err = session.Find(&dbInfo)
-		if err != nil {
-			session.Rollback()
-			Log.Error("Can only use source code routing: [info-dbFind] %v.", err)
-			return
-		}
-		if len(dbInfo) > 0 {
-			// 构建历史版本的虚拟路由树
-			dbRootVirtRouter := buildVirtRouter(dbInfo)
-			merge(lessgo.virtRouter, dbRootVirtRouter)
-			virtRouterLock.Lock()
-			defer virtRouterLock.Unlock()
-			virtRouterMap = map[string]*VirtRouter{}
-			vrs := lessgo.virtRouter.Progeny()
-			for _, vr := range vrs {
-				virtRouterMap[vr.Id] = vr
-			}
-		}
-		err = dbReset(session)
-		if err != nil {
-			Log.Error("Can only use source code routing: [info-dbInsert] %v.", err)
-			return
-		}
-		err = session.Commit()
-		if err != nil {
-			Log.Error("Can only use source code routing: [dbCommit] %v.", err)
-		}
-
-	} else {
-
-		// 软件重复运行时
-		var dbInfo []*VirtRouter
-		err = session.Find(&dbInfo)
-		if err != nil {
-			session.Rollback()
-			Log.Error("Can only use source code routing: [info-dbFind] %v.", err)
-			return
-		}
-		if len(dbInfo) == 0 {
-			return
-		}
-		err = session.Commit()
-		if err != nil {
-			Log.Error("Can only use source code routing: [dbCommit] %v.", err)
-		}
-		// 从配置信息构建虚拟路由树
-		lessgo.virtRouter = buildVirtRouter(dbInfo)
-	}
-}
-
-// 重建数据库中虚拟路由配置信息
-func dbReset(session *xorm.Session) (err error) {
-	nodes := lessgo.virtRouter.Progeny()
-	_, err = session.Insert(&nodes)
-	if err != nil {
-		session.Rollback()
+	// 程序被重新编译后第一次运行
+	if vr != nil {
+		merge(lessgo.virtRouter, vr.initFromConfig())
+		os.Remove(ROUTERCONFIG_FILE)
 	}
 	return
 }
 
 // 虚拟路由树同级节点合并，将b合并入a，冲突时以a为准
 func merge(a, b *VirtRouter) {
-	if a.Prefix != b.Prefix {
-		if a.parent != nil {
+	// 类型不同不合并
+	if a.Type != b.Type {
+		return
+	}
+
+	// 类型为操作时
+	if a.Type == HANDLER {
+		if a.Prefix != b.Prefix || a.apiHandler.Method != b.apiHandler.Method {
 			b.Dynamic = true     //强制为动态的配置路由
-			a.parent.addChild(b) //并入正式虚拟路由树中
+			a.Parent.addChild(b) //并入正式虚拟路由树中
 		}
 		return
-	} else {
-		for _, ac := range a.children {
-			for _, bc := range b.children {
-				merge(ac, bc)
+	}
+
+	// 类型为根路由或分组时
+
+	// 路由前缀不同时可合并
+	if a.Prefix != b.Prefix {
+		b.Dynamic = true     //强制为动态的配置路由
+		a.Parent.addChild(b) //并入正式虚拟路由树中
+		return
+	}
+
+	var has *VirtRouter
+	for _, bc := range b.Children {
+		has = nil
+		for _, ac := range a.Children {
+			if ac.Prefix == b.Prefix {
+				has = ac
+				break
 			}
 		}
-	}
-}
-
-// 构建虚拟路由树
-func buildVirtRouter(vrs []*VirtRouter) *VirtRouter {
-	virtRouterMap2 := map[string]*VirtRouter{}
-	for _, vr := range vrs {
-		vr.apiHandler = getApiHandler(vr.Hid)
-		virtRouterMap2[vr.Id] = vr
-	}
-	var root *VirtRouter
-	for _, vr := range virtRouterMap2 {
-		if vr.Type == ROOT {
-			root = vr
+		if has == nil {
+			// 当前源码路由中不存在的节点，直接增加
+			b.Dynamic = true     //强制为动态的配置路由
+			a.Parent.addChild(b) //并入正式虚拟路由树中
+		} else {
+			merge(bc, has)
 		}
-		parent := virtRouterMap2[vr.Pid]
-		if parent == nil {
-			continue
-		}
-		vr.parent = parent
-		parent.children = append(parent.children, vr)
 	}
-	root.reset()
-	return root
-}
-
-// 重置路由节点
-func resetVirtRouter(oldId string, vr *VirtRouter) {
-	virtRouterLock.Lock()
-	defer virtRouterLock.Unlock()
-	delete(virtRouterMap, oldId)
-	virtRouterMap[vr.Id] = vr
 }
 
 // 添加路由节点

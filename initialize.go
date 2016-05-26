@@ -4,28 +4,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"mime"
-	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/go-xorm/core"
-	"github.com/go-xorm/xorm"
-
-	"github.com/lessgo/lessgo/dbservice"
 	"github.com/lessgo/lessgo/session"
-	"github.com/lessgo/lessgo/utils"
 )
 
 func newLessgo() *Lessgo {
 	printInfo()
+
 	err := Config.LoadMainConfig(APPCONFIG_FILE)
 	if err != nil {
 		fmt.Println(err)
 	}
-	err = Config.LoadDBConfig(DBCONFIG_FILE)
-	if err != nil {
-		fmt.Println(err)
-	}
+
 	registerMime()
 
 	l := &Lessgo{
@@ -61,9 +53,6 @@ func newLessgo() *Lessgo {
 
 	// 设置上传文件允许的最大尺寸
 	MaxMemory = Config.MaxMemoryMB * MB
-
-	// 配置数据库
-	l.dbService = registerDBService()
 
 	// 初始化sessions管理实例
 	sessions, err := newSessions()
@@ -113,13 +102,13 @@ func newSessions() (sessions *session.Manager, err error) {
 
 // 尝试设置系统默认通用操作
 func tryRegisterDefaultHandler() {
-	if lessgo.notFoundHandler == nil {
+	if lessgo.App.router.NotFound == nil {
 		SetNotFound(defaultNotFoundHandler)
 	}
-	if lessgo.methodNotAllowedHandler == nil {
+	if lessgo.App.router.MethodNotAllowed == nil {
 		SetMethodNotAllowed(defaultMethodNotAllowedHandler)
 	}
-	if lessgo.internalServerErrorHandler == nil {
+	if lessgo.App.router.ErrorPanicHandler == nil {
 		SetInternalServerError(defaultInternalServerErrorHandler)
 	}
 }
@@ -153,69 +142,4 @@ func registerStatics() {
 // 添加系统预设的静态文件虚拟路由
 func registerFiles() {
 	File("/favicon.ico", IMG_DIR+"/favicon.ico")
-}
-
-// 注册数据库服务
-func registerDBService() *dbservice.DBService {
-	dbService := &dbservice.DBService{
-		List: map[string]*xorm.Engine{},
-	}
-	for _, conf := range Config.DBList {
-		engine, err := xorm.NewEngine(conf.Driver, conf.ConnString)
-		if err != nil {
-			Log.Error("%v\n", err)
-			continue
-		}
-		logger := dbservice.NewILogger(Config.Log.AsyncChan, Config.Log.Level, conf.Name)
-		logger.BeeLogger.EnableFuncCallDepth(Config.Debug)
-
-		engine.SetLogger(logger)
-		engine.SetMaxOpenConns(conf.MaxOpenConns)
-		engine.SetMaxIdleConns(conf.MaxIdleConns)
-		engine.SetDisableGlobalCache(conf.DisableCache)
-		engine.ShowSQL(conf.ShowSql)
-		engine.ShowExecTime(conf.ShowExecTime)
-		if (conf.TableFix == "prefix" || conf.TableFix == "suffix") && len(conf.TableSpace) > 0 {
-			var impr core.IMapper
-			if conf.TableSnake {
-				impr = core.SnakeMapper{}
-			} else {
-				impr = core.SameMapper{}
-			}
-			if conf.TableFix == "prefix" {
-				engine.SetTableMapper(core.NewPrefixMapper(impr, conf.TableSpace))
-			} else {
-				engine.SetTableMapper(core.NewSuffixMapper(impr, conf.TableSpace))
-			}
-		}
-		if (conf.ColumnFix == "prefix" || conf.ColumnFix == "suffix") && len(conf.ColumnSpace) > 0 {
-			var impr core.IMapper
-			if conf.ColumnSnake {
-				impr = core.SnakeMapper{}
-			} else {
-				impr = core.SameMapper{}
-			}
-			if conf.ColumnFix == "prefix" {
-				engine.SetTableMapper(core.NewPrefixMapper(impr, conf.ColumnSpace))
-			} else {
-				engine.SetTableMapper(core.NewSuffixMapper(impr, conf.ColumnSpace))
-			}
-		}
-
-		if conf.Driver == "sqlite3" && !utils.FileExists(conf.ConnString) {
-			os.MkdirAll(filepath.Dir(conf.ConnString), 0777)
-			f, err := os.Create(conf.ConnString)
-			if err != nil {
-				Log.Error("%v", err)
-			} else {
-				f.Close()
-			}
-		}
-
-		dbService.List[conf.Name] = engine
-		if Config.DefaultDB == conf.Name {
-			dbService.Default = engine
-		}
-	}
-	return dbService
 }
