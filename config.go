@@ -212,9 +212,12 @@ func ReadSingleConfig(section string, p interface{}, iniconf confpkg.Configer) {
 			case "system::maxmemorymb",
 				"filecache::cachesecond", "filecache::singlefileallowmb", "filecache::maxcapmb",
 				"listen::readtimeout", "listen::writetimeout",
-				"session::sessiongcmaxlifetime", "session::sessioncookielifetime",
-				"log::asyncchan":
+				"session::sessiongcmaxlifetime", "session::sessioncookielifetime":
 				if num > 0 {
+					pf.SetInt(num)
+				}
+			case "log::asyncchan":
+				if num >= 0 {
 					pf.SetInt(num)
 				}
 			case "log::level":
