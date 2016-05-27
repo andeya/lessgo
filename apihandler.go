@@ -181,7 +181,7 @@ func (a *ApiHandler) initMethod() {
 }
 
 func (a *ApiHandler) initId() {
-	add := "[" + a.suffix + "]" + "[" + a.Method + "]"
+	add := "[" + a.suffix + "]" + "[" + a.Desc + "]" + "[" + a.Method + "]"
 	v := reflect.ValueOf(a.Handler)
 	t := v.Type()
 	if t.Kind() == reflect.Func {
