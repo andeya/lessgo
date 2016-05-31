@@ -41,7 +41,7 @@ type (
 	// Common message format of JSON and JSONP.
 	CommMsg struct {
 		Code int         `json:"code"`
-		Info interface{} `json:"info"`
+		Info interface{} `json:"info,omitempty"`
 	}
 )
 
