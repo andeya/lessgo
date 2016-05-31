@@ -19,7 +19,7 @@ import (
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
 	"github.com/lessgo/lessgo/utils"
-	"github.com/lessgo/lessgo/utils/uuid"
+	"github.com/lessgo/lessgoext/uuid"
 )
 
 type Lessgo struct {
