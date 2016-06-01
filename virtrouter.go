@@ -431,7 +431,7 @@ func readVirtRouterConfig() (md5 string, vr *VirtRouter, err error) {
 }
 
 // 保存虚拟路由配置到配置文件
-func saveVirtRouterConfig() (err error) {
+func saveVirtRouterConfig() error {
 	if !canSaveVirtRouterConfig {
 		// 源码路由初始化未完成时不做保存操作
 		return nil
@@ -451,7 +451,7 @@ func saveVirtRouterConfig() (err error) {
 	}
 
 	f.Write(b)
-	return err
+	return nil
 }
 
 type virtRouterSlice []*VirtRouter

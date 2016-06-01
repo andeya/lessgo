@@ -124,24 +124,23 @@ func (c *Context) SetPath(p string) {
 }
 
 // P returns path parameter by index.
-func (c *Context) P(i int) (value string) {
+func (c *Context) P(i int) string {
 	l := len(c.pnames)
 	if i < l {
-		value = c.pvalues[i]
+		return c.pvalues[i]
 	}
-	return
+	return ""
 }
 
 // Param returns path parameter by name.
-func (c *Context) Param(name string) (value string) {
+func (c *Context) Param(name string) string {
 	l := len(c.pnames)
 	for i, n := range c.pnames {
 		if n == name && i < l {
-			value = c.pvalues[i]
-			break
+			return c.pvalues[i]
 		}
 	}
-	return
+	return ""
 }
 
 // ParamNames returns path parameter names.
@@ -359,42 +358,47 @@ func (c *Context) Bind(i interface{}) error {
 
 // Render renders a template with data and sends a text/html response with status
 // code. Templates can be registered using `App.SetRenderer()`.
-func (c *Context) Render(code int, name string, data interface{}) (err error) {
+func (c *Context) Render(code int, name string, data interface{}) error {
 	if app.renderer == nil {
 		return ErrRendererNotRegistered
 	}
 	buf := new(bytes.Buffer)
+	var err error
 	if err = app.renderer.Render(buf, name, data, c); err != nil {
-		return
+		return err
 	}
 	c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
 	c.freeSession()
 	c.response.WriteHeader(code)
 	_, err = c.response.Write(buf.Bytes())
-	return
+	return nil
 }
 
 // HTML sends an HTTP response with status code.
-func (c *Context) HTML(code int, html string) (err error) {
+func (c *Context) HTML(code int, html string) error {
 	c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
 	c.freeSession()
 	c.response.WriteHeader(code)
-	_, err = c.response.Write(utils.String2Bytes(html))
-	return
+	_, err := c.response.Write(utils.String2Bytes(html))
+	return err
 }
 
 // String sends a string response with status code.
-func (c *Context) String(code int, s string) (err error) {
+func (c *Context) String(code int, s string) error {
 	c.response.Header().Set(HeaderContentType, MIMETextPlainCharsetUTF8)
 	c.freeSession()
 	c.response.WriteHeader(code)
-	_, err = c.response.Write(utils.String2Bytes(s))
-	return
+	_, err := c.response.Write(utils.String2Bytes(s))
+	return err
 }
 
 // JSON sends a JSON response with status code.
-func (c *Context) JSON(code int, i interface{}) (err error) {
-	var b []byte
+func (c *Context) JSON(code int, i interface{}) error {
+	var (
+		b   []byte
+		err error
+	)
+
 	if Debug() {
 		b, err = json.MarshalIndent(i, "", "  ")
 	} else {
@@ -407,8 +411,11 @@ func (c *Context) JSON(code int, i interface{}) (err error) {
 }
 
 // JSON with default format.
-func (c *Context) JSONMsg(code int, msgcode int, info interface{}) (err error) {
-	var b []byte
+func (c *Context) JSONMsg(code int, msgcode int, info interface{}) error {
+	var (
+		b   []byte
+		err error
+	)
 	i := CommMsg{
 		Code: msgcode,
 		Info: info,
@@ -426,18 +433,21 @@ func (c *Context) JSONMsg(code int, msgcode int, info interface{}) (err error) {
 }
 
 // JSONBlob sends a JSON blob response with status code.
-func (c *Context) JSONBlob(code int, b []byte) (err error) {
+func (c *Context) JSONBlob(code int, b []byte) error {
 	c.response.Header().Set(HeaderContentType, MIMEApplicationJSONCharsetUTF8)
 	c.freeSession()
 	c.response.WriteHeader(code)
-	_, err = c.response.Write(b)
-	return
+	_, err := c.response.Write(b)
+	return err
 }
 
 // JSONP sends a JSONP response with status code. It uses `callback` to construct
 // the JSONP payload.
-func (c *Context) JSONP(code int, callback string, i interface{}) (err error) {
-	var b []byte
+func (c *Context) JSONP(code int, callback string, i interface{}) error {
+	var (
+		b   []byte
+		err error
+	)
 	if Debug() {
 		b, err = json.MarshalIndent(i, "", "  ")
 	} else {
@@ -450,18 +460,21 @@ func (c *Context) JSONP(code int, callback string, i interface{}) (err error) {
 	c.freeSession()
 	c.response.WriteHeader(code)
 	if _, err = c.response.Write(utils.String2Bytes(callback + "(")); err != nil {
-		return
+		return err
 	}
 	if _, err = c.response.Write(b); err != nil {
-		return
+		return err
 	}
 	_, err = c.response.Write(utils.String2Bytes(");"))
-	return
+	return err
 }
 
 // JSONP with default format.
-func (c *Context) JSONPMsg(code int, callback string, msgcode int, info interface{}) (err error) {
-	var b []byte
+func (c *Context) JSONPMsg(code int, callback string, msgcode int, info interface{}) error {
+	var (
+		b   []byte
+		err error
+	)
 	i := CommMsg{
 		Code: msgcode,
 		Info: info,
@@ -478,17 +491,17 @@ func (c *Context) JSONPMsg(code int, callback string, msgcode int, info interfac
 	c.freeSession()
 	c.response.WriteHeader(code)
 	if _, err = c.response.Write(utils.String2Bytes(callback + "(")); err != nil {
-		return
+		return err
 	}
 	if _, err = c.response.Write(b); err != nil {
-		return
+		return err
 	}
 	_, err = c.response.Write(utils.String2Bytes(");"))
-	return
+	return err
 }
 
 // XML sends an XML response with status code.
-func (c *Context) XML(code int, i interface{}) (err error) {
+func (c *Context) XML(code int, i interface{}) error {
 	b, err := xml.Marshal(i)
 	if Debug() {
 		b, err = xml.MarshalIndent(i, "", "  ")
@@ -500,15 +513,16 @@ func (c *Context) XML(code int, i interface{}) (err error) {
 }
 
 // XMLBlob sends a XML blob response with status code.
-func (c *Context) XMLBlob(code int, b []byte) (err error) {
+func (c *Context) XMLBlob(code int, b []byte) error {
+	var err error
 	c.response.Header().Set(HeaderContentType, MIMEApplicationXMLCharsetUTF8)
 	c.freeSession()
 	c.response.WriteHeader(code)
 	if _, err = c.response.Write(utils.String2Bytes(xml.Header)); err != nil {
-		return
+		return err
 	}
 	_, err = c.response.Write(b)
-	return
+	return err
 }
 
 // File sends a response with the content of the file.
@@ -540,13 +554,13 @@ func (c *Context) File(file string) error {
 
 // Attachment sends a response from `io.ReaderSeeker` as attachment, prompting
 // client to save the file.
-func (c *Context) Attachment(r io.ReadSeeker, name string) (err error) {
+func (c *Context) Attachment(r io.ReadSeeker, name string) error {
 	c.response.Header().Set(HeaderContentType, ContentTypeByExtension(name))
 	c.response.Header().Set(HeaderContentDisposition, "attachment; filename="+name)
 	c.freeSession()
 	c.response.WriteHeader(http.StatusOK)
-	_, err = io.Copy(c.response, r)
-	return
+	_, err := io.Copy(c.response, r)
+	return err
 }
 
 // NoContent sends a response with no body and a status code.
@@ -605,7 +619,8 @@ func (c *Context) freeSession() {
 	}
 }
 
-func (c *Context) init(rw http.ResponseWriter, req *http.Request) (err error) {
+func (c *Context) init(rw http.ResponseWriter, req *http.Request) error {
+	var err error
 	c.pnames = c.pnames[:0]
 	c.pvalues = c.pvalues[:0]
 	if app.sessions != nil {
@@ -633,9 +648,9 @@ func (c *Context) free() {
 // ContentTypeByExtension returns the MIME type associated with the file based on
 // its extension. It returns `application/octet-stream` incase MIME type is not
 // found.
-func ContentTypeByExtension(name string) (t string) {
-	if t = mime.TypeByExtension(filepath.Ext(name)); t == "" {
-		t = MIMEOctetStream
+func ContentTypeByExtension(name string) string {
+	if t := mime.TypeByExtension(filepath.Ext(name)); t != "" {
+		return t
 	}
-	return
+	return MIMEOctetStream
 }

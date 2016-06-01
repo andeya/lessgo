@@ -20,22 +20,20 @@ type (
 	binder struct{}
 )
 
-func (b *binder) Bind(i interface{}, c *Context) (err error) {
+func (b *binder) Bind(i interface{}, c *Context) error {
 	req := c.request
 	ctype := req.Header.Get(HeaderContentType)
 	if req.Body == nil {
-		err = NewHTTPError(http.StatusBadRequest, "request body can't be empty")
-		return
+		return NewHTTPError(http.StatusBadRequest, "request body can't be empty")
 	}
-	err = ErrUnsupportedMediaType
 	switch {
 	case strings.HasPrefix(ctype, MIMEApplicationJSON):
-		if err = json.NewDecoder(req.Body).Decode(i); err != nil {
-			err = NewHTTPError(http.StatusBadRequest, err.Error())
+		if err := json.NewDecoder(req.Body).Decode(i); err != nil {
+			return NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 	case strings.HasPrefix(ctype, MIMEApplicationXML):
-		if err = xml.NewDecoder(req.Body).Decode(i); err != nil {
-			err = NewHTTPError(http.StatusBadRequest, err.Error())
+		if err := xml.NewDecoder(req.Body).Decode(i); err != nil {
+			return NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 	case strings.HasPrefix(ctype, MIMEApplicationForm), strings.HasPrefix(ctype, MIMEMultipartForm):
 		typ := reflect.TypeOf(i)
@@ -47,11 +45,11 @@ func (b *binder) Bind(i interface{}, c *Context) (err error) {
 			}
 			val = val.Elem()
 		}
-		if err = b.bindForm(typ, val, c.FormParams()); err != nil {
-			err = NewHTTPError(http.StatusBadRequest, err.Error())
+		if err := b.bindForm(typ, val, c.FormParams()); err != nil {
+			return NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 	}
-	return
+	return ErrUnsupportedMediaType
 }
 
 func (b *binder) bindForm(typ reflect.Type, val reflect.Value, form url.Values) error {

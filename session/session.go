@@ -197,7 +197,7 @@ func (manager *Manager) getSid(r *http.Request) (string, error) {
 
 // SessionStart generate or read the session id from http request.
 // if session id exists, return SessionStore with this id.
-func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session Store, err error) {
+func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (Store, error) {
 	sid, errs := manager.getSid(r)
 	if errs != nil {
 		return nil, errs
@@ -213,7 +213,7 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		return nil, errs
 	}
 
-	session, err = manager.provider.SessionRead(sid)
+	session, err := manager.provider.SessionRead(sid)
 	cookie := &http.Cookie{
 		Name:     manager.config.CookieName,
 		Value:    url.QueryEscape(sid),
@@ -236,7 +236,7 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		w.Header().Set(manager.config.SessionNameInHttpHeader, sid)
 	}
 
-	return
+	return session, err
 }
 
 // SessionDestroy Destroy session by its id in http request cookie.
@@ -266,9 +266,8 @@ func (manager *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSessionStore Get SessionStore by its id.
-func (manager *Manager) GetSessionStore(sid string) (sessions Store, err error) {
-	sessions, err = manager.provider.SessionRead(sid)
-	return
+func (manager *Manager) GetSessionStore(sid string) (Store, error) {
+	return manager.provider.SessionRead(sid)
 }
 
 // GC Start session gc process.
@@ -279,11 +278,12 @@ func (manager *Manager) GC() {
 }
 
 // SessionRegenerateID Regenerate a session id for this SessionStore who's id is saving in http request.
-func (manager *Manager) SessionRegenerateID(w http.ResponseWriter, r *http.Request) (session Store) {
+func (manager *Manager) SessionRegenerateID(w http.ResponseWriter, r *http.Request) Store {
 	sid, err := manager.sessionID()
 	if err != nil {
-		return
+		return nil
 	}
+	var session Store
 	cookie, err := r.Cookie(manager.config.CookieName)
 	if err != nil || cookie.Value == "" {
 		//delete old cookie
@@ -316,7 +316,7 @@ func (manager *Manager) SessionRegenerateID(w http.ResponseWriter, r *http.Reque
 		w.Header().Set(manager.config.SessionNameInHttpHeader, sid)
 	}
 
-	return
+	return session
 }
 
 // GetActiveSession Get all active sessions count number.

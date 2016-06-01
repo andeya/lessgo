@@ -133,14 +133,14 @@ func (a *ApiMiddleware) init() *ApiMiddleware {
 
 // 获取中间件函数，
 // 支持动态配置的中间件可传入JSON字节流进行配置。
-func (a *ApiMiddleware) regetFunc(configJSONBytes []byte) (fn MiddlewareFunc, err error) {
+func (a *ApiMiddleware) regetFunc(configJSONBytes []byte) (MiddlewareFunc, error) {
 	a.lock.Lock()
 	defer a.lock.Unlock()
+	var err error
 	if a.dynamic && len(configJSONBytes) > 0 {
 		config := utils.NewObjectPtr(a.Config)
-		err = json.Unmarshal(configJSONBytes, config)
-		if err == nil {
-			return a.Middleware.(Middleware).getMiddlewareFunc(config), err
+		if json.Unmarshal(configJSONBytes, config) == nil {
+			return a.Middleware.(Middleware).getMiddlewareFunc(config), nil
 		}
 		err = fmt.Errorf("Middleware \"%s\" uses initial config, because the type of param is error:\ngot format -> %s,\nwant format -> %s.",
 			a.Name, utils.Bytes2String(configJSONBytes), a.configJSON)
@@ -330,7 +330,7 @@ var RequestLogger = ApiMiddleware{
 	Name: "系统运行日志打印",
 	Desc: "RequestLogger returns a middleware that logs HTTP requests.",
 	Middleware: func(next HandlerFunc) HandlerFunc {
-		return func(c *Context) (err error) {
+		return func(c *Context) error {
 			if !Debug() {
 				if err := next(c); err != nil {
 					c.Error(err)
@@ -438,7 +438,7 @@ var FilterTemplate = ApiMiddleware{
 	Name: "过滤前端模板",
 	Desc: "过滤前端模板，不允许直接访问",
 	Middleware: func(next HandlerFunc) HandlerFunc {
-		return func(c *Context) (err error) {
+		return func(c *Context) error {
 			ext := path.Ext(c.Request().URL.Path)
 			if len(ext) >= 4 && ext[:4] == TPL_EXT {
 				return c.NoContent(http.StatusForbidden)
@@ -452,7 +452,7 @@ var AutoHTMLSuffix = ApiMiddleware{
 	Name: "智能追加.html后缀",
 	Desc: "静态路由时智能追加\".html\"后缀",
 	Middleware: func(next HandlerFunc) HandlerFunc {
-		return func(c *Context) (err error) {
+		return func(c *Context) error {
 			p := c.Request().URL.Path
 			if p[len(p)-1] != '/' {
 				ext := path.Ext(p)

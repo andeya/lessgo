@@ -198,14 +198,14 @@ again:
 
 // Write implements the io.Writer interface:
 // it writes data as a frame to the WebSocket connection.
-func (ws *Conn) Write(msg []byte) (n int, err error) {
+func (ws *Conn) Write(msg []byte) (int, error) {
 	ws.wio.Lock()
 	defer ws.wio.Unlock()
 	w, err := ws.frameWriterFactory.NewFrameWriter(ws.PayloadType)
 	if err != nil {
 		return 0, err
 	}
-	n, err = w.Write(msg)
+	n, err := w.Write(msg)
 	w.Close()
 	if err != nil {
 		return n, err
@@ -283,7 +283,7 @@ type Codec struct {
 }
 
 // Send sends v marshaled by cd.Marshal as single frame to ws.
-func (cd Codec) Send(ws *Conn, v interface{}) (n int, err error) {
+func (cd Codec) Send(ws *Conn, v interface{}) (int, error) {
 	data, payloadType, err := cd.Marshal(v)
 	if err != nil {
 		return 0, err
@@ -294,17 +294,17 @@ func (cd Codec) Send(ws *Conn, v interface{}) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	n, err = w.Write(data)
+	n, err := w.Write(data)
 	w.Close()
 	return n, err
 }
 
 // Receive receives single frame from ws, unmarshaled by cd.Unmarshal and stores in v.
-func (cd Codec) Receive(ws *Conn, v interface{}) (err error) {
+func (cd Codec) Receive(ws *Conn, v interface{}) error {
 	ws.rio.Lock()
 	defer ws.rio.Unlock()
 	if ws.frameReader != nil {
-		_, err = io.Copy(ioutil.Discard, ws.frameReader)
+		_, err := io.Copy(ioutil.Discard, ws.frameReader)
 		if err != nil {
 			return err
 		}
@@ -330,7 +330,7 @@ again:
 	return cd.Unmarshal(data, payloadType, v)
 }
 
-func marshal(v interface{}) (msg []byte, payloadType byte, err error) {
+func marshal(v interface{}) ([]byte, byte, error) {
 	switch data := v.(type) {
 	case string:
 		return []byte(data), TextFrame, nil
@@ -340,7 +340,7 @@ func marshal(v interface{}) (msg []byte, payloadType byte, err error) {
 	return nil, UnknownFrame, ErrNotSupported
 }
 
-func unmarshal(msg []byte, payloadType byte, v interface{}) (err error) {
+func unmarshal(msg []byte, payloadType byte, v interface{}) error {
 	switch data := v.(type) {
 	case *string:
 		*data = string(msg)
@@ -380,12 +380,12 @@ Trivial usage:
 */
 var Message = Codec{marshal, unmarshal}
 
-func jsonMarshal(v interface{}) (msg []byte, payloadType byte, err error) {
-	msg, err = json.Marshal(v)
+func jsonMarshal(v interface{}) ([]byte, byte, error) {
+	msg, err := json.Marshal(v)
 	return msg, TextFrame, err
 }
 
-func jsonUnmarshal(msg []byte, payloadType byte, v interface{}) (err error) {
+func jsonUnmarshal(msg []byte, payloadType byte, v interface{}) error {
 	return json.Unmarshal(msg, v)
 }
 

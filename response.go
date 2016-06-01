@@ -58,8 +58,8 @@ func (resp *Response) WriteHeader(code int) {
 // Write wraps and implements the http.Response.Write specification.
 // Additionally, Write will increment the size of the current response.
 // See [http.Response.Write](https://golang.org/pkg/net/http/#Response.Write)
-func (resp *Response) Write(b []byte) (n int, err error) {
-	n, err = resp.writer.Write(b)
+func (resp *Response) Write(b []byte) (int, error) {
+	n, err := resp.writer.Write(b)
 	resp.size += int64(n)
 	return n, err
 }

@@ -11,7 +11,7 @@ import (
 	"net/http"
 )
 
-func newServerConn(rwc io.ReadWriteCloser, buf *bufio.ReadWriter, req *http.Request, config *Config, handshake func(*Config, *http.Request) error) (conn *Conn, err error) {
+func newServerConn(rwc io.ReadWriteCloser, buf *bufio.ReadWriter, req *http.Request, config *Config, handshake func(*Config, *http.Request) error) (*Conn, error) {
 	var hs serverHandshaker = &hybiServerHandshaker{Config: config}
 	code, err := hs.ReadHandshake(buf.Reader, req)
 	if err == ErrBadWebSocketVersion {
@@ -20,14 +20,14 @@ func newServerConn(rwc io.ReadWriteCloser, buf *bufio.ReadWriter, req *http.Requ
 		buf.WriteString("\r\n")
 		buf.WriteString(err.Error())
 		buf.Flush()
-		return
+		return nil, err
 	}
 	if err != nil {
 		fmt.Fprintf(buf, "HTTP/1.1 %03d %s\r\n", code, http.StatusText(code))
 		buf.WriteString("\r\n")
 		buf.WriteString(err.Error())
 		buf.Flush()
-		return
+		return nil, err
 	}
 	if handshake != nil {
 		err = handshake(config, req)
@@ -36,7 +36,7 @@ func newServerConn(rwc io.ReadWriteCloser, buf *bufio.ReadWriter, req *http.Requ
 			fmt.Fprintf(buf, "HTTP/1.1 %03d %s\r\n", code, http.StatusText(code))
 			buf.WriteString("\r\n")
 			buf.Flush()
-			return
+			return nil, err
 		}
 	}
 	err = hs.AcceptHandshake(buf.Writer)
@@ -45,10 +45,9 @@ func newServerConn(rwc io.ReadWriteCloser, buf *bufio.ReadWriter, req *http.Requ
 		fmt.Fprintf(buf, "HTTP/1.1 %03d %s\r\n", code, http.StatusText(code))
 		buf.WriteString("\r\n")
 		buf.Flush()
-		return
+		return nil, err
 	}
-	conn = hs.NewServerConn(buf, rwc, req)
-	return
+	return hs.NewServerConn(buf, rwc, req), nil
 }
 
 // Server represents a server of a WebSocket.
@@ -99,7 +98,8 @@ func (s Server) serveWebSocket(w http.ResponseWriter, req *http.Request) {
 //. that doesn't check origin in its Handshake.
 type Handler func(*Conn)
 
-func checkOrigin(config *Config, req *http.Request) (err error) {
+func checkOrigin(config *Config, req *http.Request) error {
+	var err error
 	config.Origin, err = Origin(config, req)
 	if err == nil && config.Origin == nil {
 		return fmt.Errorf("null origin")
