@@ -113,14 +113,17 @@ func (c *Context) Scheme() string {
 	return "http"
 }
 
+// Path returns the registered path for the handler.
 func (c *Context) Path() string {
 	return c.path
 }
 
+// SetPath sets the registered path for the handler.
 func (c *Context) SetPath(p string) {
 	c.path = p
 }
 
+// P returns path parameter by index.
 func (c *Context) P(i int) (value string) {
 	l := len(c.pnames)
 	if i < l {
@@ -129,6 +132,7 @@ func (c *Context) P(i int) (value string) {
 	return
 }
 
+// Param returns path parameter by name.
 func (c *Context) Param(name string) (value string) {
 	l := len(c.pnames)
 	for i, n := range c.pnames {
@@ -140,10 +144,12 @@ func (c *Context) Param(name string) (value string) {
 	return
 }
 
+// ParamNames returns path parameter names.
 func (c *Context) ParamNames() []string {
 	return c.pnames
 }
 
+// SetParam sets path parameter.
 func (c *Context) SetParam(name, value string) {
 	l := len(c.pnames)
 	for i, n := range c.pnames {
@@ -160,10 +166,12 @@ func (c *Context) SetParam(name, value string) {
 	}
 }
 
+// ParamValues returns path parameter values.
 func (c *Context) ParamValues() []string {
 	return c.pvalues
 }
 
+// QueryParam returns the query param for the provided name.
 func (c *Context) QueryParam(name string) string {
 	if c.query == nil {
 		c.query = c.request.URL.Query()
@@ -171,6 +179,7 @@ func (c *Context) QueryParam(name string) string {
 	return c.query.Get(name)
 }
 
+// QueryParams returns the query parameters.
 func (c *Context) QueryParams() url.Values {
 	if c.query == nil {
 		c.query = c.request.URL.Query()
@@ -178,10 +187,12 @@ func (c *Context) QueryParams() url.Values {
 	return c.query
 }
 
+// FormValue returns the form field value for the provided name.
 func (c *Context) FormValue(name string) string {
 	return c.request.FormValue(name)
 }
 
+// FormParams returns the form parameters as map.
 func (c *Context) FormParams() url.Values {
 	if strings.HasPrefix(c.request.Header.Get(HeaderContentType), MIMEMultipartForm) {
 		if err := c.request.ParseMultipartForm(MaxMemory); err != nil {
@@ -195,29 +206,34 @@ func (c *Context) FormParams() url.Values {
 	return c.request.Form
 }
 
+// FormFile returns the multipart form file for the provided name.
 func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
 	_, fh, err := c.request.FormFile(name)
 	return fh, err
 }
 
+// MultipartForm returns the multipart form.
 func (c *Context) MultipartForm() (*multipart.Form, error) {
 	err := c.request.ParseMultipartForm(MaxMemory)
 	return c.request.MultipartForm, err
 }
 
+// Cookie returns the named cookie provided in the request.
 func (c *Context) Cookie(name string) (*http.Cookie, error) {
 	return c.request.Cookie(name)
 }
 
+// SetCookie adds a `Set-Cookie` header in HTTP response.
 func (c *Context) SetCookie(cookie *http.Cookie) {
 	c.response.SetCookie(cookie)
 }
 
+// Cookies returns the HTTP cookies sent with the request.
 func (c *Context) Cookies() []*http.Cookie {
 	return c.request.Cookies()
 }
 
-// session data info.
+// CruSession returns session data info.
 func (c *Context) CruSession() session.Store {
 	return c.cruSession
 }
@@ -266,6 +282,7 @@ func (c *Context) DestroySession() {
 	app.sessions.SessionDestroy(c.response.Writer(), c.request)
 }
 
+// Get retrieves data from the context.
 func (c *Context) Set(key string, val interface{}) {
 	if c.store == nil {
 		c.store = make(store)
@@ -273,23 +290,30 @@ func (c *Context) Set(key string, val interface{}) {
 	c.store[key] = val
 }
 
+// Set saves data in the context.
 func (c *Context) Get(key string) interface{} {
 	return c.store[key]
 }
 
+// Del deletes data from the context.
 func (c *Context) Del(key string) {
 	delete(c.store, key)
 }
 
-func (c *Context) Exists(key string) bool {
+// Contains checks if the key exists in the context.
+func (c *Context) Contains(key string) bool {
 	_, ok := c.store[key]
 	return ok
 }
 
+// Bind binds the request body into provided type `i`. The default binder
+// does it based on Content-Type header.
 func (c *Context) Bind(i interface{}) error {
 	return app.binder.Bind(i, c)
 }
 
+// Render renders a template with data and sends a text/html response with status
+// code. Templates can be registered using `App.SetRenderer()`.
 func (c *Context) Render(code int, name string, data interface{}) (err error) {
 	if app.renderer == nil {
 		return ErrRendererNotRegistered
@@ -305,6 +329,7 @@ func (c *Context) Render(code int, name string, data interface{}) (err error) {
 	return
 }
 
+// HTML sends an HTTP response with status code.
 func (c *Context) HTML(code int, html string) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
 	c.freeSession()
@@ -313,6 +338,7 @@ func (c *Context) HTML(code int, html string) (err error) {
 	return
 }
 
+// String sends a string response with status code.
 func (c *Context) String(code int, s string) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMETextPlainCharsetUTF8)
 	c.freeSession()
@@ -321,6 +347,7 @@ func (c *Context) String(code int, s string) (err error) {
 	return
 }
 
+// JSON sends a JSON response with status code.
 func (c *Context) JSON(code int, i interface{}) (err error) {
 	var b []byte
 	if Debug() {
@@ -334,6 +361,7 @@ func (c *Context) JSON(code int, i interface{}) (err error) {
 	return c.JSONBlob(code, b)
 }
 
+// JSON with default format.
 func (c *Context) JSONMsg(code int, msgcode int, info interface{}) (err error) {
 	var b []byte
 	i := CommMsg{
@@ -352,6 +380,7 @@ func (c *Context) JSONMsg(code int, msgcode int, info interface{}) (err error) {
 	return c.JSONBlob(code, b)
 }
 
+// JSONBlob sends a JSON blob response with status code.
 func (c *Context) JSONBlob(code int, b []byte) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMEApplicationJSONCharsetUTF8)
 	c.freeSession()
@@ -360,6 +389,8 @@ func (c *Context) JSONBlob(code int, b []byte) (err error) {
 	return
 }
 
+// JSONP sends a JSONP response with status code. It uses `callback` to construct
+// the JSONP payload.
 func (c *Context) JSONP(code int, callback string, i interface{}) (err error) {
 	var b []byte
 	if Debug() {
@@ -383,6 +414,7 @@ func (c *Context) JSONP(code int, callback string, i interface{}) (err error) {
 	return
 }
 
+// JSONP with default format.
 func (c *Context) JSONPMsg(code int, callback string, msgcode int, info interface{}) (err error) {
 	var b []byte
 	i := CommMsg{
@@ -410,6 +442,7 @@ func (c *Context) JSONPMsg(code int, callback string, msgcode int, info interfac
 	return
 }
 
+// XML sends an XML response with status code.
 func (c *Context) XML(code int, i interface{}) (err error) {
 	b, err := xml.Marshal(i)
 	if Debug() {
@@ -421,6 +454,7 @@ func (c *Context) XML(code int, i interface{}) (err error) {
 	return c.XMLBlob(code, b)
 }
 
+// XMLBlob sends a XML blob response with status code.
 func (c *Context) XMLBlob(code int, b []byte) (err error) {
 	c.response.Header().Set(HeaderContentType, MIMEApplicationXMLCharsetUTF8)
 	c.freeSession()
@@ -432,6 +466,7 @@ func (c *Context) XMLBlob(code int, b []byte) (err error) {
 	return
 }
 
+// File sends a response with the content of the file.
 func (c *Context) File(file string) error {
 	if app.MemoryCacheEnable() {
 		f, fi, exist := app.memoryCache.GetCacheFile(file)
@@ -458,6 +493,8 @@ func (c *Context) File(file string) error {
 	return c.ServeContent(f, fi.Name(), fi.ModTime())
 }
 
+// Attachment sends a response from `io.ReaderSeeker` as attachment, prompting
+// client to save the file.
 func (c *Context) Attachment(r io.ReadSeeker, name string) (err error) {
 	c.response.Header().Set(HeaderContentType, ContentTypeByExtension(name))
 	c.response.Header().Set(HeaderContentDisposition, "attachment; filename="+name)
@@ -467,12 +504,14 @@ func (c *Context) Attachment(r io.ReadSeeker, name string) (err error) {
 	return
 }
 
+// NoContent sends a response with no body and a status code.
 func (c *Context) NoContent(code int) error {
 	c.freeSession()
 	c.response.WriteHeader(code)
 	return nil
 }
 
+// Redirect redirects the request with status code.
 func (c *Context) Redirect(code int, url string) error {
 	if code < http.StatusMultipleChoices || code > http.StatusTemporaryRedirect {
 		return ErrInvalidRedirectCode
@@ -483,14 +522,19 @@ func (c *Context) Redirect(code int, url string) error {
 	return nil
 }
 
+// Error invokes the registered HTTP error handler. Generally used by middleware.
 func (c *Context) Error(err error) {
 	app.router.ErrorPanicHandler(c, err, nil)
 }
 
+// Log returns the `Logger` instance.
 func (c *Context) Log() logs.Logger {
 	return Log
 }
 
+// ServeContent sends static content from `io.Reader` and handles caching
+// via `If-Modified-Since` request header. It automatically sets `Content-Type`
+// and `Last-Modified` response headers.
 func (c *Context) ServeContent(content io.ReadSeeker, name string, modtime time.Time) error {
 	req := c.request
 	resp := c.response
