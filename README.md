@@ -18,19 +18,19 @@ Lessgo是一款Go语言开发的简单、稳定、高效、灵活的 web开发�
 - 发布日期：2016.05.17
 
 ##最新功能特性
-- 使用简单、运行稳定高效（核心架构来自echo的真正意义的二次开发）
+- 使用简单、运行稳定高效（核心架构来自对echo真正意义的二次开发）
 - 兼容流行系统模式如:MVC、MVVC、Restful...
-- 强大的运行时动态路由，同时支持在源码或admin中配置（动态路由保存在数据库中）
-- 多异构数据库支持（master分支使用xorm，dev-a分支使用gorm）
+- httprouter真实路由配合强大的虚拟路由层，不仅性能优秀更可同时支持在源码或admin中动态配置
+- 多异构数据库支持，且用户可以选择xorm或者gorm两种引擎（当然愿意，用户还可以同时使用两种引擎）
 - 优化的项目目录组织最佳实践，满足复杂企业应用需要
 - 集成统一的系统日志(system、database独立完整的日志)
 - 提供Session管理（优化beego框架中的session包）
-- 多种Token生成方式
 - 强大的前端模板渲染引擎（pongo2）
 - 天生支持运行时可更新的API测试网页（swagger2.0）
 - 配置文件自动补填默认值，并按字母排序
 - 支持热编译
 - 支持热升级
+- 另外灵活的扩展包中还包含HOTP、TOTP、UUID以及各种条码生成工具等常用工具包
 
 ![Lessgo Server](https://github.com/lessgo/doc/raw/master/img/server.jpg) 
 ![Lessgo Server](https://github.com/lessgo/doc/raw/master/img/admin.png)
@@ -225,7 +225,7 @@ func init() {
 --------------------------------|--------------------------------------------------
 [henrylee2cn](https://github.com/henrylee2cn)|代码的主要实现者 (第一作者) 
 [changyu72](https://github.com/changyu72)|架构的主要设计者 (第二作者) 
-[LeSou](https://github.com/LeSou)| (gorm版分支维护) 
+[LeSou](https://github.com/LeSou)|
 
 ##开源协议
 Lessgo 项目采用商业应用友好的 [MIT](https://github.com/lessgo/lessgo/raw/master/LICENSE) 协议发布。
