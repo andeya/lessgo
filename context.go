@@ -212,6 +212,12 @@ func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
 	return fh, err
 }
 
+// MultipartForm returns the multipart form.
+func (c *Context) MultipartForm() (*multipart.Form, error) {
+	err := c.request.ParseMultipartForm(MaxMemory)
+	return c.request.MultipartForm, err
+}
+
 // SaveFile saves the file *Context.FormFile to UPLOADS_DIR,
 // character "?" indicates that the original file name.
 // for example newfname="a/?" -> UPLOADS_DIR/a/fname.
@@ -252,12 +258,6 @@ func (c *Context) SaveFile(pname string, cover bool, newfname ...string) (fullna
 		}
 	}()
 	return
-}
-
-// MultipartForm returns the multipart form.
-func (c *Context) MultipartForm() (*multipart.Form, error) {
-	err := c.request.ParseMultipartForm(MaxMemory)
-	return c.request.MultipartForm, err
 }
 
 // Cookie returns the named cookie provided in the request.
