@@ -84,6 +84,10 @@ func (a *ApiMiddleware) init() *ApiMiddleware {
 		a.inited = true
 	}()
 
+	// 获取操作函数URI
+	v := reflect.ValueOf(a.Middleware)
+	funcName := runtime.FuncForPC(v.Pointer()).Name()
+
 	// 格式化验证中间件处理函数类型
 	switch m := a.Middleware.(type) {
 	case ConfMiddlewareFunc:
@@ -104,8 +108,6 @@ func (a *ApiMiddleware) init() *ApiMiddleware {
 		}
 	}
 
-	v := reflect.ValueOf(a.Middleware)
-	funcName := runtime.FuncForPC(v.Pointer()).Name()
 	if len(a.Name) == 0 {
 		if len(a.Desc) > 0 {
 			a.Name = a.Desc
