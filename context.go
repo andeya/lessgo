@@ -212,6 +212,48 @@ func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
 	return fh, err
 }
 
+// SaveFile saves the file *Context.FormFile to UPLOADS_DIR,
+// character "?" indicates that the original file name.
+// for example newfname="a/?" -> UPLOADS_DIR/a/fname.
+func (c *Context) SaveFile(pname string, cover bool, newfname ...string) (fullname string, size int64, err error) {
+	f, fh, err := c.request.FormFile(pname)
+	if err != nil {
+		return
+	}
+	defer func() {
+		err2 := f.Close()
+		if err2 != nil && err == nil {
+			err = err2
+		}
+	}()
+	if len(newfname) > 0 {
+		fullname = filepath.Join(UPLOADS_DIR, strings.Replace(newfname[0], "?", fh.Filename, -1))
+		p, _ := filepath.Split(fullname)
+		err = os.MkdirAll(p, 0777)
+		if err != nil {
+			return
+		}
+	} else {
+		fullname = filepath.Join(UPLOADS_DIR, fh.Filename)
+	}
+	if utils.FileExists(fullname) && !cover {
+		idx := strings.LastIndex(fullname, filepath.Ext(fullname))
+		fullname = fullname[:idx] + "(2)" + fullname[idx:]
+	}
+	f2, err := os.OpenFile(fullname, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	size, err = io.Copy(f2, f)
+	defer func() {
+		err3 := f2.Close()
+		if err3 != nil && err == nil {
+			err = err3
+		}
+	}()
+	return
+}
+
 // MultipartForm returns the multipart form.
 func (c *Context) MultipartForm() (*multipart.Form, error) {
 	err := c.request.ParseMultipartForm(MaxMemory)
