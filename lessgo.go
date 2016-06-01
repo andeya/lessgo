@@ -57,10 +57,6 @@ const (
 	ADDRESS = "https://github.com/lessgo/lessgo"
 )
 
-const (
-	MB = 1 << 20
-)
-
 var (
 	// 初始化全局Lessgo实例
 	lessgo = newLessgo()

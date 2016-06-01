@@ -48,8 +48,8 @@ type (
 var (
 	// 默认页面文件
 	indexPage = "index.html"
-	// 文件上传默认内存缓存大小，默认值是 1 << 32 (32MB)。
-	MaxMemory int64 = 32 << 20
+	// 文件上传默认内存缓存大小，默认值是64MB。
+	MaxMemory int64 = 64 * MB
 )
 
 func (c *Context) RealRemoteAddr() string {
@@ -207,9 +207,12 @@ func (c *Context) FormParams() url.Values {
 }
 
 // FormFile returns the multipart form file for the provided name.
-func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
-	_, fh, err := c.request.FormFile(name)
-	return fh, err
+func (c *Context) FormFile(name string) (multipart.File, *multipart.FileHeader, error) {
+	err := c.request.ParseMultipartForm(MaxMemory)
+	if err != nil {
+		return nil, nil, err
+	}
+	return c.request.FormFile(name)
 }
 
 // MultipartForm returns the multipart form.
@@ -222,7 +225,7 @@ func (c *Context) MultipartForm() (*multipart.Form, error) {
 // character "?" indicates that the original file name.
 // for example newfname="a/?" -> UPLOADS_DIR/a/fname.
 func (c *Context) SaveFile(pname string, cover bool, newfname ...string) (fullname string, size int64, err error) {
-	f, fh, err := c.request.FormFile(pname)
+	f, fh, err := c.FormFile(pname)
 	if err != nil {
 		return
 	}

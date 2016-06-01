@@ -97,6 +97,10 @@ const (
 	LOG_FILE          = "logger/lessgo.log"
 )
 
+const (
+	MB = 1 << 20
+)
+
 func newConfig() *config {
 	return &config{
 		AppName: "lessgo",
@@ -209,8 +213,11 @@ func ReadSingleConfig(section string, p interface{}, iniconf confpkg.Configer) {
 		case reflect.Int, reflect.Int64:
 			num := int64(iniconf.DefaultInt64(fullname, pf.Int()))
 			switch fullname {
-			case "system::maxmemorymb",
-				"filecache::cachesecond", "filecache::singlefileallowmb", "filecache::maxcapmb",
+			case "system::maxmemorymb":
+				if num >= 0 {
+					pf.SetInt(num)
+				}
+			case "filecache::cachesecond", "filecache::singlefileallowmb", "filecache::maxcapmb",
 				"listen::readtimeout", "listen::writetimeout",
 				"session::sessiongcmaxlifetime", "session::sessioncookielifetime":
 				if num > 0 {
