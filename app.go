@@ -475,7 +475,7 @@ func (this *App) match(methods []string, path string, handler HandlerFunc, middl
 func (this *App) webSocket(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
 	this.addwithlog(false, GET, path, HandlerFunc(func(c *Context) error {
 		websocket.Handler(func(ws *websocket.Conn) {
-			c.SetSocket(ws)
+			c.SetWs(ws)
 			err := handler(c)
 			if err != nil {
 				Log.Warn("WebSocket: [%v]%v", c.RealRemoteAddr(), err)
