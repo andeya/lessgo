@@ -151,7 +151,8 @@ func newConfig() *config {
 	}
 }
 
-func (this *config) LoadMainConfig(fname string) (err error) {
+func (this *config) LoadMainConfig() (err error) {
+	fname := APPCONFIG_FILE
 	iniconf, err := confpkg.NewConfig("ini", fname)
 	if err == nil {
 		os.Remove(fname)

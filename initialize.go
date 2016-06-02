@@ -13,7 +13,7 @@ import (
 func newLessgo() *Lessgo {
 	printInfo()
 
-	err := Config.LoadMainConfig(APPCONFIG_FILE)
+	err := Config.LoadMainConfig()
 	if err != nil {
 		fmt.Println(err)
 	}
