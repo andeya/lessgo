@@ -66,26 +66,37 @@ func (c *Context) RealRemoteAddr() string {
 	return c.realRemoteAddr
 }
 
-func (c *Context) Socket() *websocket.Conn {
+// 获取websocket实例
+func (c *Context) Ws() *websocket.Conn {
 	return c.socket
 }
 
-func (c *Context) SetSocket(conn *websocket.Conn) {
+// 设置websocket实例
+func (c *Context) SetWs(conn *websocket.Conn) {
 	c.socket = conn
 }
 
+// 关闭websocket
+func (c *Context) WsClose() error {
+	return c.socket.Close()
+}
+
+// 接收JSON格式的websocket信息
 func (c *Context) WsRecvJSON(v interface{}) error {
 	return websocket.JSON.Receive(c.socket, v)
 }
 
-func (c *Context) WsRecvMsg(v *string) error {
-	return websocket.Message.Receive(c.socket, v)
-}
-
+// 发送JSON格式的websocket信息
 func (c *Context) WsSendJSON(v interface{}) (int, error) {
 	return websocket.JSON.Send(c.socket, v)
 }
 
+// 接收string格式的websocket信息
+func (c *Context) WsRecvMsg(v *string) error {
+	return websocket.Message.Receive(c.socket, v)
+}
+
+// 发送string格式的websocket信息
 func (c *Context) WsSendMsg(v string) (int, error) {
 	return websocket.Message.Send(c.socket, v)
 }
