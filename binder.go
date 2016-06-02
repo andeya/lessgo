@@ -48,8 +48,10 @@ func (b *binder) Bind(i interface{}, c *Context) error {
 		if err := b.bindForm(typ, val, c.FormParams()); err != nil {
 			return NewHTTPError(http.StatusBadRequest, err.Error())
 		}
+	default:
+		return ErrUnsupportedMediaType
 	}
-	return ErrUnsupportedMediaType
+	return nil
 }
 
 func (b *binder) bindForm(typ reflect.Type, val reflect.Value, form url.Values) error {
