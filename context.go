@@ -29,7 +29,7 @@ type (
 		path           string
 		realRemoteAddr string
 		query          url.Values
-		pnames         []string
+		pkeys          []string
 		pvalues        []string
 		store          store
 		cruSession     session.Store
@@ -52,6 +52,38 @@ var (
 	MaxMemory int64 = 64 * MB
 )
 
+func (c *Context) Response() *Response {
+	return c.response
+}
+
+func (c *Context) ResponseWriter() http.ResponseWriter {
+	return c.response
+}
+
+func (c *Context) SetResponse(resp *Response) {
+	c.response = resp
+}
+
+func (c *Context) Request() *http.Request {
+	return c.request
+}
+
+func (c *Context) SetRequestBody(reader io.Reader) {
+	c.request.Body = ioutil.NopCloser(reader)
+}
+
+func (c *Context) IsTLS() bool {
+	return c.request.TLS != nil
+}
+
+func (c *Context) Scheme() string {
+	if c.IsTLS() {
+		return "https"
+	}
+	return "http"
+}
+
+// 获取客户端真实IP
 func (c *Context) RealRemoteAddr() string {
 	if len(c.realRemoteAddr) == 0 {
 		c.realRemoteAddr = c.request.RemoteAddr
@@ -66,64 +98,6 @@ func (c *Context) RealRemoteAddr() string {
 	return c.realRemoteAddr
 }
 
-// 获取websocket实例
-func (c *Context) Ws() *websocket.Conn {
-	return c.socket
-}
-
-// 设置websocket实例
-func (c *Context) SetWs(conn *websocket.Conn) {
-	c.socket = conn
-}
-
-// 关闭websocket
-func (c *Context) WsClose() error {
-	return c.socket.Close()
-}
-
-// 接收JSON格式的websocket信息
-func (c *Context) WsRecvJSON(v interface{}) error {
-	return websocket.JSON.Receive(c.socket, v)
-}
-
-// 发送JSON格式的websocket信息
-func (c *Context) WsSendJSON(v interface{}) (int, error) {
-	return websocket.JSON.Send(c.socket, v)
-}
-
-// 接收string格式的websocket信息
-func (c *Context) WsRecvMsg(v *string) error {
-	return websocket.Message.Receive(c.socket, v)
-}
-
-// 发送string格式的websocket信息
-func (c *Context) WsSendMsg(v string) (int, error) {
-	return websocket.Message.Send(c.socket, v)
-}
-
-func (c *Context) Request() *http.Request {
-	return c.request
-}
-
-func (c *Context) SetRequestBody(reader io.Reader) {
-	c.request.Body = ioutil.NopCloser(reader)
-}
-
-func (c *Context) Response() *Response {
-	return c.response
-}
-
-func (c *Context) IsTLS() bool {
-	return c.request.TLS != nil
-}
-
-func (c *Context) Scheme() string {
-	if c.IsTLS() {
-		return "https"
-	}
-	return "http"
-}
-
 // Path returns the registered path for the handler.
 func (c *Context) Path() string {
 	return c.path
@@ -134,41 +108,46 @@ func (c *Context) SetPath(p string) {
 	c.path = p
 }
 
-// P returns path parameter by index.
-func (c *Context) P(i int) string {
-	l := len(c.pnames)
-	if i < l {
-		return c.pvalues[i]
-	}
-	return ""
+// PathParamKeys returns path param keys.
+func (c *Context) PathParamKeys() []string {
+	return c.pkeys
 }
 
-// Param returns path parameter by name.
-func (c *Context) Param(name string) string {
-	l := len(c.pnames)
-	for i, n := range c.pnames {
-		if n == name && i < l {
+// PathParamValues returns path param values.
+func (c *Context) PathParamValues() []string {
+	return c.pvalues
+}
+
+// PathParam returns path param by key.
+func (c *Context) PathParam(key string) string {
+	l := len(c.pkeys)
+	for i, n := range c.pkeys {
+		if n == key && i < l {
 			return c.pvalues[i]
 		}
 	}
 	return ""
 }
 
-// ParamNames returns path parameter names.
-func (c *Context) ParamNames() []string {
-	return c.pnames
+// PathParamByIndex returns path param by index.
+func (c *Context) PathParamByIndex(i int) string {
+	l := len(c.pkeys)
+	if i < l {
+		return c.pvalues[i]
+	}
+	return ""
 }
 
-// SetParam sets path parameter.
-func (c *Context) SetParam(name, value string) {
-	l := len(c.pnames)
-	for i, n := range c.pnames {
-		if n == name && i < l {
+// SetPathParam sets path param.
+func (c *Context) SetPathParam(key, value string) {
+	l := len(c.pkeys)
+	for i, n := range c.pkeys {
+		if n == key && i < l {
 			c.pvalues[i] = value
 			return
 		}
 	}
-	c.pnames = append(c.pnames, name)
+	c.pkeys = append(c.pkeys, key)
 	if len(c.pvalues) > l {
 		c.pvalues[l] = value
 	} else {
@@ -176,20 +155,7 @@ func (c *Context) SetParam(name, value string) {
 	}
 }
 
-// ParamValues returns path parameter values.
-func (c *Context) ParamValues() []string {
-	return c.pvalues
-}
-
-// QueryParam returns the query param for the provided name.
-func (c *Context) QueryParam(name string) string {
-	if c.query == nil {
-		c.query = c.request.URL.Query()
-	}
-	return c.query.Get(name)
-}
-
-// QueryParams returns the query parameters.
+// QueryParams returns the query params.
 func (c *Context) QueryParams() url.Values {
 	if c.query == nil {
 		c.query = c.request.URL.Query()
@@ -197,45 +163,102 @@ func (c *Context) QueryParams() url.Values {
 	return c.query
 }
 
-// FormValue returns the form field value for the provided name.
-func (c *Context) FormValue(name string) string {
-	return c.request.FormValue(name)
+// QueryParam returns the query param for the provided key.
+func (c *Context) QueryParam(key string) string {
+	if c.query == nil {
+		c.query = c.request.URL.Query()
+	}
+	return c.query.Get(key)
 }
 
-// FormParams returns the form parameters as map.
+// SetQueryParam sets the query param. It replaces any existing
+// values.
+func (c *Context) SetQueryParam(key string, value string) {
+	if c.query == nil {
+		c.query = c.request.URL.Query()
+	}
+	c.query.Set(key, value)
+}
+
+// AddQueryParam adds the the query param. It appends to any existing
+// values associated with key.
+func (c *Context) AddQueryParam(key string, value string) {
+	if c.query == nil {
+		c.query = c.request.URL.Query()
+	}
+	c.query.Add(key, value)
+}
+
+// DelQueryParam deletes the values associated with key.
+func (c *Context) DelQueryParam(key string) {
+	if c.query == nil {
+		c.query = c.request.URL.Query()
+	}
+	c.query.Del(key)
+}
+
+// HeaderParams returns the request header.
+func (c *Context) HeaderParams() http.Header {
+	return c.request.Header
+}
+
+// HeaderParam returns the header value for the provided key.
+func (c *Context) HeaderParam(key string) string {
+	return c.request.Header.Get(key)
+}
+
+// SetHeaderParam sets header param.
+func (c *Context) SetHeaderParam(key string, value string) {
+	c.request.Header.Set(key, value)
+}
+
+// FormParams returns the form params as url.Values.
 func (c *Context) FormParams() url.Values {
-	if strings.HasPrefix(c.request.Header.Get(HeaderContentType), MIMEMultipartForm) {
-		if err := c.request.ParseMultipartForm(MaxMemory); err != nil {
-			Log.Error("%v", err)
-		}
-	} else {
+	if c.request.PostForm != nil {
+		return c.request.PostForm
+	}
+	if err := c.request.ParseForm(); err != nil {
+		Log.Error("%v", err)
+	}
+	return c.request.PostForm
+}
+
+// FormParam returns the form field value for the provided key.
+func (c *Context) FormParam(key string) string {
+	if c.request.PostForm == nil {
 		if err := c.request.ParseForm(); err != nil {
 			Log.Error("%v", err)
 		}
 	}
-	return c.request.Form
+	return c.request.PostFormValue(key)
 }
 
-// FormFile returns the multipart form file for the provided name.
-func (c *Context) FormFile(name string) (multipart.File, *multipart.FileHeader, error) {
-	err := c.request.ParseMultipartForm(MaxMemory)
-	if err != nil {
-		return nil, nil, err
+// SetFormParam sets the form param. It replaces any existing values.
+func (c *Context) SetFormParam(key string, value string) {
+	if c.request.PostForm == nil {
+		if err := c.request.ParseForm(); err != nil {
+			Log.Error("%v", err)
+		}
 	}
-	return c.request.FormFile(name)
+	c.request.PostForm.Set(key, value)
 }
 
-// MultipartForm returns the multipart form.
-func (c *Context) MultipartForm() (*multipart.Form, error) {
-	err := c.request.ParseMultipartForm(MaxMemory)
-	return c.request.MultipartForm, err
+// FormFile returns the multipart form file for the provided key.
+func (c *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
+	if c.request.MultipartForm == nil {
+		err := c.request.ParseMultipartForm(MaxMemory)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return c.request.FormFile(key)
 }
 
 // SaveFile saves the file *Context.FormFile to UPLOADS_DIR,
 // character "?" indicates that the original file name.
 // for example newfname="a/?" -> UPLOADS_DIR/a/fname.
-func (c *Context) SaveFile(pname string, cover bool, newfname ...string) (fullname string, size int64, err error) {
-	f, fh, err := c.FormFile(pname)
+func (c *Context) SaveFile(key string, cover bool, newfname ...string) (fullname string, size int64, err error) {
+	f, fh, err := c.FormFile(key)
 	if err != nil {
 		return
 	}
@@ -273,19 +296,20 @@ func (c *Context) SaveFile(pname string, cover bool, newfname ...string) (fullna
 	return
 }
 
-// Cookie returns the named cookie provided in the request.
-func (c *Context) Cookie(name string) (*http.Cookie, error) {
-	return c.request.Cookie(name)
-}
-
-// SetCookie adds a `Set-Cookie` header in HTTP response.
-func (c *Context) SetCookie(cookie *http.Cookie) {
-	c.response.SetCookie(cookie)
-}
-
-// Cookies returns the HTTP cookies sent with the request.
-func (c *Context) Cookies() []*http.Cookie {
+// CookieParams returns the HTTP cookies sent with the request.
+func (c *Context) CookieParams() []*http.Cookie {
 	return c.request.Cookies()
+}
+
+// CookieParam returns the named cookie provided in the request.
+func (c *Context) CookieParam(key string) *http.Cookie {
+	cookie, _ := c.request.Cookie(key)
+	return cookie
+}
+
+// AddCookieParam adds a cookie to the request.
+func (c *Context) AddCookieParam(cookie *http.Cookie) {
+	c.request.AddCookie(cookie)
 }
 
 // CruSession returns session data info.
@@ -294,27 +318,27 @@ func (c *Context) CruSession() session.Store {
 }
 
 // SetSession puts value into session.
-func (c *Context) SetSession(name interface{}, value interface{}) {
+func (c *Context) SetSession(key interface{}, value interface{}) {
 	if c.cruSession == nil {
 		return
 	}
-	c.cruSession.Set(name, value)
+	c.cruSession.Set(key, value)
 }
 
 // GetSession gets value from session.
-func (c *Context) GetSession(name interface{}) interface{} {
+func (c *Context) GetSession(key interface{}) interface{} {
 	if c.cruSession == nil {
 		return nil
 	}
-	return c.cruSession.Get(name)
+	return c.cruSession.Get(key)
 }
 
 // DelSession removes value from session.
-func (c *Context) DelSession(name interface{}) {
+func (c *Context) DelSession(key interface{}) {
 	if c.cruSession == nil {
 		return
 	}
-	c.cruSession.Delete(name)
+	c.cruSession.Delete(key)
 }
 
 // SessionRegenerateID regenerates session id for this session.
@@ -323,8 +347,8 @@ func (c *Context) SessionRegenerateID() {
 	if c.cruSession == nil {
 		return
 	}
-	c.cruSession.SessionRelease(c.response.Writer())
-	c.cruSession = app.sessions.SessionRegenerateID(c.response.Writer(), c.request)
+	c.cruSession.SessionRelease(c.response)
+	c.cruSession = app.sessions.SessionRegenerateID(c.response, c.request)
 }
 
 // DestroySession cleans session data and session cookie.
@@ -334,7 +358,42 @@ func (c *Context) DestroySession() {
 	}
 	c.cruSession.Flush()
 	c.cruSession = nil
-	app.sessions.SessionDestroy(c.response.Writer(), c.request)
+	app.sessions.SessionDestroy(c.response, c.request)
+}
+
+// 获取websocket实例
+func (c *Context) Ws() *websocket.Conn {
+	return c.socket
+}
+
+// 设置websocket实例
+func (c *Context) SetWs(conn *websocket.Conn) {
+	c.socket = conn
+}
+
+// 关闭websocket
+func (c *Context) WsClose() error {
+	return c.socket.Close()
+}
+
+// 接收JSON格式的websocket信息
+func (c *Context) WsRecvJSON(v interface{}) error {
+	return websocket.JSON.Receive(c.socket, v)
+}
+
+// 发送JSON格式的websocket信息
+func (c *Context) WsSendJSON(v interface{}) (int, error) {
+	return websocket.JSON.Send(c.socket, v)
+}
+
+// 接收string格式的websocket信息
+func (c *Context) WsRecvMsg(v *string) error {
+	return websocket.Message.Receive(c.socket, v)
+}
+
+// 发送string格式的websocket信息
+func (c *Context) WsSendMsg(v string) (int, error) {
+	return websocket.Message.Send(c.socket, v)
 }
 
 // Get retrieves data from the context.
@@ -361,10 +420,10 @@ func (c *Context) Contains(key string) bool {
 	return ok
 }
 
-// Bind binds the request body into provided type `i`. The default binder
+// Bind binds the request body into provided type `container`. The default binder
 // does it based on Content-Type header.
-func (c *Context) Bind(i interface{}) error {
-	return app.binder.Bind(i, c)
+func (c *Context) Bind(container interface{}) error {
+	return app.binder.Bind(container, c)
 }
 
 // Render renders a template with data and sends a text/html response with status
@@ -608,15 +667,15 @@ func (c *Context) Log() logs.Logger {
 func (c *Context) ServeContent(content io.ReadSeeker, name string, modtime time.Time) error {
 	req := c.request
 	resp := c.response
-
+	head := resp.Header()
 	if t, err := time.Parse(http.TimeFormat, req.Header.Get(HeaderIfModifiedSince)); err == nil && modtime.Before(t.Add(1*time.Second)) {
-		resp.Header().Del(HeaderContentType)
-		resp.Header().Del(HeaderContentLength)
+		head.Del(HeaderContentType)
+		head.Del(HeaderContentLength)
 		return c.NoContent(http.StatusNotModified)
 	}
 
-	resp.Header().Set(HeaderContentType, ContentTypeByExtension(name))
-	resp.Header().Set(HeaderLastModified, modtime.UTC().Format(http.TimeFormat))
+	head.Set(HeaderContentType, ContentTypeByExtension(name))
+	head.Set(HeaderLastModified, modtime.UTC().Format(http.TimeFormat))
 	c.freeSession()
 	resp.WriteHeader(http.StatusOK)
 	_, err := io.Copy(resp, content)
@@ -625,14 +684,14 @@ func (c *Context) ServeContent(content io.ReadSeeker, name string, modtime time.
 
 func (c *Context) freeSession() {
 	if c.cruSession != nil {
-		c.cruSession.SessionRelease(c.response.Writer())
+		c.cruSession.SessionRelease(c.response)
 		c.cruSession = nil
 	}
 }
 
 func (c *Context) init(rw http.ResponseWriter, req *http.Request) error {
 	var err error
-	c.pnames = c.pnames[:0]
+	c.pkeys = c.pkeys[:0]
 	c.pvalues = c.pvalues[:0]
 	if app.sessions != nil {
 		c.cruSession, err = app.sessions.SessionStart(rw, req)
@@ -641,8 +700,8 @@ func (c *Context) init(rw http.ResponseWriter, req *http.Request) error {
 			return err
 		}
 	}
-	c.response.SetWriter(rw)
 	c.request = req
+	c.response.init(rw)
 	c.store = make(store)
 	return err
 }

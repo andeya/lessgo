@@ -210,7 +210,7 @@ var (
 			}
 			Log.Error("%v", err)
 		}
-		if !c.Response().Committed() {
+		if !c.response.Committed() {
 			c.String(code, msg)
 		}
 	}
@@ -445,7 +445,7 @@ func (this *App) group(prefix string, middleware ...MiddlewareFunc) (g *Group) {
 // provided root directory.
 func (this *App) static(prefix, root string, middleware ...MiddlewareFunc) {
 	this.addwithlog(false, GET, prefix+"/*filepath", func(c *Context) error {
-		return c.File(path.Join(root, c.P(0))) // Param `_`
+		return c.File(path.Join(root, c.PathParamByIndex(0)))
 	}, middleware...)
 	Log.Sys("| %-7s | %-30s | %v", GET, prefix+"/*filepath", root)
 }
@@ -480,7 +480,7 @@ func (this *App) webSocket(path string, handler HandlerFunc, middleware ...Middl
 			if err != nil {
 				Log.Warn("WebSocket: [%v]%v", c.RealRemoteAddr(), err)
 			}
-		}).ServeHTTP(c.Response().Writer(), c.request)
+		}).ServeHTTP(c.response, c.request)
 		return nil
 	}), middleware...)
 	Log.Sys("| %-7s | %-30s | %v", WS, path, handlerName(handler))
@@ -549,7 +549,7 @@ func (this *App) newContext(resp *Response, req *http.Request) *Context {
 		request:  req,
 		response: resp,
 		pvalues:  nil,
-		pnames:   nil,
+		pkeys:    nil,
 		store:    make(store),
 	}
 }

@@ -316,7 +316,7 @@ func ResetFiles() {
 // 创建静态目录服务的操作(用于在Root()下)
 func StaticFunc(root string) HandlerFunc {
 	return func(c *Context) error {
-		return c.File(path.Join(root, c.P(0)))
+		return c.File(path.Join(root, c.PathParamByIndex(0)))
 	}
 }
 

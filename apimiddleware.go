@@ -318,8 +318,8 @@ var CheckHome = ApiMiddleware{
 	Desc: "检查是否为访问主页",
 	Middleware: func(next HandlerFunc) HandlerFunc {
 		return func(c *Context) error {
-			if c.Request().URL.Path == "/" {
-				c.Request().URL.Path = GetHome()
+			if c.request.URL.Path == "/" {
+				c.request.URL.Path = GetHome()
 			}
 			return next(c)
 		}
@@ -348,7 +348,6 @@ var RequestLogger = ApiMiddleware{
 			if path == "" {
 				path = "/"
 			}
-			size := c.response.Size()
 
 			n := c.response.Status()
 			code := color.Green(n)
@@ -361,7 +360,7 @@ var RequestLogger = ApiMiddleware{
 				code = color.Cyan(n)
 			}
 
-			Log.Debug("%s | %s | %s | %s | %s | %d", c.RealRemoteAddr(), method, path, code, stop.Sub(start), size)
+			Log.Debug("%s | %s | %s | %s | %s | %d", c.RealRemoteAddr(), method, path, code, stop.Sub(start), c.response.Size())
 			return nil
 		}
 	},
@@ -429,7 +428,7 @@ var CrossDomain = ApiMiddleware{
 	Name: "设置允许跨域",
 	Desc: "根据配置信息设置允许跨域",
 	Middleware: func(c *Context) error {
-		c.Response().Header().Set("Access-Control-Allow-Origin", "*")
+		c.response.Header().Set("Access-Control-Allow-Origin", "*")
 		return nil
 	},
 }.Reg()
@@ -439,7 +438,7 @@ var FilterTemplate = ApiMiddleware{
 	Desc: "过滤前端模板，不允许直接访问",
 	Middleware: func(next HandlerFunc) HandlerFunc {
 		return func(c *Context) error {
-			ext := path.Ext(c.Request().URL.Path)
+			ext := path.Ext(c.request.URL.Path)
 			if len(ext) >= 4 && ext[:4] == TPL_EXT {
 				return c.NoContent(http.StatusForbidden)
 			}
@@ -453,12 +452,12 @@ var AutoHTMLSuffix = ApiMiddleware{
 	Desc: "静态路由时智能追加\".html\"后缀",
 	Middleware: func(next HandlerFunc) HandlerFunc {
 		return func(c *Context) error {
-			p := c.Request().URL.Path
+			p := c.request.URL.Path
 			if p[len(p)-1] != '/' {
 				ext := path.Ext(p)
 				if ext == "" || ext[0] != '.' {
-					c.Request().URL.Path = strings.TrimSuffix(p, ext) + STATIC_HTML_EXT + ext
-					c.ParamValues()[0] += STATIC_HTML_EXT
+					c.request.URL.Path = strings.TrimSuffix(p, ext) + STATIC_HTML_EXT + ext
+					c.pvalues[0] += STATIC_HTML_EXT
 				}
 			}
 			return next(c)

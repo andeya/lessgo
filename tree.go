@@ -318,15 +318,15 @@ func (n *node) insertChild(numParams uint8, path, fullPath string, handle Handle
 // If no handle can be found, a TSR (trailing slash redirect) recommendation is
 // made if a handle exists with an extra (without the) trailing slash for the
 // given path.
-func (n *node) getValue(path string, pnames, pvalues []string) (HandlerFunc, []string, []string, bool) {
+func (n *node) getValue(path string, pkeys, pvalues []string) (HandlerFunc, []string, []string, bool) {
 	var (
 		handle HandlerFunc
 		tsr    bool
 	)
 	// save param value
-	if pnames == nil {
+	if pkeys == nil {
 		// lazy allocation
-		pnames = make([]string, 0, n.maxParams)
+		pkeys = make([]string, 0, n.maxParams)
 	}
 	if pvalues == nil {
 		// lazy allocation
@@ -353,7 +353,7 @@ walk: // outer loop for walking the tree
 					// We can recommend to redirect to the same URL without a
 					// trailing slash if a leaf exists for that path.
 					tsr = (path == "/" && n.handle != nil)
-					return handle, pnames, pvalues, tsr
+					return handle, pkeys, pvalues, tsr
 				}
 
 				// handle wildcard child
@@ -366,14 +366,14 @@ walk: // outer loop for walking the tree
 						end++
 					}
 
-					i := len(pnames)
-					if i < cap(pnames) {
-						pnames = pnames[:i+1]   // expand slice within preallocated capacity
+					i := len(pkeys)
+					if i < cap(pkeys) {
+						pkeys = pkeys[:i+1]     // expand slice within preallocated capacity
 						pvalues = pvalues[:i+1] // expand slice within preallocated capacity
-						pnames[i] = n.path[1:]
+						pkeys[i] = n.path[1:]
 						pvalues[i] = path[:end]
 					} else {
-						pnames = append(pnames, n.path[1:])
+						pkeys = append(pkeys, n.path[1:])
 						pvalues = append(pvalues, path[:end])
 					}
 
@@ -387,33 +387,33 @@ walk: // outer loop for walking the tree
 
 						// ... but we can't
 						tsr = (len(path) == end+1)
-						return handle, pnames, pvalues, tsr
+						return handle, pkeys, pvalues, tsr
 					}
 
 					if handle = n.handle; handle != nil {
-						return handle, pnames, pvalues, tsr
+						return handle, pkeys, pvalues, tsr
 					} else if len(n.children) == 1 {
 						// No handle found. Check if a handle for this path + a
 						// trailing slash exists for TSR recommendation
 						n = n.children[0]
 						tsr = (n.path == "/" && n.handle != nil)
 					}
-					return handle, pnames, pvalues, tsr
+					return handle, pkeys, pvalues, tsr
 
 				case catchAll:
-					i := len(pnames)
-					if i < cap(pnames) {
-						pnames = pnames[:i+1]   // expand slice within preallocated capacity
+					i := len(pkeys)
+					if i < cap(pkeys) {
+						pkeys = pkeys[:i+1]     // expand slice within preallocated capacity
 						pvalues = pvalues[:i+1] // expand slice within preallocated capacity
-						pnames[i] = n.path[2:]
+						pkeys[i] = n.path[2:]
 						pvalues[i] = path
 					} else {
-						pnames = append(pnames, n.path[2:])
+						pkeys = append(pkeys, n.path[2:])
 						pvalues = append(pvalues, path)
 					}
 
 					handle = n.handle
-					return handle, pnames, pvalues, tsr
+					return handle, pkeys, pvalues, tsr
 
 				default:
 					panic("invalid node type")
@@ -423,12 +423,12 @@ walk: // outer loop for walking the tree
 			// We should have reached the node containing the handle.
 			// Check if this node has a handle registered.
 			if handle = n.handle; handle != nil {
-				return handle, pnames, pvalues, tsr
+				return handle, pkeys, pvalues, tsr
 			}
 
 			if path == "/" && n.wildChild && n.nType != root {
 				tsr = true
-				return handle, pnames, pvalues, tsr
+				return handle, pkeys, pvalues, tsr
 			}
 
 			// No handle found. Check if a handle for this path + a
@@ -438,11 +438,11 @@ walk: // outer loop for walking the tree
 					n = n.children[i]
 					tsr = (len(n.path) == 1 && n.handle != nil) ||
 						(n.nType == catchAll && n.children[0].handle != nil)
-					return handle, pnames, pvalues, tsr
+					return handle, pkeys, pvalues, tsr
 				}
 			}
 
-			return handle, pnames, pvalues, tsr
+			return handle, pkeys, pvalues, tsr
 		}
 
 		// Nothing found. We can recommend to redirect to the same URL with an
@@ -450,7 +450,7 @@ walk: // outer loop for walking the tree
 		tsr = (path == "/") ||
 			(len(n.path) == len(path)+1 && n.path[len(path)] == '/' &&
 				path == n.path[:len(n.path)-1] && n.handle != nil)
-		return handle, pnames, pvalues, tsr
+		return handle, pkeys, pvalues, tsr
 	}
 }
 
