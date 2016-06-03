@@ -1,8 +1,7 @@
 package lessgo
 
 import (
-	"bytes"
-	"io"
+	"io/ioutil"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -50,7 +49,8 @@ func (m *MemoryCache) SetEnable(bl bool) {
 	}
 }
 
-func (m *MemoryCache) GetCacheFile(fname string) (*bytes.Reader, os.FileInfo, bool) {
+// 返回文件字节流、文件信息、文件是否存在
+func (m *MemoryCache) GetCacheFile(fname string) ([]byte, os.FileInfo, bool) {
 	m.RLock()
 	cfile, ok := m.filemap[fname]
 	if ok {
@@ -76,20 +76,22 @@ func (m *MemoryCache) GetCacheFile(fname string) (*bytes.Reader, os.FileInfo, bo
 	}
 	defer file.Close()
 	info, _ := file.Stat()
-	var bufferWriter bytes.Buffer
-	io.Copy(&bufferWriter, file)
+	buf, err := ioutil.ReadAll(file)
+	if err != nil {
+		return buf, info, true
+	}
 	// 检查是否加入缓存
 	if size := m.usedSize + info.Size(); size <= m.maxCap {
 		m.filemap[fname] = &Cachefile{
 			fname: fname,
-			bytes: bufferWriter.Bytes(),
+			bytes: buf,
 			info:  info,
 			exist: true,
 			time:  time.Now().Unix(),
 		}
 		atomic.StoreInt64(&m.usedSize, size)
 	}
-	return bytes.NewReader(bufferWriter.Bytes()), info, true
+	return buf, info, true
 }
 
 func (m *MemoryCache) memoryCacheMonitor() {
@@ -213,13 +215,15 @@ func (m *MemoryCache) update(c *Cachefile, preupdate bool) {
 	}
 	defer file.Close()
 	info, _ := file.Stat()
-	var bufferWriter bytes.Buffer
-	io.Copy(&bufferWriter, file)
+	buf, err := ioutil.ReadAll(file)
+	if err != nil {
+		return
+	}
 	if preupdate {
 		c.Lock()
 		defer c.Unlock()
 	}
-	c.bytes = bufferWriter.Bytes()
+	c.bytes = buf
 	c.info = info
 	c.exist = true
 	c.time = time.Now().Unix()
@@ -251,11 +255,11 @@ func (c *Cachefile) size() int64 {
 	return int64(len(c.bytes))
 }
 
-func (c *Cachefile) get() (*bytes.Reader, os.FileInfo, bool) {
+func (c *Cachefile) get() ([]byte, os.FileInfo, bool) {
 	c.RLock()
 	defer c.RUnlock()
 	atomic.StoreInt64(&c.time, time.Now().Unix())
-	return bytes.NewReader(c.bytes), c.info, c.exist
+	return c.bytes, c.info, c.exist
 }
 
 func (c *Cachefile) getTime() time.Time {

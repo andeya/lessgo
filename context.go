@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/lessgo/lessgo/logs"
+	"github.com/lessgo/lessgo/markdown"
 	"github.com/lessgo/lessgo/session"
 	"github.com/lessgo/lessgo/utils"
 	"github.com/lessgo/lessgo/websocket"
@@ -46,23 +47,14 @@ type (
 )
 
 var (
+	_ http.ResponseWriter = new(Context)
+
 	// 默认页面文件
 	indexPage = "index.html"
+
 	// 文件上传默认内存缓存大小，默认值是64MB。
 	MaxMemory int64 = 64 * MB
 )
-
-func (c *Context) Response() *Response {
-	return c.response
-}
-
-func (c *Context) ResponseWriter() http.ResponseWriter {
-	return c.response
-}
-
-func (c *Context) SetResponse(resp *Response) {
-	c.response = resp
-}
 
 func (c *Context) Request() *http.Request {
 	return c.request
@@ -156,16 +148,16 @@ func (c *Context) SetPathParam(key, value string) {
 }
 
 // DelPathParam  deletes the values associated with key.
-func (c *Context) DelPathParam(key string) {
-	l := len(c.pkeys)
-	for i, n := range c.pkeys {
-		if n == key && i < l {
-			c.pkeys = append(c.pkeys[:i], c.pkeys[i+1:]...)
-			c.pvalues = append(c.pvalues[:i], c.pvalues[i+1:]...)
-			return
-		}
-	}
-}
+// func (c *Context) DelPathParam(key string) {
+// 	l := len(c.pkeys)
+// 	for i, n := range c.pkeys {
+// 		if n == key && i < l {
+// 			c.pkeys = append(c.pkeys[:i], c.pkeys[i+1:]...)
+// 			c.pvalues = append(c.pvalues[:i], c.pvalues[i+1:]...)
+// 			return
+// 		}
+// 	}
+// }
 
 // QueryParams returns the query params.
 func (c *Context) QueryParams() url.Values {
@@ -202,38 +194,38 @@ func (c *Context) AddQueryParam(key string, value string) {
 }
 
 // DelQueryParam deletes the values associated with key.
-func (c *Context) DelQueryParam(key string) {
-	if c.query == nil {
-		c.query = c.request.URL.Query()
-	}
-	c.query.Del(key)
-}
+// func (c *Context) DelQueryParam(key string) {
+// 	if c.query == nil {
+// 		c.query = c.request.URL.Query()
+// 	}
+// 	c.query.Del(key)
+// }
 
 // HeaderParams returns the request header.
 func (c *Context) HeaderParams() http.Header {
 	return c.request.Header
 }
 
-// HeaderParam returns the header value for the provided key.
+// HeaderParam returns request header value for the provided key.
 func (c *Context) HeaderParam(key string) string {
 	return c.request.Header.Get(key)
 }
 
-// SetHeaderParam sets header param. It replaces any existing values.
+// SetHeaderParam sets request header. It replaces any existing values.
 func (c *Context) SetHeaderParam(key string, value string) {
 	c.request.Header.Set(key, value)
 }
 
-// AddHeaderParam sets header param. It appends to any existing
+// AddHeaderParam sets request header. It appends to any existing
 // values associated with key.
 func (c *Context) AddHeaderParam(key string, value string) {
 	c.request.Header.Add(key, value)
 }
 
-// DelHeaderParam deletes the values associated with key.
-func (c *Context) DelHeaderParam(key string) {
-	c.request.Header.Del(key)
-}
+// DelHeaderParam deletes the values associated with key for request.
+// func (c *Context) DelHeaderParam(key string) {
+// 	c.request.Header.Del(key)
+// }
 
 // FormParams returns the form params as url.Values.
 func (c *Context) FormParams() url.Values {
@@ -278,14 +270,14 @@ func (c *Context) AddFormParam(key string, value string) {
 }
 
 // DelFormParam deletes the values associated with key.
-func (c *Context) DelFormParam(key string) {
-	if c.request.PostForm == nil {
-		if err := c.request.ParseForm(); err != nil {
-			Log.Error("%v", err)
-		}
-	}
-	c.request.PostForm.Del(key)
-}
+// func (c *Context) DelFormParam(key string) {
+// 	if c.request.PostForm == nil {
+// 		if err := c.request.ParseForm(); err != nil {
+// 			Log.Error("%v", err)
+// 		}
+// 	}
+// 	c.request.PostForm.Del(key)
+// }
 
 // FormFile returns the multipart form file for the provided key.
 func (c *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
@@ -354,6 +346,390 @@ func (c *Context) CookieParam(key string) *http.Cookie {
 // AddCookieParam adds a cookie to the request.
 func (c *Context) AddCookieParam(cookie *http.Cookie) {
 	c.request.AddCookie(cookie)
+}
+
+// Bind binds the request body into provided type `container`. The default binder
+// does it based on Content-Type header.
+func (c *Context) Bind(container interface{}) error {
+	return app.binder.Bind(container, c)
+}
+
+func (c *Context) Response() *Response {
+	return c.response
+}
+
+func (c *Context) ResponseWriter() http.ResponseWriter {
+	return c.response
+}
+
+func (c *Context) SetResponse(resp *Response) {
+	c.response = resp
+}
+
+// Header returns the response header.
+func (c *Context) Header() http.Header {
+	return c.response.Header()
+}
+
+// SetHeader sets header for response. It replaces any existing values.
+func (c *Context) SetHeader(key string, value string) {
+	c.response.Header().Set(key, value)
+}
+
+// AddHeader sets header for response. It appends to any existing
+// values associated with key.
+func (c *Context) AddHeader(key string, value string) {
+	c.response.Header().Add(key, value)
+}
+
+// DelHeader deletes the values associated with key for response.
+func (c *Context) DelHeader(key string) {
+	c.response.Header().Del(key)
+}
+
+// AddCookie adds cookie for response.
+// The provided cookie must have a valid Name. Invalid cookies may be
+// silently dropped.
+func (c *Context) AddCookie(cookie *http.Cookie) {
+	c.response.Header().Add("Set-Cookie", cookie.String())
+}
+
+// SetCookie sets cookie for response.
+func (c *Context) SetCookie(cookie *http.Cookie) {
+	c.response.Header().Set("Set-Cookie", cookie.String())
+}
+
+// DelCookie deletes cookie for response.
+func (c *Context) DelCookie() {
+	c.response.Header().Del("Set-Cookie")
+}
+
+// Write writes the data to the connection as part of an HTTP reply.
+// If WriteHeader has not yet been called, Write calls WriteHeader(http.StatusOK)
+// before writing the data.  If the Header does not contain a
+// Content-Type line, Write adds a Content-Type set to the result of passing
+// the initial 512 bytes of written data to DetectContentType.
+func (c *Context) Write(b []byte) (int, error) {
+	n, err := c.response.writer.Write(b)
+	c.response.size += int64(n)
+	return n, err
+}
+
+// WriteHeader sends an HTTP response header with status code.
+// If WriteHeader is not called explicitly, the first call to Write
+// will trigger an implicit WriteHeader(http.StatusOK).
+// Thus explicit calls to WriteHeader are mainly used to
+// send error codes.
+func (c *Context) WriteHeader(code int) {
+	if c.response.committed {
+		Log.Warn("response already committed")
+		return
+	}
+	c.freeSession()
+	c.response.status = code
+	c.response.writer.WriteHeader(code)
+	c.response.committed = true
+}
+
+// Render renders a template with data and sends a text/html response with status
+// code. Templates can be registered using `App.SetRenderer()`.
+func (c *Context) Render(code int, name string, data interface{}) error {
+	if app.renderer == nil {
+		return ErrRendererNotRegistered
+	}
+	buf := new(bytes.Buffer)
+	var err error
+	if err = app.renderer.Render(buf, name, data, c); err != nil {
+		return err
+	}
+	c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
+	c.WriteHeader(code)
+	_, err = c.response.Write(buf.Bytes())
+	return nil
+}
+
+// HTML sends an HTTP response with status code.
+func (c *Context) HTML(code int, html string) error {
+	c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
+	c.WriteHeader(code)
+	_, err := c.response.Write(utils.String2Bytes(html))
+	return err
+}
+
+// String sends a string response with status code.
+func (c *Context) String(code int, s string) error {
+	c.response.Header().Set(HeaderContentType, MIMETextPlainCharsetUTF8)
+	c.WriteHeader(code)
+	_, err := c.response.Write(utils.String2Bytes(s))
+	return err
+}
+
+// JSON sends a JSON response with status code.
+func (c *Context) JSON(code int, i interface{}) error {
+	var (
+		b   []byte
+		err error
+	)
+
+	if Debug() {
+		b, err = json.MarshalIndent(i, "", "  ")
+	} else {
+		b, err = json.Marshal(i)
+	}
+	if err != nil {
+		return err
+	}
+	return c.JSONBlob(code, b)
+}
+
+// JSON with default format.
+func (c *Context) JSONMsg(code int, msgcode int, info interface{}) error {
+	var (
+		b   []byte
+		err error
+	)
+	i := CommMsg{
+		Code: msgcode,
+		Info: info,
+	}
+	if Debug() {
+		b, err = json.MarshalIndent(i, "", "  ")
+	} else {
+		b, err = json.Marshal(i)
+	}
+	if err != nil {
+		return err
+	}
+
+	return c.JSONBlob(code, b)
+}
+
+// JSONBlob sends a JSON blob response with status code.
+func (c *Context) JSONBlob(code int, b []byte) error {
+	c.response.Header().Set(HeaderContentType, MIMEApplicationJSONCharsetUTF8)
+	c.WriteHeader(code)
+	_, err := c.response.Write(b)
+	return err
+}
+
+// JSONP sends a JSONP response with status code. It uses `callback` to construct
+// the JSONP payload.
+func (c *Context) JSONP(code int, callback string, i interface{}) error {
+	var (
+		b   []byte
+		err error
+	)
+	if Debug() {
+		b, err = json.MarshalIndent(i, "", "  ")
+	} else {
+		b, err = json.Marshal(i)
+	}
+	if err != nil {
+		return err
+	}
+	c.response.Header().Set(HeaderContentType, MIMEApplicationJavaScriptCharsetUTF8)
+	c.WriteHeader(code)
+	if _, err = c.response.Write(utils.String2Bytes(callback + "(")); err != nil {
+		return err
+	}
+	if _, err = c.response.Write(b); err != nil {
+		return err
+	}
+	_, err = c.response.Write(utils.String2Bytes(");"))
+	return err
+}
+
+// JSONP with default format.
+func (c *Context) JSONPMsg(code int, callback string, msgcode int, info interface{}) error {
+	var (
+		b   []byte
+		err error
+	)
+	i := CommMsg{
+		Code: msgcode,
+		Info: info,
+	}
+	if Debug() {
+		b, err = json.MarshalIndent(i, "", "  ")
+	} else {
+		b, err = json.Marshal(i)
+	}
+	if err != nil {
+		return err
+	}
+	c.response.Header().Set(HeaderContentType, MIMEApplicationJavaScriptCharsetUTF8)
+	c.WriteHeader(code)
+	if _, err = c.response.Write(utils.String2Bytes(callback + "(")); err != nil {
+		return err
+	}
+	if _, err = c.response.Write(b); err != nil {
+		return err
+	}
+	_, err = c.response.Write(utils.String2Bytes(");"))
+	return err
+}
+
+// XML sends an XML response with status code.
+func (c *Context) XML(code int, i interface{}) error {
+	b, err := xml.Marshal(i)
+	if Debug() {
+		b, err = xml.MarshalIndent(i, "", "  ")
+	}
+	if err != nil {
+		return err
+	}
+	return c.XMLBlob(code, b)
+}
+
+// XMLBlob sends a XML blob response with status code.
+func (c *Context) XMLBlob(code int, b []byte) error {
+	var err error
+	c.response.Header().Set(HeaderContentType, MIMEApplicationXMLCharsetUTF8)
+	c.WriteHeader(code)
+	if _, err = c.response.Write(utils.String2Bytes(xml.Header)); err != nil {
+		return err
+	}
+	_, err = c.response.Write(b)
+	return err
+}
+
+// File sends a response with the content of the file.
+func (c *Context) File(file string) error {
+	if app.MemoryCacheEnable() {
+		b, fi, exist := app.memoryCache.GetCacheFile(file)
+		if !exist {
+			return ErrNotFound
+		}
+		return c.ServeContent2(b, fi.Name(), fi.ModTime())
+	}
+	f, err := os.Open(file)
+	if err != nil {
+		return ErrNotFound
+	}
+	defer f.Close()
+
+	fi, _ := f.Stat()
+	if fi.IsDir() {
+		file = filepath.Join(file, indexPage)
+		f, err = os.Open(file)
+		if err != nil {
+			return ErrNotFound
+		}
+		fi, _ = f.Stat()
+	}
+	return c.ServeContent(f, fi.Name(), fi.ModTime())
+}
+
+// Markdown parses markdown file and generates html in github style
+func (c *Context) Markdown(file string, hasCatalog ...bool) error {
+	var catalog bool
+	if len(hasCatalog) > 0 {
+		catalog = hasCatalog[0]
+	}
+	if app.MemoryCacheEnable() {
+		b, fi, exist := app.memoryCache.GetCacheFile(file)
+		if !exist {
+			return ErrNotFound
+		}
+		if c.isModified(fi.Name(), fi.ModTime()) {
+			c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
+			return markdown.GithubMarkdown(b, c.response, catalog)
+		}
+		return c.NoContent(http.StatusNotModified)
+	}
+	f, err := os.Open(file)
+	if err != nil {
+		return ErrNotFound
+	}
+	defer f.Close()
+
+	fi, _ := f.Stat()
+	if fi.IsDir() {
+		file = filepath.Join(file, indexPage)
+		f, err = os.Open(file)
+		if err != nil {
+			return ErrNotFound
+		}
+		fi, _ = f.Stat()
+	}
+	if c.isModified(fi.Name(), fi.ModTime()) {
+		buf, err := ioutil.ReadAll(f)
+		if err != nil {
+			return ErrNotFound
+		}
+		c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
+		return markdown.GithubMarkdown(buf, c.response, catalog)
+	}
+	return c.NoContent(http.StatusNotModified)
+}
+
+// Attachment sends a response from `io.ReaderSeeker` as attachment, prompting
+// client to save the file.
+func (c *Context) Attachment(r io.ReadSeeker, name string) error {
+	c.response.Header().Set(HeaderContentType, ContentTypeByExtension(name))
+	c.response.Header().Set(HeaderContentDisposition, "attachment; filename="+name)
+
+	c.WriteHeader(http.StatusOK)
+	_, err := io.Copy(c.response, r)
+	return err
+}
+
+// ServeContent sends static content from `io.Reader` and handles caching
+// via `If-Modified-Since` request header. It automatically sets `Content-Type`
+// and `Last-Modified` response headers.
+func (c *Context) ServeContent(content io.ReadSeeker, name string, modtime time.Time) error {
+	if c.isModified(name, modtime) {
+		c.response.Header().Set(HeaderContentType, ContentTypeByExtension(name))
+		_, err := io.Copy(c.response, content)
+		return err
+	}
+	return c.NoContent(http.StatusNotModified)
+}
+
+// ServeContent2 sends static content from `[]byte` and handles caching
+// via `If-Modified-Since` request header. It automatically sets `Content-Type`
+// and `Last-Modified` response headers.
+func (c *Context) ServeContent2(content []byte, name string, modtime time.Time) error {
+	if c.isModified(name, modtime) {
+		c.response.Header().Set(HeaderContentType, ContentTypeByExtension(name))
+		_, err := c.response.Write(content)
+		return err
+	}
+	return c.NoContent(http.StatusNotModified)
+}
+
+func (c *Context) isModified(name string, modtime time.Time) bool {
+	req := c.request
+	head := c.response.Header()
+	if t, err := time.Parse(http.TimeFormat, req.Header.Get(HeaderIfModifiedSince)); err == nil && modtime.Before(t.Add(1*time.Second)) {
+		head.Del(HeaderContentType)
+		head.Del(HeaderContentLength)
+		return false
+	}
+	head.Set(HeaderLastModified, modtime.UTC().Format(http.TimeFormat))
+	c.WriteHeader(http.StatusOK)
+	return true
+}
+
+// NoContent sends a response with no body and a status code.
+func (c *Context) NoContent(code int) error {
+	c.WriteHeader(code)
+	return nil
+}
+
+// Redirect redirects the request with status code.
+func (c *Context) Redirect(code int, url string) error {
+	if code < http.StatusMultipleChoices || code > http.StatusTemporaryRedirect {
+		return ErrInvalidRedirectCode
+	}
+	c.response.Header().Set(HeaderLocation, url)
+	c.WriteHeader(code)
+	return nil
+}
+
+// Error invokes the registered HTTP error handler. Generally used by middleware.
+func (c *Context) Error(err error) {
+	app.router.ErrorPanicHandler(c, err, nil)
 }
 
 // CruSession returns session data info.
@@ -464,266 +840,9 @@ func (c *Context) Contains(key string) bool {
 	return ok
 }
 
-// Bind binds the request body into provided type `container`. The default binder
-// does it based on Content-Type header.
-func (c *Context) Bind(container interface{}) error {
-	return app.binder.Bind(container, c)
-}
-
-// Render renders a template with data and sends a text/html response with status
-// code. Templates can be registered using `App.SetRenderer()`.
-func (c *Context) Render(code int, name string, data interface{}) error {
-	if app.renderer == nil {
-		return ErrRendererNotRegistered
-	}
-	buf := new(bytes.Buffer)
-	var err error
-	if err = app.renderer.Render(buf, name, data, c); err != nil {
-		return err
-	}
-	c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
-	c.freeSession()
-	c.response.WriteHeader(code)
-	_, err = c.response.Write(buf.Bytes())
-	return nil
-}
-
-// HTML sends an HTTP response with status code.
-func (c *Context) HTML(code int, html string) error {
-	c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
-	c.freeSession()
-	c.response.WriteHeader(code)
-	_, err := c.response.Write(utils.String2Bytes(html))
-	return err
-}
-
-// String sends a string response with status code.
-func (c *Context) String(code int, s string) error {
-	c.response.Header().Set(HeaderContentType, MIMETextPlainCharsetUTF8)
-	c.freeSession()
-	c.response.WriteHeader(code)
-	_, err := c.response.Write(utils.String2Bytes(s))
-	return err
-}
-
-// JSON sends a JSON response with status code.
-func (c *Context) JSON(code int, i interface{}) error {
-	var (
-		b   []byte
-		err error
-	)
-
-	if Debug() {
-		b, err = json.MarshalIndent(i, "", "  ")
-	} else {
-		b, err = json.Marshal(i)
-	}
-	if err != nil {
-		return err
-	}
-	return c.JSONBlob(code, b)
-}
-
-// JSON with default format.
-func (c *Context) JSONMsg(code int, msgcode int, info interface{}) error {
-	var (
-		b   []byte
-		err error
-	)
-	i := CommMsg{
-		Code: msgcode,
-		Info: info,
-	}
-	if Debug() {
-		b, err = json.MarshalIndent(i, "", "  ")
-	} else {
-		b, err = json.Marshal(i)
-	}
-	if err != nil {
-		return err
-	}
-
-	return c.JSONBlob(code, b)
-}
-
-// JSONBlob sends a JSON blob response with status code.
-func (c *Context) JSONBlob(code int, b []byte) error {
-	c.response.Header().Set(HeaderContentType, MIMEApplicationJSONCharsetUTF8)
-	c.freeSession()
-	c.response.WriteHeader(code)
-	_, err := c.response.Write(b)
-	return err
-}
-
-// JSONP sends a JSONP response with status code. It uses `callback` to construct
-// the JSONP payload.
-func (c *Context) JSONP(code int, callback string, i interface{}) error {
-	var (
-		b   []byte
-		err error
-	)
-	if Debug() {
-		b, err = json.MarshalIndent(i, "", "  ")
-	} else {
-		b, err = json.Marshal(i)
-	}
-	if err != nil {
-		return err
-	}
-	c.response.Header().Set(HeaderContentType, MIMEApplicationJavaScriptCharsetUTF8)
-	c.freeSession()
-	c.response.WriteHeader(code)
-	if _, err = c.response.Write(utils.String2Bytes(callback + "(")); err != nil {
-		return err
-	}
-	if _, err = c.response.Write(b); err != nil {
-		return err
-	}
-	_, err = c.response.Write(utils.String2Bytes(");"))
-	return err
-}
-
-// JSONP with default format.
-func (c *Context) JSONPMsg(code int, callback string, msgcode int, info interface{}) error {
-	var (
-		b   []byte
-		err error
-	)
-	i := CommMsg{
-		Code: msgcode,
-		Info: info,
-	}
-	if Debug() {
-		b, err = json.MarshalIndent(i, "", "  ")
-	} else {
-		b, err = json.Marshal(i)
-	}
-	if err != nil {
-		return err
-	}
-	c.response.Header().Set(HeaderContentType, MIMEApplicationJavaScriptCharsetUTF8)
-	c.freeSession()
-	c.response.WriteHeader(code)
-	if _, err = c.response.Write(utils.String2Bytes(callback + "(")); err != nil {
-		return err
-	}
-	if _, err = c.response.Write(b); err != nil {
-		return err
-	}
-	_, err = c.response.Write(utils.String2Bytes(");"))
-	return err
-}
-
-// XML sends an XML response with status code.
-func (c *Context) XML(code int, i interface{}) error {
-	b, err := xml.Marshal(i)
-	if Debug() {
-		b, err = xml.MarshalIndent(i, "", "  ")
-	}
-	if err != nil {
-		return err
-	}
-	return c.XMLBlob(code, b)
-}
-
-// XMLBlob sends a XML blob response with status code.
-func (c *Context) XMLBlob(code int, b []byte) error {
-	var err error
-	c.response.Header().Set(HeaderContentType, MIMEApplicationXMLCharsetUTF8)
-	c.freeSession()
-	c.response.WriteHeader(code)
-	if _, err = c.response.Write(utils.String2Bytes(xml.Header)); err != nil {
-		return err
-	}
-	_, err = c.response.Write(b)
-	return err
-}
-
-// File sends a response with the content of the file.
-func (c *Context) File(file string) error {
-	if app.MemoryCacheEnable() {
-		f, fi, exist := app.memoryCache.GetCacheFile(file)
-		if !exist {
-			return ErrNotFound
-		}
-		return c.ServeContent(f, fi.Name(), fi.ModTime())
-	}
-	f, err := os.Open(file)
-	if err != nil {
-		return ErrNotFound
-	}
-	defer f.Close()
-
-	fi, _ := f.Stat()
-	if fi.IsDir() {
-		file = filepath.Join(file, indexPage)
-		f, err = os.Open(file)
-		if err != nil {
-			return ErrNotFound
-		}
-		fi, _ = f.Stat()
-	}
-	return c.ServeContent(f, fi.Name(), fi.ModTime())
-}
-
-// Attachment sends a response from `io.ReaderSeeker` as attachment, prompting
-// client to save the file.
-func (c *Context) Attachment(r io.ReadSeeker, name string) error {
-	c.response.Header().Set(HeaderContentType, ContentTypeByExtension(name))
-	c.response.Header().Set(HeaderContentDisposition, "attachment; filename="+name)
-	c.freeSession()
-	c.response.WriteHeader(http.StatusOK)
-	_, err := io.Copy(c.response, r)
-	return err
-}
-
-// NoContent sends a response with no body and a status code.
-func (c *Context) NoContent(code int) error {
-	c.freeSession()
-	c.response.WriteHeader(code)
-	return nil
-}
-
-// Redirect redirects the request with status code.
-func (c *Context) Redirect(code int, url string) error {
-	if code < http.StatusMultipleChoices || code > http.StatusTemporaryRedirect {
-		return ErrInvalidRedirectCode
-	}
-	c.response.Header().Set(HeaderLocation, url)
-	c.freeSession()
-	c.response.WriteHeader(code)
-	return nil
-}
-
-// Error invokes the registered HTTP error handler. Generally used by middleware.
-func (c *Context) Error(err error) {
-	app.router.ErrorPanicHandler(c, err, nil)
-}
-
 // Log returns the `Logger` instance.
 func (c *Context) Log() logs.Logger {
 	return Log
-}
-
-// ServeContent sends static content from `io.Reader` and handles caching
-// via `If-Modified-Since` request header. It automatically sets `Content-Type`
-// and `Last-Modified` response headers.
-func (c *Context) ServeContent(content io.ReadSeeker, name string, modtime time.Time) error {
-	req := c.request
-	resp := c.response
-	head := resp.Header()
-	if t, err := time.Parse(http.TimeFormat, req.Header.Get(HeaderIfModifiedSince)); err == nil && modtime.Before(t.Add(1*time.Second)) {
-		head.Del(HeaderContentType)
-		head.Del(HeaderContentLength)
-		return c.NoContent(http.StatusNotModified)
-	}
-
-	head.Set(HeaderContentType, ContentTypeByExtension(name))
-	head.Set(HeaderLastModified, modtime.UTC().Format(http.TimeFormat))
-	c.freeSession()
-	resp.WriteHeader(http.StatusOK)
-	_, err := io.Copy(resp, content)
-	return err
 }
 
 func (c *Context) freeSession() {
@@ -751,7 +870,7 @@ func (c *Context) init(rw http.ResponseWriter, req *http.Request) error {
 }
 
 func (c *Context) free() {
-	c.freeSession()
+
 	c.socket = nil
 	c.store = nil
 	c.realRemoteAddr = ""

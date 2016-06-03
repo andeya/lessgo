@@ -71,6 +71,11 @@ func (r *Response) SetCookie(cookie *http.Cookie) {
 	r.Header().Set("Set-Cookie", cookie.String())
 }
 
+// DelCookie sets Set-Cookie header.
+func (r *Response) DelCookie() {
+	r.Header().Del("Set-Cookie")
+}
+
 // Flush implements the http.Flusher interface to allow an HTTP handler to flush
 // buffered data to the client.
 func (resp *Response) Flush() {
