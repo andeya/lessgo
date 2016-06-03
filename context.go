@@ -155,6 +155,18 @@ func (c *Context) SetPathParam(key, value string) {
 	}
 }
 
+// DelPathParam  deletes the values associated with key.
+func (c *Context) DelPathParam(key string) {
+	l := len(c.pkeys)
+	for i, n := range c.pkeys {
+		if n == key && i < l {
+			c.pkeys = append(c.pkeys[:i], c.pkeys[i+1:]...)
+			c.pvalues = append(c.pvalues[:i], c.pvalues[i+1:]...)
+			return
+		}
+	}
+}
+
 // QueryParams returns the query params.
 func (c *Context) QueryParams() url.Values {
 	if c.query == nil {
@@ -207,9 +219,20 @@ func (c *Context) HeaderParam(key string) string {
 	return c.request.Header.Get(key)
 }
 
-// SetHeaderParam sets header param.
+// SetHeaderParam sets header param. It replaces any existing values.
 func (c *Context) SetHeaderParam(key string, value string) {
 	c.request.Header.Set(key, value)
+}
+
+// AddHeaderParam sets header param. It appends to any existing
+// values associated with key.
+func (c *Context) AddHeaderParam(key string, value string) {
+	c.request.Header.Add(key, value)
+}
+
+// DelHeaderParam deletes the values associated with key.
+func (c *Context) DelHeaderParam(key string) {
+	c.request.Header.Del(key)
 }
 
 // FormParams returns the form params as url.Values.
@@ -241,6 +264,27 @@ func (c *Context) SetFormParam(key string, value string) {
 		}
 	}
 	c.request.PostForm.Set(key, value)
+}
+
+// AddFormParam adds the form param. It appends to any existing
+// values associated with key.
+func (c *Context) AddFormParam(key string, value string) {
+	if c.request.PostForm == nil {
+		if err := c.request.ParseForm(); err != nil {
+			Log.Error("%v", err)
+		}
+	}
+	c.request.PostForm.Add(key, value)
+}
+
+// DelFormParam deletes the values associated with key.
+func (c *Context) DelFormParam(key string) {
+	if c.request.PostForm == nil {
+		if err := c.request.ParseForm(); err != nil {
+			Log.Error("%v", err)
+		}
+	}
+	c.request.PostForm.Del(key)
 }
 
 // FormFile returns the multipart form file for the provided key.
