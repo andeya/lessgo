@@ -40,7 +40,7 @@ type (
 	store map[string]interface{}
 
 	// Common message format of JSON and JSONP.
-	CommMsg struct {
+	CommJSON struct {
 		Code int         `json:"code"`
 		Info interface{} `json:"info,omitempty"`
 	}
@@ -488,7 +488,7 @@ func (c *Context) JSONMsg(code int, msgcode int, info interface{}) error {
 		b   []byte
 		err error
 	)
-	i := CommMsg{
+	i := CommJSON{
 		Code: msgcode,
 		Info: info,
 	}
@@ -545,7 +545,7 @@ func (c *Context) JSONPMsg(code int, callback string, msgcode int, info interfac
 		b   []byte
 		err error
 	)
-	i := CommMsg{
+	i := CommJSON{
 		Code: msgcode,
 		Info: info,
 	}
