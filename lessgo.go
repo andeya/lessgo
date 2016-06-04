@@ -162,11 +162,6 @@ func CanMemoryCache() bool {
 	return app.CanMemoryCache()
 }
 
-// 主动刷新缓存文件
-func RefreshMemoryCache() {
-	app.memoryCache.TriggerScan()
-}
-
 // 启用文件缓存
 func EnableMemoryCache() {
 	app.memoryCache.SetEnable(true)
@@ -175,6 +170,11 @@ func EnableMemoryCache() {
 // 关闭文件缓存
 func DisableMemoryCache() {
 	app.memoryCache.SetEnable(false)
+}
+
+// 主动刷新缓存文件
+func RefreshMemoryCache() {
+	app.memoryCache.TriggerScan()
 }
 
 // 获取已注册的操作列表
