@@ -157,14 +157,24 @@ func SetDebug(on bool) {
 	app.SetDebug(on)
 }
 
-// 设置文件内存缓存功能(内部有默认实现)
-func SetMemoryCache(m *MemoryCache) {
-	app.SetMemoryCache(m)
+// 判断文件缓存是否开启
+func CanMemoryCache() bool {
+	return app.CanMemoryCache()
 }
 
-// 判断是否开启了文件内存缓存功能
-func MemoryCacheEnable() bool {
-	return app.MemoryCacheEnable()
+// 主动刷新缓存文件
+func RefreshMemoryCache() {
+	app.memoryCache.TriggerScan()
+}
+
+// 启用文件缓存
+func EnableMemoryCache() {
+	app.memoryCache.SetEnable(true)
+}
+
+// 关闭文件缓存
+func DisableMemoryCache() {
+	app.memoryCache.SetEnable(false)
 }
 
 // 获取已注册的操作列表

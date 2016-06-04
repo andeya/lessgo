@@ -595,7 +595,7 @@ func (c *Context) XMLBlob(code int, b []byte) error {
 
 // File sends a response with the content of the file.
 func (c *Context) File(file string) error {
-	if app.MemoryCacheEnable() {
+	if app.CanMemoryCache() {
 		b, fi, exist := app.memoryCache.GetCacheFile(file)
 		if !exist {
 			return ErrNotFound
@@ -626,7 +626,7 @@ func (c *Context) Markdown(file string, hasCatalog ...bool) error {
 	if len(hasCatalog) > 0 {
 		catalog = hasCatalog[0]
 	}
-	if app.MemoryCacheEnable() {
+	if app.CanMemoryCache() {
 		b, fi, exist := app.memoryCache.GetCacheFile(file)
 		if !exist {
 			return ErrNotFound

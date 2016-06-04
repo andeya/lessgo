@@ -285,13 +285,14 @@ func (this *App) Debug() bool {
 	return this.debug
 }
 
-func (this *App) MemoryCacheEnable() bool {
-	return this.memoryCache != nil && this.memoryCache.Enable()
+// 获取文件缓存对象
+func (this *App) MemoryCache() *MemoryCache {
+	return this.memoryCache
 }
 
-func (this *App) SetMemoryCache(m *MemoryCache) {
-	m.SetEnable(!this.debug)
-	this.memoryCache = m
+// 判断文件缓存是否开启
+func (this *App) CanMemoryCache() bool {
+	return this.memoryCache != nil && this.memoryCache.Enable()
 }
 
 // 返回当前真实注册的路由列表
@@ -382,6 +383,12 @@ func (this *App) run(address, tlsCertfile, tlsKeyfile string, readTimeout, write
 		Log.Fatal("%v", err)
 		select {}
 	}
+}
+
+// 设置文件缓存
+func (this *App) setMemoryCache(m *MemoryCache) {
+	m.SetEnable(!this.debug)
+	this.memoryCache = m
 }
 
 func (this *App) setSessions(sessions *session.Manager) {

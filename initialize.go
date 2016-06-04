@@ -42,7 +42,7 @@ func newLessgo() *Lessgo {
 	l.App.SetDebug(Config.Debug)
 
 	// 设置静态资源缓存
-	l.App.SetMemoryCache(NewMemoryCache(
+	l.App.setMemoryCache(NewMemoryCache(
 		Config.FileCache.SingleFileAllowMB*MB,
 		Config.FileCache.MaxCapMB*MB,
 		time.Duration(Config.FileCache.CacheSecond)*time.Second),
