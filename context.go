@@ -807,12 +807,12 @@ func (c *Context) WsSendJSON(v interface{}) (int, error) {
 }
 
 // 接收string格式的websocket信息
-func (c *Context) WsRecvMsg(v *string) error {
+func (c *Context) WsRecvString(v *string) error {
 	return websocket.Message.Receive(c.socket, v)
 }
 
 // 发送string格式的websocket信息
-func (c *Context) WsSendMsg(v string) (int, error) {
+func (c *Context) WsSendString(v string) (int, error) {
 	return websocket.Message.Send(c.socket, v)
 }
 
