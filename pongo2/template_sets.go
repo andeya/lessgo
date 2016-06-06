@@ -153,6 +153,13 @@ func (set *TemplateSet) FromString(tpl string) (*Template, error) {
 	return newTemplateString(set, []byte(tpl))
 }
 
+// FromBytes loads a template from bytes and returns a Template instance.
+func (set *TemplateSet) FromBytes(filename string, buf []byte) (*Template, error) {
+	set.firstTemplateCreated = true
+
+	return newTemplate(set, filename, false, buf)
+}
+
 // FromFile loads a template from a filename and returns a Template instance.
 func (set *TemplateSet) FromFile(filename string) (*Template, error) {
 	set.firstTemplateCreated = true

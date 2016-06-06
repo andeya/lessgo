@@ -49,7 +49,7 @@ func newLessgo() *Lessgo {
 	)
 
 	// 设置渲染接口
-	l.App.SetRenderer(NewPongo2Render(Config.Debug))
+	l.App.SetRenderer(NewPongo2Render(!Config.Debug))
 
 	// 设置上传文件允许的最大尺寸
 	MaxMemory = Config.MaxMemoryMB * MB
