@@ -45,7 +45,7 @@ func (b *binder) Bind(i interface{}, c *Context) error {
 			}
 			val = val.Elem()
 		}
-		if err := b.bindForm(typ, val, c.FormParams()); err != nil {
+		if err := b.bindForm(typ, val, c.FormValues()); err != nil {
 			return NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 	default:
