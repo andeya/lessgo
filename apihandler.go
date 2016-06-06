@@ -12,11 +12,12 @@ import (
 
 type (
 	ApiHandler struct {
-		Desc    string               // 本操作的描述
-		Method  string               // 请求方法，"*"表示除"WS"外全部方法，多方法写法："GET|POST"或"GET POST"，冲突时优先级WS>GET>*
+		Desc    string               // (可选)本操作的描述
+		Method  string               // (必填)请求方法，"*"表示除"WS"外全部方法，多方法写法："GET|POST"或"GET POST"，冲突时优先级WS>GET>*
 		methods []string             // 真实的请求方法列表
-		Params  []Param              // 参数说明列表，path参数类型的先后顺序与url中保持一致
-		Handler func(*Context) error // 操作
+		Params  []Param              // (必填)参数说明列表，path参数类型的先后顺序与url中保持一致
+		HTTP200 []Result             // (可选)HTTP Status Code 为200时的响应结果
+		Handler func(*Context) error // (必填)操作
 
 		id     string // 操作的唯一标识符
 		suffix string // 路由节点的url参数后缀
@@ -24,11 +25,16 @@ type (
 		lock   sync.Mutex
 	}
 	Param struct {
-		Name     string      // 参数名
-		In       string      // 参数出现位置
-		Required bool        // 是否必填
-		Format   interface{} // 参数值示例(至少为相应go基础类型空值)
-		Desc     string      // 参数描述
+		Name     string      // (必填)参数名
+		In       string      // (必填)参数出现位置
+		Required bool        // (必填)是否必填
+		Model    interface{} // (必填)参数值，API文档中依此推断参数值类型，同时作为默认值，当为nil时表示file文件上传
+		Desc     string      // (可选)参数描述
+	}
+	Result struct {
+		Code int         `json:"code"`           // (必填)返回结果码
+		Info interface{} `json:"info,omitempty"` // (可选)返回结果格式参考或描述
+		// Header interface{} // (可选)返回结果头部信息
 	}
 )
 
@@ -45,6 +51,7 @@ type (
  * 7、double:浮点型
  * 8、decimal:精确到比较高的浮点型
  * 9、ref:引用类型，即引用定义好的数据结构
+ * 10、file:文件（Param.Model==nil）
  *
  * 二、参数位置
  *    body：http请求body

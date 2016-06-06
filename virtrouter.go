@@ -81,9 +81,14 @@ func (vr *VirtRouter) Description() string {
 	return vr.apiHandler.Desc
 }
 
-// 操作的参数说明列表的副本
+// 操作的参数说明列表
 func (vr *VirtRouter) Params() []Param {
 	return vr.apiHandler.Params
+}
+
+// 操作的返回结果说明列表
+func (vr *VirtRouter) HTTP200() []Result {
+	return vr.apiHandler.HTTP200
 }
 
 // 子孙虚拟路由节点列表

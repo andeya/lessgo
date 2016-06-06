@@ -40,10 +40,7 @@ type (
 	store map[string]interface{}
 
 	// Common message format of JSON and JSONP.
-	CommJSON struct {
-		Code int         `json:"code"`
-		Info interface{} `json:"info,omitempty"`
-	}
+	CommJSON Result
 )
 
 var (
