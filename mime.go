@@ -539,4 +539,5 @@ var mimemaps = map[string]string{
 	".xpi":         "application/x-xpinstall",
 	".oex":         "application/x-opera-extension",
 	".mustache":    "text/html",
+	".md":          "text/html",
 }

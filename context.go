@@ -654,7 +654,7 @@ func (c *Context) Markdown(file string, hasCatalog ...bool) error {
 			return ErrNotFound
 		}
 		if c.isModified(fi.Name(), fi.ModTime()) {
-			c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
+			c.WriteHeader(http.StatusOK)
 			return markdown.GithubMarkdown(b, c.response, catalog)
 		}
 		return c.NoContent(http.StatusNotModified)
@@ -679,7 +679,7 @@ func (c *Context) Markdown(file string, hasCatalog ...bool) error {
 		if err != nil {
 			return ErrNotFound
 		}
-		c.response.Header().Set(HeaderContentType, MIMETextHTMLCharsetUTF8)
+		c.WriteHeader(http.StatusOK)
 		return markdown.GithubMarkdown(buf, c.response, catalog)
 	}
 	return c.NoContent(http.StatusNotModified)
@@ -701,7 +701,7 @@ func (c *Context) Attachment(r io.ReadSeeker, name string) error {
 // and `Last-Modified` response headers.
 func (c *Context) ServeContent(content io.ReadSeeker, name string, modtime time.Time) error {
 	if c.isModified(name, modtime) {
-		c.response.Header().Set(HeaderContentType, ContentTypeByExtension(name))
+		c.WriteHeader(http.StatusOK)
 		_, err := io.Copy(c.response, content)
 		return err
 	}
@@ -713,7 +713,7 @@ func (c *Context) ServeContent(content io.ReadSeeker, name string, modtime time.
 // and `Last-Modified` response headers.
 func (c *Context) ServeContent2(content []byte, name string, modtime time.Time) error {
 	if c.isModified(name, modtime) {
-		c.response.Header().Set(HeaderContentType, ContentTypeByExtension(name))
+		c.WriteHeader(http.StatusOK)
 		_, err := c.response.Write(content)
 		return err
 	}
@@ -728,8 +728,8 @@ func (c *Context) isModified(name string, modtime time.Time) bool {
 		head.Del(HeaderContentLength)
 		return false
 	}
+	c.response.Header().Set(HeaderContentType, ContentTypeByExtension(name))
 	head.Set(HeaderLastModified, modtime.UTC().Format(http.TimeFormat))
-	c.WriteHeader(http.StatusOK)
 	return true
 }
 
@@ -892,7 +892,7 @@ func (c *Context) init(rw http.ResponseWriter, req *http.Request) error {
 }
 
 func (c *Context) free() {
-
+	c.freeSession()
 	c.socket = nil
 	c.store = nil
 	c.realRemoteAddr = ""
