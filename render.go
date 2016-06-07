@@ -18,7 +18,7 @@ type (
 	Pongo2Render struct {
 		set      *pongo2.TemplateSet
 		caching  bool // false=disable caching, true=enable caching
-		tplCahce map[string]*Tpl
+		tplCache map[string]*Tpl
 		sync.RWMutex
 	}
 )
@@ -28,7 +28,7 @@ func NewPongo2Render(caching bool) *Pongo2Render {
 	return &Pongo2Render{
 		set:      pongo2.NewSet("lessgo", pongo2.DefaultLoader),
 		caching:  caching,
-		tplCahce: make(map[string]*Tpl),
+		tplCache: make(map[string]*Tpl),
 	}
 }
 
@@ -65,9 +65,9 @@ func (p *Pongo2Render) FromCache(fname string) (*pongo2.Template, error) {
 	if !exist {
 		// 移除模板中缓存
 		p.Lock()
-		_, has := p.tplCahce[fname]
+		_, has := p.tplCache[fname]
 		if has {
-			delete(p.tplCahce, fname)
+			delete(p.tplCache, fname)
 		}
 		p.Unlock()
 		// 返回错误
@@ -76,11 +76,11 @@ func (p *Pongo2Render) FromCache(fname string) (*pongo2.Template, error) {
 
 	// 查看模板缓存
 	p.RLock()
-	tpl, has := p.tplCahce[fname]
+	tpl, has := p.tplCache[fname]
 	p.RUnlock()
 
 	// 存在模板缓存且文件未更新时，直接读模板缓存
-	if has && p.tplCahce[fname].modTime.Equal(finfo.ModTime()) {
+	if has && p.tplCache[fname].modTime.Equal(finfo.ModTime()) {
 		return tpl.template, nil
 	}
 
@@ -94,6 +94,6 @@ func (p *Pongo2Render) FromCache(fname string) (*pongo2.Template, error) {
 		return nil, err
 	}
 
-	p.tplCahce[fname] = &Tpl{template: newtpl, modTime: finfo.ModTime()}
+	p.tplCache[fname] = &Tpl{template: newtpl, modTime: finfo.ModTime()}
 	return newtpl, nil
 }
