@@ -14,15 +14,15 @@ type (
 	ApiHandler struct {
 		Desc    string               // (可选)本操作的描述
 		Method  string               // (必填)请求方法，"*"表示除"WS"外全部方法，多方法写法："GET|POST"或"GET POST"，冲突时优先级WS>GET>*
-		methods []string             // 真实的请求方法列表
-		Params  []Param              // (必填)参数说明列表，path参数类型的先后顺序与url中保持一致
+		Params  []Param              // (必填)参数说明列表(应该只声明当前中间件用到的参数)，path参数类型的先后顺序与url中保持一致
 		HTTP200 []Result             // (可选)HTTP Status Code 为200时的响应结果
 		Handler func(*Context) error // (必填)操作
 
-		id     string // 操作的唯一标识符
-		suffix string // 路由节点的url参数后缀
-		inited bool   // 标记是否已经初始化过
-		lock   sync.Mutex
+		id      string   // 操作的唯一标识符
+		methods []string // 真实的请求方法列表
+		suffix  string   // 路由节点的url参数后缀
+		inited  bool     // 标记是否已经初始化过
+		lock    sync.Mutex
 	}
 	Param struct {
 		Name     string      // (必填)参数名
@@ -112,10 +112,10 @@ func (a *ApiHandler) Id() string {
 	return a.id
 }
 
-// 操作的url前缀
-func (a *ApiHandler) Suffix() string {
-	return a.suffix
-}
+// // 操作的url前缀
+// func (a *ApiHandler) Suffix() string {
+// 	return a.suffix
+// }
 
 // 真实的请求方法列表(自动转换: "WS"->"GET", "*"->methods)
 func (a *ApiHandler) Methods() []string {

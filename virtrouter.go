@@ -52,7 +52,9 @@ type VirtRouter struct {
 	Parent      *VirtRouter         `json:"-"`           // 父节点
 
 	path       string      `json:"-"` // 路由匹配模式
+	suffix     string      `json:"-"` // 路由匹配模式path参数后缀
 	apiHandler *ApiHandler `json:"-"` // 操作
+	params     []Param     `json:"-"` // 所有参数的列表，含前面节点的中间件
 }
 
 // 虚拟路由节点类型
@@ -81,9 +83,9 @@ func (vr *VirtRouter) Description() string {
 	return vr.apiHandler.Desc
 }
 
-// 操作的参数说明列表
+// 节点所有参数的说明列表
 func (vr *VirtRouter) Params() []Param {
-	return vr.apiHandler.Params
+	return vr.params
 }
 
 // 操作的返回结果说明列表
@@ -124,7 +126,7 @@ func (vr *VirtRouter) SetPrefix(prefix string) (err error) {
 
 // 操作的参数匹配模式
 func (vr *VirtRouter) Suffix() string {
-	return vr.apiHandler.Suffix()
+	return vr.suffix
 }
 
 // 启用/禁用虚拟路由节点
@@ -297,20 +299,18 @@ func (vr *VirtRouter) delChild(virtRouter *VirtRouter) (err error) {
 }
 
 // 对从配置文件读来的路由进行部分字段的初始化
-func (vr *VirtRouter) initFromConfig() *VirtRouter {
-	vr.init()
-	return vr
-}
-
-// 初始化虚拟路由树
-func (vr *VirtRouter) init() {
+func (vr *VirtRouter) initFromConfig() {
+	// 获取操作
 	vr.apiHandler = getApiHandler(vr.Hid)
 
 	if vr.apiHandler == nil {
 		if vr.Type != HANDLER {
+			// 为根节点或分组节点时
+			// 为分组类节点添加空操作
 			vr.apiHandler = NilApiHandler("?")
 
 		} else {
+			// 移除无效的操作类节点
 			parent := vr.Parent
 			if parent == nil {
 				return
@@ -326,45 +326,98 @@ func (vr *VirtRouter) init() {
 		}
 	}
 
-	var parentPath = "/"
-	if vr.Parent != nil {
-		parentPath = vr.Parent.path
-	}
-	var suffix string
-	if vr.apiHandler != nil {
-		suffix = vr.apiHandler.Suffix()
-	}
-	vr.path = pathpkg.Join("/", parentPath, vr.Prefix, suffix)
+	// 设置节点path和params
+	vr.setParamsAndPath()
 	sort.Sort(vr.Children)
 	for _, child := range vr.Children {
 		child.Parent = vr
-		child.init()
+		child.initFromConfig()
 	}
 }
 
 // 格式化路由
-// 根据父节点重置虚拟路由节点自身及其子节点path
+// 设置节点及其子节点的path和params
 // 根据path排序同级节点
 func (vr *VirtRouter) reset() {
-	vr.resetPath()
+	vr.setParamsAndPathForTree()
 	if vr.Parent != nil {
 		sort.Sort(vr.Parent.Children)
 	}
 	vr.sort()
 }
 
-func (vr *VirtRouter) resetPath() {
+// 设置节点及其子节点的path和params
+func (vr *VirtRouter) setParamsAndPathForTree() {
+	vr.setParamsAndPath()
+	for _, child := range vr.Children {
+		child.setParamsAndPathForTree()
+	}
+}
+
+// 设置节点path和params
+func (vr *VirtRouter) setParamsAndPath() {
+	paramMap := make(map[string]Param)
+	pk := []string{}
+
+	// 继承父节点信息
 	var parentPath = "/"
 	if vr.Parent != nil {
 		parentPath = vr.Parent.path
+		for _, p := range vr.Parent.params {
+			k := p.In + p.Name
+			paramMap[k] = p
+			pk = append(pk, k)
+		}
 	}
-	var suffix string
+	// 处理中间件中参数信息
+	for _, m := range vr.Middlewares {
+		err := m.initApiMiddleware()
+		if err != nil {
+			Log.Error(err.Error())
+			continue
+		}
+		for _, p := range m.GetApiMiddleware().Params {
+			k := p.In + p.Name
+			had, ok := paramMap[k]
+			if ok {
+				p.Required = had.Required || p.Required
+			} else {
+				pk = append(pk, k)
+			}
+			paramMap[k] = p
+		}
+	}
+	// 处理操作中参数信息
 	if vr.apiHandler != nil {
-		suffix = vr.apiHandler.Suffix()
+		for _, p := range vr.apiHandler.Params {
+			k := p.In + p.Name
+			had, ok := paramMap[k]
+			if ok {
+				p.Required = had.Required || p.Required
+			} else {
+				pk = append(pk, k)
+			}
+			paramMap[k] = p
+		}
 	}
-	vr.path = pathpkg.Join("/", parentPath, vr.Prefix, suffix)
-	for _, child := range vr.Children {
-		child.resetPath()
+	// 设置节点最终参数列表
+	vr.params = make([]Param, len(pk))
+	vr.suffix = ""
+	for k, v := range pk {
+		vr.params[k] = paramMap[v]
+		// 设置URL中path参数
+		if vr.params[k].In == "path" {
+			vr.params[k].Required = true //path参数不可缺省
+			if vr.Type == HANDLER {
+				vr.suffix += "/:" + vr.params[k].Name
+			}
+		}
+	}
+	// 设置节点path
+	if vr.Type == HANDLER {
+		vr.path = pathpkg.Join("/", parentPath, vr.Prefix, vr.suffix)
+	} else {
+		vr.path = pathpkg.Join("/", parentPath, vr.Prefix)
 	}
 }
 
@@ -381,13 +434,13 @@ func (vr *VirtRouter) route(g *Group) {
 		return
 	}
 	mws := getMiddlewareFuncs(vr.Middlewares)
-	prefix := pathpkg.Join("/", vr.Prefix, vr.apiHandler.Suffix())
-	prefix2 := pathpkg.Join("/", strings.TrimSuffix(vr.Prefix, "/index"), vr.apiHandler.Suffix())
-	hasIndex := prefix2 != prefix
+	prefix := pathpkg.Join("/", vr.Prefix, vr.suffix)
+	prefix2 := pathpkg.Join("/", strings.TrimSuffix(vr.Prefix, "/index"), vr.suffix)
+	omitIndex := prefix2 != prefix && vr.suffix == ""
 	switch vr.Type {
 	case GROUP:
 		var childGroup *Group
-		if hasIndex {
+		if omitIndex {
 			// "/index"分组会被默认为"/"
 			childGroup = g.group(prefix2, mws...)
 		} else {
@@ -397,7 +450,7 @@ func (vr *VirtRouter) route(g *Group) {
 			child.route(childGroup)
 		}
 	case HANDLER:
-		if hasIndex {
+		if omitIndex {
 			g.match(vr.Methods(), prefix2, vr.apiHandler.Handler, mws...)
 		}
 		g.match(vr.Methods(), prefix, vr.apiHandler.Handler, mws...)
@@ -541,8 +594,10 @@ func initVirtRouterConfig() {
 	// 重新运行程序
 	if md5 == Md5 {
 		if vr != nil {
-			lessgo.virtRouter = vr.initFromConfig()
+			vr.initFromConfig()
+			lessgo.virtRouter = vr
 		}
+		canSaveVirtRouterConfig = true
 		return
 	}
 
@@ -563,7 +618,8 @@ func initVirtRouterConfig() {
 
 	// 程序被重新编译后第一次运行
 	if vr != nil {
-		merge(lessgo.virtRouter, vr.initFromConfig())
+		vr.initFromConfig()
+		merge(lessgo.virtRouter, vr)
 		os.Remove(ROUTERCONFIG_FILE)
 	}
 	return

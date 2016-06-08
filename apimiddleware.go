@@ -28,6 +28,7 @@ import (
 type ApiMiddleware struct {
 	Name       string // 全局唯一
 	Desc       string
+	Params     []Param     // (可选)参数说明列表(应该只声明当前中间件用到的参数)，path参数类型的先后顺序与url中保持一致
 	Config     interface{} // 初始配置，若希望使用参数，则Config不能为nil，至少为对应类型的空值
 	Middleware interface{} // 处理函数，类型参考上面注释
 	id         string      // 允许不同id相同name的中间件注册，但在name末尾追加"(2)"
@@ -163,6 +164,13 @@ type MiddlewareConfig struct {
 	lock          sync.RWMutex
 }
 
+// 获取*ApiMiddleware
+func (m *MiddlewareConfig) GetApiMiddleware() *ApiMiddleware {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.apiMiddleware
+}
+
 // 获取JSON字符串格式的中间件配置
 func (m *MiddlewareConfig) GetConfig() string {
 	m.lock.RLock()
@@ -209,18 +217,27 @@ func (m *MiddlewareConfig) CheckValid() bool {
 func (m *MiddlewareConfig) middlewareFunc() MiddlewareFunc {
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	if m.apiMiddleware == nil {
-		m.apiMiddleware = getApiMiddleware(m.Name)
-		if m.apiMiddleware == nil {
-			Log.Error("ApiMiddleware %s is not exist.", m.Name)
-			return nil
-		}
+	err := m.initApiMiddleware()
+	if err != nil {
+		Log.Error(err.Error())
+		return nil
 	}
 	fn, err := m.apiMiddleware.regetFunc([]byte(m.Config))
 	if err != nil {
 		Log.Error(err.Error())
 	}
 	return fn
+}
+
+// 初始化设置中间件对象
+func (m *MiddlewareConfig) initApiMiddleware() error {
+	if m.apiMiddleware == nil {
+		m.apiMiddleware = getApiMiddleware(m.Name)
+		if m.apiMiddleware == nil {
+			return fmt.Errorf("ApiMiddleware %s is not exist.", m.Name)
+		}
+	}
+	return nil
 }
 
 type (
