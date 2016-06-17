@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -13,41 +14,47 @@ import (
 type (
 	// Binder is the interface that wraps the Bind method.
 	Binder interface {
-		Bind(interface{}, Context) error
+		Bind(interface{}, *Context) error
 	}
 
 	binder struct{}
 )
 
-func (b *binder) Bind(i interface{}, c Context) (err error) {
-	req := c.Request()
+func (b *binder) Bind(i interface{}, c *Context) error {
+	req := c.request
 	ctype := req.Header.Get(HeaderContentType)
 	if req.Body == nil {
-		err = NewHTTPError(http.StatusBadRequest, "request body can't be empty")
-		return
+		return NewHTTPError(http.StatusBadRequest, "request body can't be empty")
 	}
-	err = ErrUnsupportedMediaType
 	switch {
 	case strings.HasPrefix(ctype, MIMEApplicationJSON):
-		if err = json.NewDecoder(req.Body).Decode(i); err != nil {
-			err = NewHTTPError(http.StatusBadRequest, err.Error())
+		if err := json.NewDecoder(req.Body).Decode(i); err != nil {
+			return NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 	case strings.HasPrefix(ctype, MIMEApplicationXML):
-		if err = xml.NewDecoder(req.Body).Decode(i); err != nil {
-			err = NewHTTPError(http.StatusBadRequest, err.Error())
+		if err := xml.NewDecoder(req.Body).Decode(i); err != nil {
+			return NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 	case strings.HasPrefix(ctype, MIMEApplicationForm), strings.HasPrefix(ctype, MIMEMultipartForm):
-		if err = b.bindForm(i, req.FormParams()); err != nil {
-			err = NewHTTPError(http.StatusBadRequest, err.Error())
+		typ := reflect.TypeOf(i)
+		val := reflect.ValueOf(i)
+		if typ.Kind() == reflect.Ptr {
+			typ = typ.Elem()
+			if typ.Kind() != reflect.Struct {
+				return NewHTTPError(http.StatusBadRequest, "When \"Content-Type: "+ctype+"\", \"Bind()\"'s param must be \"struct\".")
+			}
+			val = val.Elem()
 		}
+		if err := b.bindForm(typ, val, c.FormValues()); err != nil {
+			return NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+	default:
+		return ErrUnsupportedMediaType
 	}
-	return
+	return nil
 }
 
-func (b *binder) bindForm(ptr interface{}, form map[string][]string) error {
-	typ := reflect.TypeOf(ptr).Elem()
-	val := reflect.ValueOf(ptr).Elem()
-
+func (b *binder) bindForm(typ reflect.Type, val reflect.Value, form url.Values) error {
 	for i := 0; i < typ.NumField(); i++ {
 		typeField := typ.Field(i)
 		structField := val.Field(i)
@@ -59,9 +66,12 @@ func (b *binder) bindForm(ptr interface{}, form map[string][]string) error {
 
 		if inputFieldName == "" {
 			inputFieldName = typeField.Name
-			// If "form" tag is nil, we inspect if the field is a struct.
+			// If "form" tag is nil, we inspect if the field is a struct or *struct.
+			if structFieldKind == reflect.Ptr {
+				structField = structField.Elem()
+			}
 			if structFieldKind == reflect.Struct {
-				err := b.bindForm(structField.Addr().Interface(), form)
+				err := b.bindForm(structField.Type(), structField, form)
 				if err != nil {
 					return err
 				}

@@ -31,10 +31,7 @@ func TestMem(t *testing.T) {
 		t.Fatal("set error,", err)
 	}
 	defer sess.SessionRelease(w)
-	err = sess.Set("username", "astaxie")
-	if err != nil {
-		t.Fatal("set error,", err)
-	}
+	sess.Set("username", "astaxie")
 	if username := sess.Get("username"); username != "astaxie" {
 		t.Fatal("get username error")
 	}

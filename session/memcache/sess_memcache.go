@@ -20,8 +20,8 @@
 //
 // Usage:
 // import(
-//   _ "github.com/astaxie/beego/session/memcache"
-//   "github.com/astaxie/beego/session"
+//   _ "github.com/lessgo/lessgo/session/memcache"
+//   "github.com/lessgo/lessgo/session"
 // )
 //
 //	func init() {
@@ -37,7 +37,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/astaxie/beego/session"
+	"github.com/lessgo/lessgo/session"
 
 	"github.com/bradfitz/gomemcache/memcache"
 )
@@ -54,11 +54,10 @@ type SessionStore struct {
 }
 
 // Set value in memcache session
-func (rs *SessionStore) Set(key, value interface{}) error {
+func (rs *SessionStore) Set(key, value interface{}) {
 	rs.lock.Lock()
 	defer rs.lock.Unlock()
 	rs.values[key] = value
-	return nil
 }
 
 // Get value in memcache session
@@ -72,19 +71,17 @@ func (rs *SessionStore) Get(key interface{}) interface{} {
 }
 
 // Delete value in memcache session
-func (rs *SessionStore) Delete(key interface{}) error {
+func (rs *SessionStore) Delete(key interface{}) {
 	rs.lock.Lock()
 	defer rs.lock.Unlock()
 	delete(rs.values, key)
-	return nil
 }
 
 // Flush clear all values in memcache session
-func (rs *SessionStore) Flush() error {
+func (rs *SessionStore) Flush() {
 	rs.lock.Lock()
 	defer rs.lock.Unlock()
 	rs.values = make(map[interface{}]interface{})
-	return nil
 }
 
 // SessionID get memcache session id

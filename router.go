@@ -1,445 +1,212 @@
 package lessgo
 
-type (
-	// Router is the registry of all registered routes for an `Echo` instance for
-	// request matching and URL path parameter parsing.
-	Router struct {
-		tree   *node
-		routes []Route
-		echo   *Echo
-	}
-	node struct {
-		kind          kind
-		label         byte
-		prefix        string
-		parent        *node
-		children      children
-		ppath         string
-		pnames        []string
-		methodHandler *methodHandler
-	}
-	kind          uint8
-	children      []*node
-	methodHandler struct {
-		connect HandlerFunc
-		delete  HandlerFunc
-		get     HandlerFunc
-		head    HandlerFunc
-		options HandlerFunc
-		patch   HandlerFunc
-		post    HandlerFunc
-		put     HandlerFunc
-		trace   HandlerFunc
-	}
+import (
+	"github.com/lessgo/lessgo/utils"
 )
 
-const (
-	skind kind = iota
-	pkind
-	akind
-)
+// Router is a http.Handler which can be used to dispatch requests to different
+// handler functions via configurable routes
+type Router struct {
+	trees map[string]*node
 
-// NewRouter returns a new Router instance.
-func NewRouter(e *Echo) *Router {
+	// Enables automatic redirection if the current route can't be matched but a
+	// handler for the path with (without) the trailing slash exists.
+	// For example if /foo/ is requested but a route only exists for /foo, the
+	// client is redirected to /foo with http status code 301 for GET requests
+	// and 307 for all other request methods.
+	RedirectTrailingSlash bool
+
+	// If enabled, the router tries to fix the current request path, if no
+	// handle is registered for it.
+	// First superfluous path elements like ../ or // are removed.
+	// Afterwards the router does a case-insensitive lookup of the cleaned path.
+	// If a handle can be found for this route, the router makes a redirection
+	// to the corrected path with status code 301 for GET requests and 307 for
+	// all other request methods.
+	// For example /FOO and /..//Foo could be redirected to /foo.
+	// RedirectTrailingSlash is independent of this option.
+	RedirectFixedPath bool
+
+	// If enabled, the router checks if another method is allowed for the
+	// current route, if the current request can not be routed.
+	// If this is the case, the request is answered with 'Method Not Allowed'
+	// and HTTP status code 405.
+	// If no other Method is allowed, the request is delegated to the NotFound
+	// handler.
+	HandleMethodNotAllowed bool
+
+	// If enabled, the router automatically replies to OPTIONS requests.
+	// Custom OPTIONS handlers take priority over automatic replies.
+	HandleOPTIONS bool
+
+	// Configurable http.Handler which is called when no matching route is
+	// found. If it is not set, http.NotFound is used.
+	NotFound HandlerFunc
+
+	// Configurable http.Handler which is called when a request
+	// cannot be routed and HandleMethodNotAllowed is true.
+	// If it is not set, http.Error with http.StatusMethodNotAllowed is used.
+	// The "Allow" header with allowed request methods is set before the handler
+	// is called.
+	MethodNotAllowed HandlerFunc
+
+	// Function to handle panics recovered from http handlers.
+	// It should be used to generate a error page and return the http error code
+	// 500 (Internal Server Error).
+	// The handler can be used to keep your server from crashing because of
+	// unrecovered panics.
+	ErrorPanicHandler func(*Context, error, interface{})
+}
+
+// NewRouter returns a new initialized Router.
+// Path auto-correction, including trailing slashes, is enabled by default.
+func newRouter() *Router {
 	return &Router{
-		tree: &node{
-			methodHandler: new(methodHandler),
-		},
-		routes: []Route{},
-		echo:   e,
+		RedirectTrailingSlash:  true,
+		RedirectFixedPath:      true,
+		HandleMethodNotAllowed: true,
+		HandleOPTIONS:          true,
 	}
 }
 
-// Process implements `echo.MiddlewareFunc` which makes router a middleware.
-func (r *Router) Process(next HandlerFunc) HandlerFunc {
-	return func(c Context) error {
-		r.Find(c.Request().Method, c.Request().URL.Path, c)
-		if err := c.Handler()(c); err != nil {
+// Handle registers a new request handle with the given path and method.
+//
+// For GET, POST, PUT, PATCH and DELETE requests the respective shortcut
+// functions can be used.
+//
+// This function is intended for bulk loading and to allow the usage of less
+// frequently used, non-standardized or custom methods (e.g. for internal
+// communication with a proxy).
+func (r *Router) Handle(method, path string, handle HandlerFunc) {
+	if path[0] != '/' {
+		panic("path must begin with '/' in path '" + path + "'")
+	}
+
+	if r.trees == nil {
+		r.trees = make(map[string]*node)
+	}
+
+	root := r.trees[method]
+	if root == nil {
+		root = new(node)
+		r.trees[method] = root
+	}
+
+	root.addRoute(path, handle)
+}
+
+func (r *Router) allowed(path, reqMethod string, pkeys, pvalues []string) string {
+	var allow string
+	if path == "*" { // server-wide
+		for method := range r.trees {
+			if method == OPTIONS {
+				continue
+			}
+
+			// add request method to list of allowed methods
+			if len(allow) == 0 {
+				allow = method
+			} else {
+				allow += ", " + method
+			}
+		}
+	} else { // specific path
+		for method := range r.trees {
+			// Skip the requested method - we already tried this one
+			if method == reqMethod || method == OPTIONS {
+				continue
+			}
+
+			handle, _, _, _ := r.trees[method].getValue(path, pkeys, pvalues)
+			if handle != nil {
+				// add request method to list of allowed methods
+				if len(allow) == 0 {
+					allow = method
+				} else {
+					allow += ", " + method
+				}
+			}
+		}
+	}
+	if len(allow) > 0 {
+		allow += ", OPTIONS"
+	}
+	return allow
+}
+
+// ServeHTTP makes the router implement the MiddlewareFunc.
+func (r *Router) process(next HandlerFunc) HandlerFunc {
+	return func(c *Context) error {
+		req := c.request
+		path := req.URL.Path
+		if root := r.trees[req.Method]; root != nil {
+			var handle HandlerFunc
+			var tsr bool
+			handle, c.pkeys, c.pvalues, tsr = root.getValue(path, c.pkeys, c.pvalues)
+			if handle != nil {
+				if err := handle(c); err != nil {
+					return err
+				}
+				return next(c)
+			} else if req.Method != CONNECT && path != "/" {
+				code := 301 // Permanent redirect, request with GET method
+				if req.Method != GET {
+					// Temporary redirect, request with same method
+					// As of Go 1.3, Go does not support status code 308.
+					code = 307
+				}
+
+				if tsr && r.RedirectTrailingSlash {
+					if len(path) > 1 && path[len(path)-1] == '/' {
+						req.URL.Path = path[:len(path)-1]
+					} else {
+						req.URL.Path = path + "/"
+					}
+					c.Redirect(code, req.URL.String())
+					return next(c)
+				}
+
+				// Try to fix the request path
+				if r.RedirectFixedPath {
+					fixedPath, found := root.findCaseInsensitivePath(
+						CleanPath(path),
+						r.RedirectTrailingSlash,
+					)
+					if found {
+						req.URL.Path = utils.Bytes2String(fixedPath)
+						c.Redirect(code, req.URL.String())
+						return next(c)
+					}
+				}
+			}
+		}
+
+		if req.Method == OPTIONS {
+			// Handle OPTIONS requests
+			if r.HandleOPTIONS {
+				if allow := r.allowed(path, req.Method, c.pkeys, c.pvalues); len(allow) > 0 {
+					c.response.Header().Set("Allow", allow)
+					c.NoContent(200)
+					return next(c)
+				}
+			}
+		} else {
+			// Handle 405
+			if r.HandleMethodNotAllowed {
+				if allow := r.allowed(path, req.Method, c.pkeys, c.pvalues); len(allow) > 0 {
+					c.response.Header().Set("Allow", allow)
+					if err := r.MethodNotAllowed(c); err != nil {
+						return err
+					}
+					return next(c)
+				}
+			}
+		}
+
+		// Handle 404
+		if err := r.NotFound(c); err != nil {
 			return err
 		}
 		return next(c)
 	}
-}
-
-// Add registers a new route for method and path with matching handler.
-func (r *Router) Add(method, path string, h HandlerFunc, e *Echo) {
-	ppath := path        // Pristine path
-	pnames := []string{} // Param names
-
-	for i, l := 0, len(path); i < l; i++ {
-		if path[i] == ':' {
-			j := i + 1
-
-			r.insert(method, path[:i], nil, skind, "", nil, e)
-			for ; i < l && path[i] != '/'; i++ {
-			}
-
-			pnames = append(pnames, path[j:i])
-			path = path[:j] + path[i:]
-			i, l = j, len(path)
-
-			if i == l {
-				r.insert(method, path[:i], h, pkind, ppath, pnames, e)
-				return
-			}
-			r.insert(method, path[:i], nil, pkind, ppath, pnames, e)
-		} else if path[i] == '*' {
-			r.insert(method, path[:i], nil, skind, "", nil, e)
-			pnames = append(pnames, "_*")
-			r.insert(method, path[:i+1], h, akind, ppath, pnames, e)
-			return
-		}
-	}
-
-	r.insert(method, path, h, skind, ppath, pnames, e)
-}
-
-func (r *Router) insert(method, path string, h HandlerFunc, t kind, ppath string, pnames []string, e *Echo) {
-	// Adjust max param
-	l := len(pnames)
-	if *e.maxParam < l {
-		*e.maxParam = l
-	}
-
-	cn := r.tree // Current node as root
-	if cn == nil {
-		panic("echo ⇛ invalid method")
-	}
-	search := path
-
-	for {
-		sl := len(search)
-		pl := len(cn.prefix)
-		l := 0
-
-		// LCP
-		max := pl
-		if sl < max {
-			max = sl
-		}
-		for ; l < max && search[l] == cn.prefix[l]; l++ {
-		}
-
-		if l == 0 {
-			// At root node
-			cn.label = search[0]
-			cn.prefix = search
-			if h != nil {
-				cn.kind = t
-				cn.addHandler(method, h)
-				cn.ppath = ppath
-				cn.pnames = pnames
-			}
-		} else if l < pl {
-			// Split node
-			n := newNode(cn.kind, cn.prefix[l:], cn, cn.children, cn.methodHandler, cn.ppath, cn.pnames)
-
-			// Reset parent node
-			cn.kind = skind
-			cn.label = cn.prefix[0]
-			cn.prefix = cn.prefix[:l]
-			cn.children = nil
-			cn.methodHandler = new(methodHandler)
-			cn.ppath = ""
-			cn.pnames = nil
-
-			cn.addChild(n)
-
-			if l == sl {
-				// At parent node
-				cn.kind = t
-				cn.addHandler(method, h)
-				cn.ppath = ppath
-				cn.pnames = pnames
-			} else {
-				// Create child node
-				n = newNode(t, search[l:], cn, nil, new(methodHandler), ppath, pnames)
-				n.addHandler(method, h)
-				cn.addChild(n)
-			}
-		} else if l < sl {
-			search = search[l:]
-			c := cn.findChildWithLabel(search[0])
-			if c != nil {
-				// Go deeper
-				cn = c
-				continue
-			}
-			// Create child node
-			n := newNode(t, search, cn, nil, new(methodHandler), ppath, pnames)
-			n.addHandler(method, h)
-			cn.addChild(n)
-		} else {
-			// Node already exists
-			if h != nil {
-				cn.addHandler(method, h)
-				cn.ppath = ppath
-				cn.pnames = pnames
-			}
-		}
-		return
-	}
-}
-
-func newNode(t kind, pre string, p *node, c children, mh *methodHandler, ppath string, pnames []string) *node {
-	return &node{
-		kind:          t,
-		label:         pre[0],
-		prefix:        pre,
-		parent:        p,
-		children:      c,
-		ppath:         ppath,
-		pnames:        pnames,
-		methodHandler: mh,
-	}
-}
-
-func (n *node) addChild(c *node) {
-	n.children = append(n.children, c)
-}
-
-func (n *node) findChild(l byte, t kind) *node {
-	for _, c := range n.children {
-		if c.label == l && c.kind == t {
-			return c
-		}
-	}
-	return nil
-}
-
-func (n *node) findChildWithLabel(l byte) *node {
-	for _, c := range n.children {
-		if c.label == l {
-			return c
-		}
-	}
-	return nil
-}
-
-func (n *node) findChildByKind(t kind) *node {
-	for _, c := range n.children {
-		if c.kind == t {
-			return c
-		}
-	}
-	return nil
-}
-
-func (n *node) addHandler(method string, h HandlerFunc) {
-	switch method {
-	case GET:
-		n.methodHandler.get = h
-	case POST:
-		n.methodHandler.post = h
-	case PUT:
-		n.methodHandler.put = h
-	case DELETE:
-		n.methodHandler.delete = h
-	case PATCH:
-		n.methodHandler.patch = h
-	case OPTIONS:
-		n.methodHandler.options = h
-	case HEAD:
-		n.methodHandler.head = h
-	case CONNECT:
-		n.methodHandler.connect = h
-	case TRACE:
-		n.methodHandler.trace = h
-	}
-}
-
-func (n *node) findHandler(method string) HandlerFunc {
-	switch method {
-	case GET:
-		return n.methodHandler.get
-	case POST:
-		return n.methodHandler.post
-	case PUT:
-		return n.methodHandler.put
-	case DELETE:
-		return n.methodHandler.delete
-	case PATCH:
-		return n.methodHandler.patch
-	case OPTIONS:
-		return n.methodHandler.options
-	case HEAD:
-		return n.methodHandler.head
-	case CONNECT:
-		return n.methodHandler.connect
-	case TRACE:
-		return n.methodHandler.trace
-	default:
-		return nil
-	}
-}
-
-func (n *node) findClosestByKind(t kind) (x *node) {
-	if x = n.findChildByKind(t); x != nil {
-		return
-	}
-	if n.parent == nil {
-		return nil
-	}
-	return n.parent.findClosestByKind(t)
-}
-
-func (n *node) checkMethodNotAllowed() HandlerFunc {
-	for _, m := range methods {
-		if h := n.findHandler(m); h != nil {
-			return methodNotAllowedHandler
-		}
-	}
-	return nil
-}
-
-// Find lookup a handler registed for method and path. It also parses URL for path
-// parameters and load them into context.
-//
-// For performance:
-//
-// - Get context from `Echo#GetContext()`
-// - Reset it `Context#Reset()`
-// - Return it `Echo#PutContext()`.
-func (r *Router) Find(method, path string, context Context) {
-	cn := r.tree // Current node as root
-
-	var (
-		search  = path
-		c       *node  // Child node
-		n       int    // Param counter
-		nk      kind   // Next kind
-		nn      *node  // Next node
-		ns      string // Next search
-		pvalues = context.ParamValues()
-	)
-
-	// Search order static > param > any
-	for {
-		if search == "" {
-			goto End
-		}
-
-		pl := 0 // Prefix length
-		l := 0  // LCP length
-
-		if cn.label != ':' {
-			sl := len(search)
-			pl = len(cn.prefix)
-
-			// LCP
-			max := pl
-			if sl < max {
-				max = sl
-			}
-			for ; l < max && search[l] == cn.prefix[l]; l++ {
-			}
-		}
-
-		if l == pl {
-			// Continue search
-			search = search[l:]
-		} else {
-			cn = nn
-			search = ns
-			if nk == pkind {
-				goto Param
-			} else if nk == akind {
-				goto Any
-			}
-			// Not found
-			return
-		}
-
-		if search == "" {
-			goto End
-		}
-
-		// Static node
-		if c = cn.findChild(search[0], skind); c != nil {
-			// Save next
-			if cn.label == '/' {
-				nk = pkind
-				nn = cn
-				ns = search
-			}
-			cn = c
-			continue
-		}
-
-		// Param node
-	Param:
-		if c = cn.findChildByKind(pkind); c != nil {
-			// Issue #378
-			if len(pvalues) == n {
-				continue
-			}
-
-			// Save next
-			if cn.label == '/' {
-				nk = akind
-				nn = cn
-				ns = search
-			}
-
-			cn = c
-			i, l := 0, len(search)
-			for ; i < l && search[i] != '/'; i++ {
-			}
-			pvalues[n] = search[:i]
-			n++
-			search = search[i:]
-			continue
-		}
-
-		// Any node
-	Any:
-		if cn = cn.findChildByKind(akind); cn == nil {
-			if nn != nil {
-				cn = nn
-				nn = nil // Next
-				search = ns
-				if nk == pkind {
-					goto Param
-				} else if nk == akind {
-					goto Any
-				}
-			}
-			// Not found
-			return
-		}
-		pvalues[len(cn.pnames)-1] = search
-		goto End
-	}
-
-End:
-	context.SetHandler(cn.findHandler(method))
-	context.SetPath(cn.ppath)
-	context.setParamNames(cn.pnames)
-
-	// NOTE: Slow zone...
-	if context.Handler() == nil {
-		context.SetHandler(cn.checkMethodNotAllowed())
-		if context.Handler() != nil {
-			return
-		}
-		defer func() {
-			if context.Handler() == nil {
-				context.SetHandler(notFoundHandler)
-			}
-		}()
-		// Dig further for any, might have an empty value for *, e.g.
-		// serving a directory. Issue #207.
-		if cn = cn.findClosestByKind(akind); cn == nil {
-			return
-		}
-		if h := cn.findHandler(method); h != nil {
-			context.SetHandler(h)
-		} else {
-			context.SetHandler(cn.checkMethodNotAllowed())
-		}
-		context.SetPath(cn.ppath)
-		context.setParamNames(cn.pnames)
-	}
-
-	return
 }

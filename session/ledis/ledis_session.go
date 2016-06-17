@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/astaxie/beego/session"
+	"github.com/lessgo/lessgo/session"
 	"github.com/siddontang/ledisdb/config"
 	"github.com/siddontang/ledisdb/ledis"
 )
@@ -24,11 +24,10 @@ type SessionStore struct {
 }
 
 // Set value in ledis session
-func (ls *SessionStore) Set(key, value interface{}) error {
+func (ls *SessionStore) Set(key, value interface{}) {
 	ls.lock.Lock()
 	defer ls.lock.Unlock()
 	ls.values[key] = value
-	return nil
 }
 
 // Get value in ledis session
@@ -42,19 +41,17 @@ func (ls *SessionStore) Get(key interface{}) interface{} {
 }
 
 // Delete value in ledis session
-func (ls *SessionStore) Delete(key interface{}) error {
+func (ls *SessionStore) Delete(key interface{}) {
 	ls.lock.Lock()
 	defer ls.lock.Unlock()
 	delete(ls.values, key)
-	return nil
 }
 
 // Flush clear all values in ledis session
-func (ls *SessionStore) Flush() error {
+func (ls *SessionStore) Flush() {
 	ls.lock.Lock()
 	defer ls.lock.Unlock()
 	ls.values = make(map[interface{}]interface{})
-	return nil
 }
 
 // SessionID get ledis session id

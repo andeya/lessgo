@@ -3,32 +3,66 @@ package lessgo
 import (
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
+
+	"github.com/lessgo/lessgo/utils"
 )
 
 type (
 	ApiHandler struct {
-		Desc    string   // 本操作的描述
-		Method  string   // 请求方法，"*"表示除"WS"外全部方法
-		methods []string // 真实的请求方法列表(自动转换: "WS"->"GET", "*"->methods)
-		Params  []Param  // 参数说明列表，path参数类型的先后顺序与url中保持一致
-		// Produces []string            // 支持的响应内容类型，如["application/xml", "application/json"]
-		Handler func(Context) error // 操作
+		Desc    string               // (可选)本操作的描述
+		Method  string               // (必填)请求方法，"*"表示除"WS"外全部方法，多方法写法："GET|POST"或"GET POST"，冲突时优先级WS>GET>*
+		Params  []Param              // (必填)参数说明列表(应该只声明当前中间件用到的参数)，path参数类型的先后顺序与url中保持一致
+		HTTP200 []Result             // (可选)HTTP Status Code 为200时的响应结果
+		Handler func(*Context) error // (必填)操作
 
-		id     string // 操作的唯一标识符
-		suffix string // 路由节点的url参数后缀
-		inited bool   // 标记是否已经初始化过
-		lock   sync.Mutex
+		id      string   // 操作的唯一标识符
+		methods []string // 真实的请求方法列表
+		suffix  string   // 路由节点的url参数后缀
+		inited  bool     // 标记是否已经初始化过
+		lock    sync.Mutex
 	}
 	Param struct {
-		Name     string      // 参数名
-		In       string      // 参数出现位置form、query、path、body、header
-		Required bool        // 是否必填
-		Format   interface{} // 参数值示例(至少为相应go基础类型空值)
-		Desc     string      // 参数描述
+		Name     string      // (必填)参数名
+		In       string      // (必填)参数出现位置
+		Required bool        // (必填)是否必填
+		Model    interface{} // (必填)参数值，API文档中依此推断参数值类型，同时作为默认值，当为nil时表示file文件上传
+		Desc     string      // (可选)参数描述
+	}
+	Result struct {
+		Code int         `json:"code"`           // (必填)返回结果码
+		Info interface{} `json:"info,omitempty"` // (可选)返回结果格式参考或描述
+		// Header interface{} // (可选)返回结果头部信息
 	}
 )
+
+/*
+ * 关于参数的说明
+ * 一、数据结构主要用于固定格式的服务器响应结构，适用于多个接口可能返回相同的数据结构，编辑保存后相关所有的引用都会变更。
+ * 支持的数据类型说明如下：
+ * 1、string:字符串类型
+ * 2、array:数组类型，子项只能是支持的数据类型中的一种，不能添加多个
+ * 3、object:对象类型，只支持一级属性，不支持嵌套，嵌套可以通过在属性中引入ref类型的对象或自定义数据格式
+ * 4、int:短整型
+ * 5、long:长整型
+ * 6、float:浮点型
+ * 7、double:浮点型
+ * 8、decimal:精确到比较高的浮点型
+ * 9、ref:引用类型，即引用定义好的数据结构
+ * 10、file:文件（Param.Model==nil）
+ *
+ * 二、参数位置
+ *    body：http请求body
+ *    cookie：本地cookie
+ *    formData：表单参数
+ *    header：http请求header
+ *    path：http请求url,如getInfo/{userId}
+ *    query：http请求拼接，如getInfo?userId={userId}
+ * 三、参数类型
+ *    自定义：目前仅支持自定义json格式，仅当"参数位置"为“body"有效
+ */
 
 var (
 	apiHandlerMap  = map[string]*ApiHandler{}
@@ -78,10 +112,10 @@ func (a *ApiHandler) Id() string {
 	return a.id
 }
 
-// 操作的url前缀
-func (a *ApiHandler) Suffix() string {
-	return a.suffix
-}
+// // 操作的url前缀
+// func (a *ApiHandler) Suffix() string {
+// 	return a.suffix
+// }
 
 // 真实的请求方法列表(自动转换: "WS"->"GET", "*"->methods)
 func (a *ApiHandler) Methods() []string {
@@ -98,17 +132,17 @@ func setApiHandler(vh *ApiHandler) {
 	apiHandlerLock.Lock()
 	defer apiHandlerLock.Unlock()
 	apiHandlerMap[vh.id] = vh
-	for i, vh2 := range DefLessgo.apiHandlers {
+	for i, vh2 := range lessgo.apiHandlers {
 		if vh.Id() < vh2.Id() {
-			list := make([]*ApiHandler, len(DefLessgo.apiHandlers)+1)
-			copy(list, DefLessgo.apiHandlers[:i])
+			list := make([]*ApiHandler, len(lessgo.apiHandlers)+1)
+			copy(list, lessgo.apiHandlers[:i])
 			list[i] = vh
-			copy(list[i+1:], DefLessgo.apiHandlers[i:])
-			DefLessgo.apiHandlers = list
+			copy(list[i+1:], lessgo.apiHandlers[i:])
+			lessgo.apiHandlers = list
 			return
 		}
 	}
-	DefLessgo.apiHandlers = append(DefLessgo.apiHandlers, vh)
+	lessgo.apiHandlers = append(lessgo.apiHandlers, vh)
 }
 
 func (a *ApiHandler) initParamsAndSuffix() {
@@ -122,21 +156,39 @@ func (a *ApiHandler) initParamsAndSuffix() {
 }
 
 func (a *ApiHandler) initMethod() {
+	defer func() {
+		sort.Strings(a.methods)                 //方法排序，保证一致性
+		a.Method = strings.Join(a.methods, "|") //格式化，保证一致性
+	}()
+
+	a.methods = []string{}
 	a.Method = strings.ToUpper(a.Method)
-	switch a.Method {
-	case ANY:
-		a.methods = methods[:]
-	case WS:
-		a.methods = []string{GET}
-	case CONNECT, DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT, TRACE:
-		a.methods = []string{a.Method}
-	default:
-		Logger().Fatal("ApiHandler \"%v\"'s method can't be %v. ", a.Desc, a.Method)
+
+	// 检查websocket方法，若存在则不允许GET方法存在
+	if strings.Contains(a.Method, WS) {
+		a.Method = strings.Replace(a.Method, GET, "", -1)
+		a.methods = append(a.methods, WS)
+	}
+
+	// 遍历标准方法
+	for _, method := range methods {
+		if strings.Contains(a.Method, method) {
+			a.methods = append(a.methods, method)
+		}
+	}
+
+	// 当只含有 * 时表示除WS外任意方法
+	if len(a.methods) == 0 {
+		if strings.Contains(a.Method, ANY) {
+			a.methods = methods[:]
+		} else {
+			Log.Fatal("ApiHandler \"%v\"'s method can't be %v. ", a.Desc, a.Method)
+		}
 	}
 }
 
 func (a *ApiHandler) initId() {
-	add := "[" + a.suffix + "][" + a.Desc + "]" + "[" + a.Method + "]"
+	add := "[" + a.suffix + "]" + "[" + a.Desc + "]" + "[" + a.Method + "]"
 	v := reflect.ValueOf(a.Handler)
 	t := v.Type()
 	if t.Kind() == reflect.Func {
@@ -144,4 +196,5 @@ func (a *ApiHandler) initId() {
 	} else {
 		a.id = t.String() + add
 	}
+	a.id = utils.MakeHash(a.id)
 }

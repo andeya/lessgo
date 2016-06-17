@@ -131,7 +131,7 @@ func (w *fileLogWriter) WriteMsg(lm logMsg) error {
 		return nil
 	}
 	h, d := formatTimeHeader(lm.when)
-	msg := string(h) + lm.line + lm.prefix + " " + lm.msg + "\n"
+	msg := Bytes2String(h) + lm.line + lm.prefix + " " + lm.msg + "\n"
 	if w.Rotate {
 		if w.needRotate(len(msg), d) {
 			w.Lock()
@@ -145,7 +145,7 @@ func (w *fileLogWriter) WriteMsg(lm logMsg) error {
 	}
 
 	w.Lock()
-	_, err := w.fileWriter.Write([]byte(msg))
+	_, err := w.fileWriter.Write(String2Bytes(msg))
 	if err == nil {
 		w.maxLinesCurLines++
 		w.maxSizeCurSize += len(msg)

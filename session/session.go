@@ -31,20 +31,25 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"net/textproto"
 	"net/url"
+	"os"
 	"time"
 )
 
 // Store contains all data for one session process with specific id.
 type Store interface {
-	Set(key, value interface{}) error     //set session value
+	Set(key, value interface{})           //set session value
 	Get(key interface{}) interface{}      //get session value
-	Delete(key interface{}) error         //delete session value
+	Delete(key interface{})               //delete session value
 	SessionID() string                    //back current sessionID
 	SessionRelease(w http.ResponseWriter) // release the resource & save data to provider & return the data
-	Flush() error                         //delete all data
+	Flush()                               //delete all data
 }
 
 // Provider contains global session methods and saved SessionStores.
@@ -61,6 +66,9 @@ type Provider interface {
 
 var provides = make(map[string]Provider)
 
+// SLogger a helpful variable to log information about session
+var SLogger = NewSessionLog(os.Stderr)
+
 // Register makes a session provide available by the provided name.
 // If Register is called twice with the same name or if driver is nil,
 // it panics.
@@ -75,15 +83,18 @@ func Register(name string, provide Provider) {
 }
 
 type managerConfig struct {
-	CookieName      string `json:"cookieName"`
-	EnableSetCookie bool   `json:"enableSetCookie,omitempty"`
-	Gclifetime      int64  `json:"gclifetime"`
-	Maxlifetime     int64  `json:"maxLifetime"`
-	Secure          bool   `json:"secure"`
-	CookieLifeTime  int    `json:"cookieLifeTime"`
-	ProviderConfig  string `json:"providerConfig"`
-	Domain          string `json:"domain"`
-	SessionIDLength int64  `json:"sessionIDLength"`
+	CookieName              string `json:"cookieName"`
+	EnableSetCookie         bool   `json:"enableSetCookie,omitempty"`
+	Gclifetime              int64  `json:"gclifetime"`
+	Maxlifetime             int64  `json:"maxLifetime"`
+	Secure                  bool   `json:"secure"`
+	CookieLifeTime          int    `json:"cookieLifeTime"`
+	ProviderConfig          string `json:"providerConfig"`
+	Domain                  string `json:"domain"`
+	SessionIDLength         int64  `json:"sessionIDLength"`
+	EnableSidInHttpHeader   bool   `json:"enableSidInHttpHeader"`
+	SessionNameInHttpHeader string `json:"sessionNameInHttpHeader"`
+	EnableSidInUrlQuery     bool   `json:"enableSidInUrlQuery"`
 }
 
 // Manager contains Provider and its configuration.
@@ -118,6 +129,19 @@ func NewManager(provideName, config string) (*Manager, error) {
 	if cf.Maxlifetime == 0 {
 		cf.Maxlifetime = cf.Gclifetime
 	}
+
+	if cf.EnableSidInHttpHeader {
+		if cf.SessionNameInHttpHeader == "" {
+			panic(errors.New("SessionNameInHttpHeader is empty"))
+		}
+
+		strMimeHeader := textproto.CanonicalMIMEHeaderKey(cf.SessionNameInHttpHeader)
+		if cf.SessionNameInHttpHeader != strMimeHeader {
+			strErrMsg := "SessionNameInHttpHeader (" + cf.SessionNameInHttpHeader + ") has the wrong format, it should be like this : " + strMimeHeader
+			panic(errors.New(strErrMsg))
+		}
+	}
+
 	err = provider.SessionInit(cf.Maxlifetime, cf.ProviderConfig)
 	if err != nil {
 		return nil, err
@@ -126,6 +150,9 @@ func NewManager(provideName, config string) (*Manager, error) {
 	if cf.SessionIDLength == 0 {
 		cf.SessionIDLength = 16
 	}
+
+	// 设置存储提供者cookie的CookieName
+	CookieName = cf.CookieName
 
 	return &Manager{
 		provider,
@@ -143,12 +170,24 @@ func NewManager(provideName, config string) (*Manager, error) {
 func (manager *Manager) getSid(r *http.Request) (string, error) {
 	cookie, errs := r.Cookie(manager.config.CookieName)
 	if errs != nil || cookie.Value == "" || cookie.MaxAge < 0 {
-		errs := r.ParseForm()
-		if errs != nil {
-			return "", errs
+		var sid string
+		if manager.config.EnableSidInUrlQuery {
+			errs := r.ParseForm()
+			if errs != nil {
+				return "", errs
+			}
+
+			sid = r.FormValue(manager.config.CookieName)
 		}
 
-		sid := r.FormValue(manager.config.CookieName)
+		// if not found in Cookie / param, then read it from request headers
+		if manager.config.EnableSidInHttpHeader && sid == "" {
+			sids, isFound := r.Header[manager.config.SessionNameInHttpHeader]
+			if isFound && len(sids) != 0 {
+				return sids[0], nil
+			}
+		}
+
 		return sid, nil
 	}
 
@@ -158,7 +197,7 @@ func (manager *Manager) getSid(r *http.Request) (string, error) {
 
 // SessionStart generate or read the session id from http request.
 // if session id exists, return SessionStore with this id.
-func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session Store, err error) {
+func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (Store, error) {
 	sid, errs := manager.getSid(r)
 	if errs != nil {
 		return nil, errs
@@ -174,7 +213,7 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 		return nil, errs
 	}
 
-	session, err = manager.provider.SessionRead(sid)
+	session, err := manager.provider.SessionRead(sid)
 	cookie := &http.Cookie{
 		Name:     manager.config.CookieName,
 		Value:    url.QueryEscape(sid),
@@ -192,11 +231,21 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 	}
 	r.AddCookie(cookie)
 
-	return
+	if manager.config.EnableSidInHttpHeader {
+		r.Header.Set(manager.config.SessionNameInHttpHeader, sid)
+		w.Header().Set(manager.config.SessionNameInHttpHeader, sid)
+	}
+
+	return session, err
 }
 
 // SessionDestroy Destroy session by its id in http request cookie.
 func (manager *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
+	if manager.config.EnableSidInHttpHeader {
+		r.Header.Del(manager.config.SessionNameInHttpHeader)
+		w.Header().Del(manager.config.SessionNameInHttpHeader)
+	}
+
 	cookie, err := r.Cookie(manager.config.CookieName)
 	if err != nil || cookie.Value == "" {
 		return
@@ -217,9 +266,8 @@ func (manager *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSessionStore Get SessionStore by its id.
-func (manager *Manager) GetSessionStore(sid string) (sessions Store, err error) {
-	sessions, err = manager.provider.SessionRead(sid)
-	return
+func (manager *Manager) GetSessionStore(sid string) (Store, error) {
+	return manager.provider.SessionRead(sid)
 }
 
 // GC Start session gc process.
@@ -230,11 +278,12 @@ func (manager *Manager) GC() {
 }
 
 // SessionRegenerateID Regenerate a session id for this SessionStore who's id is saving in http request.
-func (manager *Manager) SessionRegenerateID(w http.ResponseWriter, r *http.Request) (session Store) {
+func (manager *Manager) SessionRegenerateID(w http.ResponseWriter, r *http.Request) Store {
 	sid, err := manager.sessionID()
 	if err != nil {
-		return
+		return nil
 	}
+	var session Store
 	cookie, err := r.Cookie(manager.config.CookieName)
 	if err != nil || cookie.Value == "" {
 		//delete old cookie
@@ -261,7 +310,13 @@ func (manager *Manager) SessionRegenerateID(w http.ResponseWriter, r *http.Reque
 		http.SetCookie(w, cookie)
 	}
 	r.AddCookie(cookie)
-	return
+
+	if manager.config.EnableSidInHttpHeader {
+		r.Header.Set(manager.config.SessionNameInHttpHeader, sid)
+		w.Header().Set(manager.config.SessionNameInHttpHeader, sid)
+	}
+
+	return session
 }
 
 // GetActiveSession Get all active sessions count number.
@@ -295,4 +350,16 @@ func (manager *Manager) isSecure(req *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+// Log implement the log.Logger
+type Log struct {
+	*log.Logger
+}
+
+// NewSessionLog set io.Writer to create a Logger for session.
+func NewSessionLog(out io.Writer) *Log {
+	sl := new(Log)
+	sl.Logger = log.New(out, "[SESSION]", 1e9)
+	return sl
 }

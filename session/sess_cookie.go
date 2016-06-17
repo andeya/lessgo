@@ -34,11 +34,10 @@ type CookieSessionStore struct {
 
 // Set value to cookie session.
 // the value are encoded as gob with hash block string.
-func (st *CookieSessionStore) Set(key, value interface{}) error {
+func (st *CookieSessionStore) Set(key, value interface{}) {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	st.values[key] = value
-	return nil
 }
 
 // Get value from cookie session
@@ -52,19 +51,17 @@ func (st *CookieSessionStore) Get(key interface{}) interface{} {
 }
 
 // Delete value in cookie session
-func (st *CookieSessionStore) Delete(key interface{}) error {
+func (st *CookieSessionStore) Delete(key interface{}) {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	delete(st.values, key)
-	return nil
 }
 
 // Flush Clean all values in cookie session
-func (st *CookieSessionStore) Flush() error {
+func (st *CookieSessionStore) Flush() {
 	st.lock.Lock()
 	defer st.lock.Unlock()
 	st.values = make(map[interface{}]interface{})
-	return nil
 }
 
 // SessionID Return id of this cookie session
@@ -81,7 +78,7 @@ func (st *CookieSessionStore) SessionRelease(w http.ResponseWriter) {
 	if err != nil {
 		return
 	}
-	cookie := &http.Cookie{Name: cookiepder.config.CookieName,
+	cookie := &http.Cookie{Name: CookieName,
 		Value:    url.QueryEscape(str),
 		Path:     "/",
 		HttpOnly: true,
@@ -95,7 +92,6 @@ type cookieConfig struct {
 	SecurityKey  string `json:"securityKey"`
 	BlockKey     string `json:"blockKey"`
 	SecurityName string `json:"securityName"`
-	CookieName   string `json:"cookieName"`
 	Secure       bool   `json:"secure"`
 	Maxage       int    `json:"maxage"`
 }
@@ -106,6 +102,8 @@ type CookieProvider struct {
 	config      *cookieConfig
 	block       cipher.Block
 }
+
+var CookieName string
 
 // SessionInit Init cookie session provider with max lifetime and config json.
 // maxlifetime is ignored.

@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"reflect"
+	"runtime"
 	"strings"
 )
 
@@ -45,4 +47,14 @@ func CamelString(s string) string {
 		data = append(data, d)
 	}
 	return string(data[:])
+}
+
+// 获取对象的类型名称
+func ObjectName(i interface{}) string {
+	v := reflect.ValueOf(i)
+	t := v.Type()
+	if t.Kind() == reflect.Func {
+		return runtime.FuncForPC(v.Pointer()).Name()
+	}
+	return t.String()
 }

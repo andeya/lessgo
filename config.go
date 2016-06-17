@@ -2,33 +2,31 @@ package lessgo
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 
-	"github.com/lessgo/lessgo/config"
+	confpkg "github.com/lessgo/lessgo/config"
 	"github.com/lessgo/lessgo/logs"
-	"github.com/lessgo/lessgo/session"
 )
 
 type (
-	// Config is the main struct for BConfig
-	Config struct {
-		AppName             string // Application name
-		Info                Info   // Application info
-		Debug               bool   // enable/disable debug mode.
-		CrossDomain         bool
-		RouterCaseSensitive bool  // 是否路由忽略大小写匹配，默认是 true，区分大小写
-		MaxMemoryMB         int64 // 文件上传默认内存缓存大小，单位MB
-		Listen              Listen
-		Session             SessionConfig
-		Log                 LogConfig
-		FileCache           FileCacheConfig
-		DefaultDB           string
-		DBList              map[string]DBConfig
+	// Config is the main struct for Config
+	config struct {
+		AppName     string // Application name
+		Info        Info   // Application info
+		Debug       bool   // enable/disable debug mode.
+		CrossDomain bool
+		MaxMemoryMB int64 // 文件上传默认内存缓存大小，单位MB
+		Listen      Listen
+		Session     SessionConfig
+		Log         LogConfig
+		FileCache   FileCacheConfig
 	}
 	Info struct {
-		Version     string
-		Description string
-		// Host              string
+		Version           string
+		Description       string
 		Email             string
 		TermsOfServiceUrl string
 		License           string
@@ -46,15 +44,19 @@ type (
 	}
 	// SessionConfig holds session related config
 	SessionConfig struct {
-		Enable          bool
-		CookieName      string
-		Provider        string
-		ProviderConfig  string
-		GcMaxlifetime   int64
-		CookieLifeTime  int64
-		EnableSetCookie bool
-		Domain          string
+		SessionOn               bool
+		SessionProvider         string
+		SessionName             string
+		SessionGCMaxLifetime    int64
+		SessionProviderConfig   string
+		SessionCookieLifeTime   int
+		SessionAutoSetCookie    bool
+		SessionDomain           string
+		EnableSidInHttpHeader   bool //	enable store/get the sessionId into/from http headers
+		SessionNameInHttpHeader string
+		EnableSidInUrlQuery     bool //	enable get the sessionId from Url Query params
 	}
+
 	// LogConfig holds Log related config
 	LogConfig struct {
 		Level     int
@@ -65,66 +67,42 @@ type (
 		SingleFileAllowMB int64 // 允许的最大文件，单位MB
 		MaxCapMB          int64 // 最大缓存总量，单位MB
 	}
-	// DataBase connection Config
-	DBConfig struct {
-		Name         string
-		Driver       string // Driver：mssql | odbc(mssql) | mysql | mymysql | postgres | sqlite3 | oci8 | goracle
-		ConnString   string
-		MaxOpenConns int
-		MaxIdleConns int
-		TableFix     string // 表命名空间是前缀还是后缀：prefix | suffix
-		TableSpace   string // 表命名空间
-		TableSnake   bool   // 表名使用snake风格或保持不变
-		ColumnFix    string // 列命名空间是前缀还是后缀：prefix | suffix
-		ColumnSpace  string // 列命名空间
-		ColumnSnake  bool   // 列名使用snake风格或保持不变
-		DisableCache bool
-		ShowExecTime bool
-		ShowSql      bool
-	}
 )
 
 // 项目固定目录文件名称
 const (
-	BUSINESS_API_DIR  = "BusinessApi"
-	BUSINESS_VIEW_DIR = "BusinessView"
-	SYSTEM_API_DIR    = "SystemApi"
-	SYSTEM_VIEW_DIR   = "SystemView"
-	STATIC_DIR        = "Static"
-	IMG_DIR           = STATIC_DIR + "/Img"
-	JS_DIR            = STATIC_DIR + "/Js"
-	CSS_DIR           = STATIC_DIR + "/Css"
-	TPL_DIR           = STATIC_DIR + "/Tpl"
-	PLUGIN_DIR        = STATIC_DIR + "/Plugin"
-	UPLOADS_DIR       = "Uploads"
-	COMMON_DIR        = "Common"
-	MIDDLEWARE_DIR    = COMMON_DIR + "/Middleware"
+	BIZ_HANDLER_DIR = "bizhandler"
+	BIZ_MODEL_DIR   = "bizmodel"
+	BIZ_VIEW_DIR    = "bizview"
+	SYS_HANDLER_DIR = "syshandler"
+	SYS_MODEL_DIR   = "sysmodel"
+	SYS_VIEW_DIR    = "sysview"
+	STATIC_DIR      = "static"
+	IMG_DIR         = STATIC_DIR + "/img"
+	JS_DIR          = STATIC_DIR + "/js"
+	CSS_DIR         = STATIC_DIR + "/css"
+	TPL_DIR         = STATIC_DIR + "/tpl"
+	PLUGIN_DIR      = STATIC_DIR + "/plugin"
+	UPLOADS_DIR     = "uploads"
+	COMMON_DIR      = "common"
+	MIDDLEWARE_DIR  = "middleware"
+	ROUTER_DIR      = "router"
 
 	TPL_EXT         = ".tpl"
 	STATIC_HTML_EXT = ".html"
 
-	CONFIG_DIR     = "Config"
-	APPCONFIG_FILE = CONFIG_DIR + "/app.config"
-	DBCONFIG_FILE  = CONFIG_DIR + "/db.config"
-
-	DB_DIR            = COMMON_DIR + "/DB"
-	DEFAULTDB_SECTION = "defaultdb"
-
-	VIEW_PKG      = "/View"
-	MODULE_SUFFIX = "Module"
+	CONFIG_DIR        = "config"
+	APPCONFIG_FILE    = CONFIG_DIR + "/app.config"
+	ROUTERCONFIG_FILE = CONFIG_DIR + "/virtrouter.config"
+	LOG_FILE          = "logger/lessgo.log"
 )
 
-var (
-	// BConfig is the default config for Application
-	BConfig = initConfig()
-	// AppConfig is the instance of Config, store the config information from file
-	AppConfig = initConfig()
-	// GlobalSessions is the instance for the session manager
-	GlobalSessions *session.Manager
+const (
+	MB = 1 << 20
 )
 
-func initConfig() *Config {
-	return &Config{
+func newConfig() *config {
+	return &config{
 		AppName: "lessgo",
 		Info: Info{
 			Version:     "0.4.0",
@@ -135,10 +113,9 @@ func initConfig() *Config {
 			License:           "MIT",
 			LicenseUrl:        "https://github.com/lessgo/lessgo/raw/master/doc/LICENSE",
 		},
-		Debug:               true,
-		CrossDomain:         false,
-		RouterCaseSensitive: false,
-		MaxMemoryMB:         64, // 64MB
+		Debug:       true,
+		CrossDomain: false,
+		MaxMemoryMB: 64, // 64MB
 		Listen: Listen{
 			Graceful:      false,
 			Address:       "0.0.0.0:8080",
@@ -149,15 +126,19 @@ func initConfig() *Config {
 			HTTPSKeyFile:  "",
 		},
 		Session: SessionConfig{
-			Enable:          false,
-			CookieName:      "lessgosessionID",
-			Provider:        "memory",
-			ProviderConfig:  `{"cookieName":"gosessionid", "enableSetCookie,omitempty": true, "gclifetime":3600, "maxLifetime": 3600, "secure": false, "sessionIDHashFunc": "sha1", "sessionIDHashKey": "", "cookieLifeTime": 3600, "providerConfig": ""}`,
-			GcMaxlifetime:   3600,
-			CookieLifeTime:  3600,
-			EnableSetCookie: true,
-			Domain:          "",
+			SessionOn:               false,
+			SessionProvider:         "memory",
+			SessionName:             "lessgosessionID",
+			SessionGCMaxLifetime:    3600,
+			SessionProviderConfig:   "",
+			SessionCookieLifeTime:   0, //set cookie default is the browser life
+			SessionAutoSetCookie:    true,
+			SessionDomain:           "",
+			EnableSidInHttpHeader:   false, //	enable store/get the sessionId into/from http headers
+			SessionNameInHttpHeader: "Lessgosessionid",
+			EnableSidInUrlQuery:     false, //	enable get the sessionId from Url Query params
 		},
+
 		FileCache: FileCacheConfig{
 			CacheSecond:       600, // 600s
 			SingleFileAllowMB: 64,  // 64MB
@@ -167,255 +148,138 @@ func initConfig() *Config {
 			Level:     logs.DEBUG,
 			AsyncChan: 1000,
 		},
-		DefaultDB: "lessgo",
-		DBList: map[string]DBConfig{
-			"lessgo": {
-				Name:         "lessgo",
-				Driver:       "sqlite3",
-				ConnString:   DB_DIR + "/sqlite.db",
-				MaxOpenConns: 1,
-				MaxIdleConns: 1,
-				TableFix:     "prefix",
-				TableSpace:   "",
-				TableSnake:   true,
-				ColumnFix:    "prefix",
-				ColumnSpace:  "",
-				ColumnSnake:  true,
-				DisableCache: false,
-				ShowExecTime: false,
-				ShowSql:      false,
-			},
-		},
 	}
 }
 
-func defaultAppConfig(iniconf *config.IniConfigContainer) {
-	iniconf.Set("system::appname", BConfig.AppName)
-	iniconf.Set("system::debug", fmt.Sprint(BConfig.Debug))
-	iniconf.Set("system::crossdomain", fmt.Sprint(BConfig.CrossDomain))
-	iniconf.Set("system::casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
-	iniconf.Set("system::maxmemorymb", fmt.Sprint(BConfig.MaxMemoryMB))
+func (this *config) LoadMainConfig() (err error) {
+	fname := APPCONFIG_FILE
+	iniconf, err := confpkg.NewConfig("ini", fname)
+	if err == nil {
+		os.Remove(fname)
+		ReadSingleConfig("system", Config, iniconf)
+		ReadSingleConfig("filecache", &this.FileCache, iniconf)
+		ReadSingleConfig("info", &this.Info, iniconf)
+		ReadSingleConfig("listen", &this.Listen, iniconf)
+		ReadSingleConfig("log", &this.Log, iniconf)
+		ReadSingleConfig("session", &this.Session, iniconf)
+	}
+	os.MkdirAll(filepath.Dir(fname), 0777)
+	f, err := os.Create(fname)
+	if err != nil {
+		return err
+	}
+	f.Close()
+	iniconf, err = confpkg.NewConfig("ini", fname)
+	if err != nil {
+		return err
+	}
+	WriteSingleConfig("system", Config, iniconf)
+	WriteSingleConfig("filecache", &this.FileCache, iniconf)
+	WriteSingleConfig("info", &this.Info, iniconf)
+	WriteSingleConfig("listen", &this.Listen, iniconf)
+	WriteSingleConfig("log", &this.Log, iniconf)
+	WriteSingleConfig("session", &this.Session, iniconf)
 
-	iniconf.Set("info::version", BConfig.Info.Version)
-	iniconf.Set("info::description", BConfig.Info.Description)
-	// iniconf.Set("info::host", BConfig.Info.Host)
-	iniconf.Set("info::email", BConfig.Info.Email)
-	iniconf.Set("info::termsofserviceurl", BConfig.Info.TermsOfServiceUrl)
-	iniconf.Set("info::license", BConfig.Info.License)
-	iniconf.Set("info::licenseurl", BConfig.Info.LicenseUrl)
-
-	iniconf.Set("filecache::cachesecond", fmt.Sprint(BConfig.FileCache.CacheSecond))
-	iniconf.Set("filecache::singlefileallowmb", fmt.Sprint(BConfig.FileCache.SingleFileAllowMB))
-	iniconf.Set("filecache::maxcapmb", fmt.Sprint(BConfig.FileCache.MaxCapMB))
-
-	iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
-	iniconf.Set("listen::address", fmt.Sprint(BConfig.Listen.Address))
-	iniconf.Set("listen::readtimeout", fmt.Sprint(BConfig.Listen.ReadTimeout))
-	iniconf.Set("listen::writetimeout", fmt.Sprint(BConfig.Listen.WriteTimeout))
-	iniconf.Set("listen::enablehttps", fmt.Sprint(BConfig.Listen.EnableHTTPS))
-	iniconf.Set("listen::httpscertfile", fmt.Sprint(BConfig.Listen.HTTPSCertFile))
-	iniconf.Set("listen::httpskeyfile", fmt.Sprint(BConfig.Listen.HTTPSKeyFile))
-
-	iniconf.Set("session::enable", fmt.Sprint(BConfig.Session.Enable))
-	iniconf.Set("session::cookiename", fmt.Sprint(BConfig.Session.CookieName))
-	iniconf.Set("session::provider", fmt.Sprint(BConfig.Session.Provider))
-	iniconf.Set("session::providerconfig", fmt.Sprint(BConfig.Session.ProviderConfig))
-	iniconf.Set("session::gcmaxlifetime", fmt.Sprint(BConfig.Session.GcMaxlifetime))
-	iniconf.Set("session::cookielifetime", fmt.Sprint(BConfig.Session.CookieLifeTime))
-	iniconf.Set("session::enablesetcookie", fmt.Sprint(BConfig.Session.EnableSetCookie))
-	iniconf.Set("session::domain", fmt.Sprint(BConfig.Session.Domain))
-
-	iniconf.Set("log::level", logLevelString(BConfig.Log.Level))
-	iniconf.Set("log::asyncchan", fmt.Sprint(BConfig.Log.AsyncChan))
+	return iniconf.SaveConfigFile(fname)
 }
 
-func defaultDBConfig(iniconf *config.IniConfigContainer) {
-	for _, db := range BConfig.DBList {
-		var section string
-		if BConfig.DefaultDB == db.Name {
-			section = fmt.Sprintf("%v::", DEFAULTDB_SECTION)
-		} else {
-			section = fmt.Sprintf("%v::", db.Name)
+func ReadSingleConfig(section string, p interface{}, iniconf confpkg.Configer) {
+	pt := reflect.TypeOf(p)
+	if pt.Kind() != reflect.Ptr {
+		return
+	}
+	pt = pt.Elem()
+	if pt.Kind() != reflect.Struct {
+		return
+	}
+	pv := reflect.ValueOf(p).Elem()
+
+	for i := 0; i < pt.NumField(); i++ {
+		pf := pv.Field(i)
+		if !pf.CanSet() {
+			continue
 		}
-		iniconf.Set(section+"name", db.Name)
-		iniconf.Set(section+"driver", db.Driver)
-		iniconf.Set(section+"connstring", db.ConnString)
-		iniconf.Set(section+"maxopenconns", fmt.Sprint(db.MaxOpenConns))
-		iniconf.Set(section+"maxidleconns", fmt.Sprint(db.MaxIdleConns))
-		iniconf.Set(section+"tablefix", strings.ToLower(db.TableFix))
-		iniconf.Set(section+"tablespace", db.TableSpace)
-		iniconf.Set(section+"tablesnake", fmt.Sprint(db.TableSnake))
-		iniconf.Set(section+"columnfix", strings.ToLower(db.ColumnFix))
-		iniconf.Set(section+"columnpace", db.ColumnSpace)
-		iniconf.Set(section+"columnsnake", fmt.Sprint(db.ColumnSnake))
-		iniconf.Set(section+"disablecache", fmt.Sprint(db.DisableCache))
-		iniconf.Set(section+"showexectime", fmt.Sprint(db.ShowExecTime))
-		iniconf.Set(section+"showsql", fmt.Sprint(db.ShowSql))
+		name := pt.Field(i).Name
+		fullname := getfullname(section, name)
+		switch pf.Kind() {
+		case reflect.String:
+			str := iniconf.DefaultString(fullname, pf.String())
+			switch name {
+			case "TableFix", "ColumnFix":
+				pf.SetString(strings.ToLower(str))
+			default:
+				pf.SetString(str)
+			}
+
+		case reflect.Int, reflect.Int64:
+			num := int64(iniconf.DefaultInt64(fullname, pf.Int()))
+			switch fullname {
+			case "system::maxmemorymb":
+				if num >= 0 {
+					pf.SetInt(num)
+				}
+			case "filecache::cachesecond", "filecache::singlefileallowmb", "filecache::maxcapmb",
+				"listen::readtimeout", "listen::writetimeout",
+				"session::sessiongcmaxlifetime", "session::sessioncookielifetime":
+				if num > 0 {
+					pf.SetInt(num)
+				}
+			case "log::asyncchan":
+				if num >= 0 {
+					pf.SetInt(num)
+				}
+			case "log::level":
+				str := logLevelString(int(num))
+				str2 := iniconf.DefaultString(fullname, str)
+				num = int64(logLevelInt(str2))
+				if num != -10 {
+					pf.SetInt(num)
+				}
+			default:
+				pf.SetInt(num)
+			}
+
+		case reflect.Bool:
+			pf.SetBool(iniconf.DefaultBool(fullname, pf.Bool()))
+		}
 	}
 }
 
-func trySetDBConfig(iniconf *config.IniConfigContainer) {
-	defDB := BConfig.DBList["lessgo"]
-	delete(AppConfig.DBList, "lessgo") // 移除预设数据库
-	for _, s := range iniconf.Sections() {
-		dbconfig := DBConfig{
-			Name:         iniconf.String(s + "::name"),
-			Driver:       iniconf.String(s + "::driver"),
-			ConnString:   iniconf.String(s + "::connstring"),
-			MaxOpenConns: iniconf.DefaultInt(s+"::maxopenconns", defDB.MaxOpenConns),
-			MaxIdleConns: iniconf.DefaultInt(s+"::maxidleconns", defDB.MaxIdleConns),
-			TableFix:     strings.ToLower(iniconf.String(s + "::tablefix")),
-			TableSpace:   iniconf.String(s + "::tablespace"),
-			TableSnake:   iniconf.DefaultBool(s+"::tablesnake", defDB.TableSnake),
-			ColumnFix:    strings.ToLower(iniconf.String(s + "::columnfix")),
-			ColumnSpace:  iniconf.String(s + "::columnpace"),
-			ColumnSnake:  iniconf.DefaultBool(s+"::columnsnake", defDB.ColumnSnake),
-			DisableCache: iniconf.DefaultBool(s+"::disablecache", defDB.DisableCache),
-			ShowExecTime: iniconf.DefaultBool(s+"::showexectime", defDB.ShowExecTime),
-			ShowSql:      iniconf.DefaultBool(s+"::showsql", defDB.ShowSql),
+func WriteSingleConfig(section string, p interface{}, iniconf confpkg.Configer) {
+	pt := reflect.TypeOf(p)
+	if pt.Kind() != reflect.Ptr {
+		return
+	}
+	pt = pt.Elem()
+	if pt.Kind() != reflect.Struct {
+		return
+	}
+	pv := reflect.ValueOf(p).Elem()
+
+	for i := 0; i < pt.NumField(); i++ {
+		pf := pv.Field(i)
+		if !pf.CanSet() {
+			continue
 		}
-		if strings.ToLower(s) == DEFAULTDB_SECTION {
-			AppConfig.DefaultDB = dbconfig.Name
+		fullname := getfullname(section, pt.Field(i).Name)
+		switch pf.Kind() {
+		case reflect.String, reflect.Int, reflect.Int64, reflect.Bool:
+			switch fullname {
+			case "log::level":
+				iniconf.Set(fullname, logLevelString(int(pf.Int())))
+			default:
+				iniconf.Set(fullname, fmt.Sprint(pf.Interface()))
+			}
 		}
-		AppConfig.DBList[dbconfig.Name] = dbconfig
 	}
 }
 
-func trySetAppConfig(iniconf *config.IniConfigContainer) {
-	var err error
-	if AppConfig.AppName = iniconf.String("system::appname"); AppConfig.AppName == "" {
-		iniconf.Set("system::appname", BConfig.AppName)
-		AppConfig.AppName = BConfig.AppName
+// section name and key name case insensitive
+func getfullname(section, name string) string {
+	if section == "" {
+		return strings.ToLower(name)
 	}
-	if AppConfig.Debug, err = iniconf.Bool("system::debug"); err != nil {
-		iniconf.Set("system::debug", fmt.Sprint(BConfig.Debug))
-		AppConfig.Debug = BConfig.Debug
-	}
-	if AppConfig.CrossDomain, err = iniconf.Bool("system::crossdomain"); err != nil {
-		iniconf.Set("system::crossdomain", fmt.Sprint(BConfig.CrossDomain))
-		AppConfig.CrossDomain = BConfig.CrossDomain
-	}
-	if AppConfig.RouterCaseSensitive, err = iniconf.Bool("system::casesensitive"); err != nil {
-		iniconf.Set("system::casesensitive", fmt.Sprint(BConfig.RouterCaseSensitive))
-		AppConfig.RouterCaseSensitive = BConfig.RouterCaseSensitive
-	}
-	if AppConfig.MaxMemoryMB, err = iniconf.Int64("system::maxmemorymb"); AppConfig.MaxMemoryMB <= 0 || err != nil {
-		iniconf.Set("system::maxmemorymb", fmt.Sprint(BConfig.MaxMemoryMB))
-		AppConfig.MaxMemoryMB = BConfig.MaxMemoryMB
-	}
-
-	if AppConfig.Info.Version = iniconf.String("info::version"); AppConfig.Info.Version == "" {
-		iniconf.Set("info::version", BConfig.Info.Version)
-		AppConfig.Info.Version = BConfig.Info.Version
-	}
-	if AppConfig.Info.Description = iniconf.String("info::description"); AppConfig.Info.Description == "" {
-		iniconf.Set("info::description", BConfig.Info.Description)
-		AppConfig.Info.Description = BConfig.Info.Description
-	}
-	// if AppConfig.Info.Host = iniconf.String("info::host"); AppConfig.Info.Host == "" {
-	// 	iniconf.Set("info::host", BConfig.Info.Host)
-	// 	AppConfig.Info.Host = BConfig.Info.Host
-	// }
-	if AppConfig.Info.Email = iniconf.String("info::email"); AppConfig.Info.Email == "" {
-		iniconf.Set("info::email", BConfig.Info.Email)
-		AppConfig.Info.Email = BConfig.Info.Email
-	}
-	if AppConfig.Info.TermsOfServiceUrl = iniconf.String("info::termsofserviceurl"); AppConfig.Info.TermsOfServiceUrl == "" {
-		iniconf.Set("info::termsofserviceurl", BConfig.Info.TermsOfServiceUrl)
-		AppConfig.Info.TermsOfServiceUrl = BConfig.Info.TermsOfServiceUrl
-	}
-	if AppConfig.Info.License = iniconf.String("info::license"); AppConfig.Info.License == "" {
-		iniconf.Set("info::license", BConfig.Info.License)
-		AppConfig.Info.License = BConfig.Info.License
-	}
-	if AppConfig.Info.LicenseUrl = iniconf.String("info::licenseurl"); AppConfig.Info.LicenseUrl == "" {
-		iniconf.Set("info::licenseurl", BConfig.Info.LicenseUrl)
-		AppConfig.Info.LicenseUrl = BConfig.Info.LicenseUrl
-	}
-
-	if AppConfig.FileCache.CacheSecond, err = iniconf.Int64("filecache::cachesecond"); AppConfig.FileCache.CacheSecond <= 0 || err != nil {
-		iniconf.Set("filecache::cachesecond", fmt.Sprint(BConfig.FileCache.CacheSecond))
-		AppConfig.FileCache.CacheSecond = BConfig.FileCache.CacheSecond
-	}
-	if AppConfig.FileCache.SingleFileAllowMB, err = iniconf.Int64("filecache::singlefileallowmb"); AppConfig.FileCache.SingleFileAllowMB <= 0 || err != nil {
-		iniconf.Set("filecache::singlefileallowmb", fmt.Sprint(BConfig.FileCache.SingleFileAllowMB))
-		AppConfig.FileCache.SingleFileAllowMB = BConfig.FileCache.SingleFileAllowMB
-	}
-	if AppConfig.FileCache.MaxCapMB, err = iniconf.Int64("filecache::maxcapmb"); AppConfig.FileCache.MaxCapMB <= 0 || err != nil {
-		iniconf.Set("filecache::maxcapmb", fmt.Sprint(BConfig.FileCache.MaxCapMB))
-		AppConfig.FileCache.MaxCapMB = BConfig.FileCache.MaxCapMB
-	}
-
-	if AppConfig.Listen.Graceful, err = iniconf.Bool("listen::graceful"); err != nil {
-		iniconf.Set("listen::graceful", fmt.Sprint(BConfig.Listen.Graceful))
-		AppConfig.Listen.Graceful = BConfig.Listen.Graceful
-	}
-	if AppConfig.Listen.Address = iniconf.String("listen::address"); AppConfig.Listen.Address == "" {
-		iniconf.Set("listen::address", fmt.Sprint(BConfig.Listen.Address))
-		AppConfig.Listen.Address = BConfig.Listen.Address
-	}
-	if AppConfig.Listen.ReadTimeout, err = iniconf.Int64("listen::readtimeout"); AppConfig.Listen.ReadTimeout < 0 || err != nil {
-		iniconf.Set("listen::readtimeout", fmt.Sprint(BConfig.Listen.ReadTimeout))
-		AppConfig.Listen.ReadTimeout = BConfig.Listen.ReadTimeout
-	}
-	if AppConfig.Listen.WriteTimeout, err = iniconf.Int64("listen::writetimeout"); AppConfig.Listen.WriteTimeout < 0 || err != nil {
-		iniconf.Set("listen::writetimeout", fmt.Sprint(BConfig.Listen.WriteTimeout))
-		AppConfig.Listen.WriteTimeout = BConfig.Listen.WriteTimeout
-	}
-	if AppConfig.Listen.EnableHTTPS, err = iniconf.Bool("listen::enablehttps"); err != nil {
-		iniconf.Set("listen::enablehttps", fmt.Sprint(BConfig.Listen.EnableHTTPS))
-		AppConfig.Listen.EnableHTTPS = BConfig.Listen.EnableHTTPS
-	}
-	if AppConfig.Listen.HTTPSCertFile = iniconf.String("listen::httpscertfile"); AppConfig.Listen.HTTPSCertFile == "" {
-		iniconf.Set("listen::httpscertfile", fmt.Sprint(BConfig.Listen.HTTPSCertFile))
-		AppConfig.Listen.HTTPSCertFile = BConfig.Listen.HTTPSCertFile
-	}
-	if AppConfig.Listen.HTTPSKeyFile = iniconf.String("listen::httpskeyfile"); AppConfig.Listen.HTTPSKeyFile == "" {
-		iniconf.Set("listen::httpskeyfile", fmt.Sprint(BConfig.Listen.HTTPSKeyFile))
-		AppConfig.Listen.HTTPSKeyFile = BConfig.Listen.HTTPSKeyFile
-	}
-
-	if AppConfig.Session.Enable, err = iniconf.Bool("session::enable"); err != nil {
-		iniconf.Set("session::enable", fmt.Sprint(BConfig.Session.Enable))
-		AppConfig.Session.Enable = BConfig.Session.Enable
-	}
-	if AppConfig.Session.CookieName = iniconf.String("session::cookiename"); AppConfig.Session.CookieName == "" {
-		iniconf.Set("session::cookiename", fmt.Sprint(BConfig.Session.CookieName))
-		AppConfig.Session.CookieName = BConfig.Session.CookieName
-	}
-	if AppConfig.Session.Provider = iniconf.String("session::provider"); AppConfig.Session.Provider == "" {
-		iniconf.Set("session::provider", fmt.Sprint(BConfig.Session.Provider))
-		AppConfig.Session.Provider = BConfig.Session.Provider
-	}
-	if AppConfig.Session.ProviderConfig = iniconf.String("session::providerconfig"); AppConfig.Session.ProviderConfig == "" {
-		iniconf.Set("session::providerconfig", fmt.Sprint(BConfig.Session.ProviderConfig))
-		AppConfig.Session.ProviderConfig = BConfig.Session.ProviderConfig
-	}
-	if AppConfig.Session.GcMaxlifetime, err = iniconf.Int64("session::gcmaxlifetime"); AppConfig.Session.GcMaxlifetime < 0 || err != nil {
-		iniconf.Set("session::gcmaxlifetime", fmt.Sprint(BConfig.Session.GcMaxlifetime))
-		AppConfig.Session.GcMaxlifetime = BConfig.Session.GcMaxlifetime
-	}
-	if AppConfig.Session.CookieLifeTime, err = iniconf.Int64("session::gcmaxlifetime"); AppConfig.Session.CookieLifeTime < 0 || err != nil {
-		iniconf.Set("session::cookielifetime", fmt.Sprint(BConfig.Session.CookieLifeTime))
-		AppConfig.Session.CookieLifeTime = BConfig.Session.CookieLifeTime
-	}
-	if AppConfig.Session.EnableSetCookie, err = iniconf.Bool("session::enablesetcookie"); err != nil {
-		iniconf.Set("session::enablesetcookie", fmt.Sprint(BConfig.Session.EnableSetCookie))
-		AppConfig.Session.EnableSetCookie = BConfig.Session.EnableSetCookie
-	}
-	if AppConfig.Session.Domain = iniconf.String("session::domain"); AppConfig.Session.Domain == "" {
-		iniconf.Set("session::domain", fmt.Sprint(BConfig.Session.Domain))
-		AppConfig.Session.Domain = BConfig.Session.Domain
-	}
-
-	if AppConfig.Log.Level = logLevelInt(iniconf.String("log::level")); AppConfig.Log.Level == -10 {
-		iniconf.Set("log::level", logLevelString(BConfig.Log.Level))
-		AppConfig.Log.Level = BConfig.Log.Level
-	}
-	if AppConfig.Log.AsyncChan, err = iniconf.Int64("log::asyncchan"); AppConfig.Log.AsyncChan <= 0 || err != nil {
-		iniconf.Set("log::asyncchan", fmt.Sprint(BConfig.Log.AsyncChan))
-		AppConfig.Log.AsyncChan = BConfig.Log.AsyncChan
-	}
+	return strings.ToLower(section + "::" + name)
 }
 
 func logLevelInt(l string) int {
@@ -435,6 +299,7 @@ func logLevelInt(l string) int {
 	}
 	return -10
 }
+
 func logLevelString(l int) string {
 	switch l {
 	case logs.DEBUG:

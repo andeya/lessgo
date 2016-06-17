@@ -10,38 +10,33 @@ import (
 	"path"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/lessgo/lessgo/grace"
 	"github.com/lessgo/lessgo/logs"
+	"github.com/lessgo/lessgo/logs/color"
 	"github.com/lessgo/lessgo/session"
 	"github.com/lessgo/lessgo/websocket"
 )
 
 type (
-	// Echo is the top-level framework instance.
-	Echo struct {
-		prefix           string
-		middleware       []MiddlewareFunc
-		head             HandlerFunc
-		pristineHead     HandlerFunc
-		maxParam         *int
-		notFoundHandler  HandlerFunc
-		httpErrorHandler HTTPErrorHandler
-		binder           Binder
-		renderer         Renderer
-		pool             sync.Pool
-		debug            bool
-		router           *Router
-		logger           logs.Logger
-		lock             sync.RWMutex
-		routerIndex      int
-		caseSensitive    bool
-		memoryCache      *MemoryCache
-		sessions         *session.Manager
-		server           *http.Server
+	// App is the top-level framework instancthis.
+	App struct {
+		debug        bool
+		router       *Router
+		routes       map[string]Route
+		routerIndex  int
+		chainNodes   []MiddlewareFunc
+		chainHandler HandlerFunc
+		sessions     *session.Manager
+		binder       Binder
+		renderer     Renderer
+		memoryCache  *MemoryCache
+		ctxPool      sync.Pool
+		lock         sync.RWMutex
 	}
 
 	// Route contains a handler and information for matching against requests.
@@ -51,17 +46,11 @@ type (
 		Handler string
 	}
 
-	// HTTPError represents an error that occured while handling a request.
-	HTTPError struct {
-		Code    int
-		Message string
-	}
-
 	// HandlerFunc defines a function to server HTTP requests.
-	HandlerFunc func(Context) error
+	HandlerFunc func(*Context) error
 
-	// HTTPErrorHandler is a centralized HTTP error handler.
-	HTTPErrorHandler func(error, Context)
+	// MiddlewareFunc defines a function to process middleware.
+	MiddlewareFunc func(HandlerFunc) HandlerFunc
 
 	// Validator is the interface that wraps the Validate function.
 	Validator interface {
@@ -70,7 +59,7 @@ type (
 
 	// Renderer is the interface that wraps the Render function.
 	Renderer interface {
-		Render(io.Writer, string, interface{}, Context) error
+		Render(io.Writer, string, interface{}, *Context) error
 	}
 )
 
@@ -150,6 +139,7 @@ const (
 	HeaderXXSSProtection          = "X-XSS-Protection"
 	HeaderXFrameOptions           = "X-Frame-Options"
 	HeaderContentSecurityPolicy   = "Content-Security-Policy"
+	HeaderXCSRFToken              = "X-CSRF-Token"
 )
 
 var (
@@ -173,365 +163,370 @@ var (
 	ErrUnauthorized                = NewHTTPError(http.StatusUnauthorized)
 	ErrMethodNotAllowed            = NewHTTPError(http.StatusMethodNotAllowed)
 	ErrStatusRequestEntityTooLarge = NewHTTPError(http.StatusRequestEntityTooLarge)
+	ErrStatusInternalServerError   = NewHTTPError(http.StatusInternalServerError)
 	ErrRendererNotRegistered       = errors.New("renderer not registered")
 	ErrInvalidRedirectCode         = errors.New("invalid redirect status code")
 	ErrCookieNotFound              = errors.New("cookie not found")
 )
 
-// Error handlers
 var (
-	notFoundHandler = func(c Context) error {
+	// 请求处理链的最末端(最后被调用的空操作)
+	chainEndHandler = HandlerFunc(func(c *Context) error {
+		return nil
+	})
+
+	// 请求的url不存在时的默认操作
+	// 404 Not Found
+	defaultNotFoundHandler = func(c *Context) error {
 		return ErrNotFound
 	}
 
-	methodNotAllowedHandler = func(c Context) error {
+	// 请求的url存在但方法不被允许时的默认操作
+	// 405 Method Not Allowed
+	defaultMethodNotAllowedHandler = func(c *Context) error {
 		return ErrMethodNotAllowed
 	}
 
-	// 请求最后被调用的空操作
-	headHandlerFunc = HandlerFunc(func(c Context) error {
-		return nil
-	})
+	// 请求的操作发生错误后的默认处理
+	// 500 Internal Server Error
+	defaultInternalServerErrorHandler = func(c *Context, err error, rcv interface{}) {
+		code := http.StatusInternalServerError
+		msg := http.StatusText(code)
+		if rcv != nil {
+			msg = fmt.Sprint(rcv)
+			stack := make([]byte, 4<<10) //4KB
+			length := runtime.Stack(stack, true)
+			Log.Error("[%s] %s %s", color.Red("PANIC RECOVER"), msg, stack[:length])
+
+		} else if err != nil {
+			switch e := err.(type) {
+			case *HTTPError:
+				code = e.Code
+				msg = e.Message
+			case error:
+				if Debug() {
+					msg = e.Error()
+				}
+			}
+			Log.Error("%v", err)
+		}
+		if !c.response.Committed() {
+			c.String(code, msg)
+		}
+	}
 )
 
-// New creates an instance of Echo.
-func New() (e *Echo) {
-	e = &Echo{
-		server:        new(http.Server),
-		pristineHead:  headHandlerFunc,
-		head:          headHandlerFunc,
-		maxParam:      new(int),
-		logger:        logs.Global,
-		binder:        &binder{},
-		caseSensitive: true,
+// New creates an instance of App.
+func newApp() (this *App) {
+	this = &App{
+		chainHandler: chainEndHandler,
+		binder:       &binder{},
 	}
-	e.pool.New = func() interface{} {
-		return e.NewContext(new(Response), new(Request))
-	}
-	e.router = NewRouter(e)
-	e.middleware = []MiddlewareFunc{e.router.Process}
-	e.chainMiddleware()
 
-	// Defaults
-	e.SetHTTPErrorHandler(e.DefaultHTTPErrorHandler)
-	e.logger.AddAdapter("console", "")
-	e.logger.AddAdapter("file", `{"filename":"Logger/lessgo.log"}`)
-	e.SetDebug(true)
+	this.ctxPool.New = func() interface{} {
+		return this.newContext(new(Response), new(http.Request))
+	}
+
+	this.router = newRouter()
+
+	this.chainNodes = []MiddlewareFunc{this.router.process}
+	this.resetChain()
+
+	this.SetDebug(true)
 	return
 }
 
-// NewContext returns a Context instance.
-func (e *Echo) NewContext(resp *Response, req *Request) Context {
-	return &context{
-		request:  req,
-		response: resp,
-		echo:     e,
-		pvalues:  make([]string, *e.maxParam),
-		store:    make(store),
-		handler:  notFoundHandler,
-	}
+func (this *App) Log() logs.Logger {
+	return Log
 }
 
-// Router returns router.
-func (e *Echo) Router() *Router {
-	return e.router
+func (this *App) Sessions() *session.Manager {
+	return this.sessions
 }
 
-// LogFuncCallDepth enable log funcCallDepth.
-func (e *Echo) LogFuncCallDepth(b bool) {
-	e.logger.EnableFuncCallDepth(b)
+func (this *App) SetNotFound(fn func(*Context) error) {
+	this.router.NotFound = HandlerFunc(fn)
 }
 
-// SetLogLevel sets the log level for the logger
-func (e *Echo) SetLogLevel(l int) {
-	e.logger.SetLevel(l)
+func (this *App) SetMethodNotAllowed(fn func(*Context) error) {
+	this.router.MethodNotAllowed = HandlerFunc(fn)
 }
 
-// AddLogger provides a given logger adapter intologs.Logger with config string.
-// config need to be correct JSON as string: {"interval":360}.
-func (e *Echo) AddLogAdapter(adaptername string, config string) error {
-	return e.logger.AddAdapter(adaptername, config)
-}
-
-//logs.Logger returns the logger instance.
-func (e *Echo) Logger() logs.Logger {
-	return e.logger
-}
-
-func (e *Echo) SetCaseSensitive(sensitive bool) {
-	e.caseSensitive = sensitive
-}
-
-func (e *Echo) CaseSensitive() bool {
-	return e.caseSensitive
-}
-
-func (e *Echo) Sessions() *session.Manager {
-	return e.sessions
-}
-
-func (e *Echo) SetSessions(sessions *session.Manager) {
-	e.sessions = sessions
-}
-
-// DefaultHTTPErrorHandler invokes the default HTTP error handler.
-func (e *Echo) DefaultHTTPErrorHandler(err error, c Context) {
-	code := http.StatusInternalServerError
-	msg := http.StatusText(code)
-	if he, ok := err.(*HTTPError); ok {
-		code = he.Code
-		msg = he.Message
-	}
-	if e.debug {
-		msg = err.Error()
-	}
-	if !c.Response().Committed() {
-		c.String(code, msg)
-	}
-	e.logger.Debug("%v", err)
-}
-
-// SetHTTPErrorHandler registers a custom Echo.HTTPErrorHandler.
-func (e *Echo) SetHTTPErrorHandler(h HTTPErrorHandler) {
-	e.httpErrorHandler = h
+func (this *App) SetInternalServerError(fn func(*Context, error, interface{})) {
+	this.router.ErrorPanicHandler = fn
 }
 
 // SetBinder registers a custom binder. It's invoked by `Context#Bind()`.
-func (e *Echo) SetBinder(b Binder) {
-	e.binder = b
+func (this *App) SetBinder(b Binder) {
+	this.binder = b
 }
 
 // SetRenderer registers an HTML template renderer. It's invoked by `Context#Render()`.
-func (e *Echo) SetRenderer(r Renderer) {
-	e.renderer = r
+func (this *App) SetRenderer(r Renderer) {
+	this.renderer = r
 }
 
-// SetDebug enable/disable debug mode.
-func (e *Echo) SetDebug(on bool) {
-	e.debug = on
-	if e.memoryCache != nil {
-		e.memoryCache.SetEnable(!on)
+// SetDebug enable/disable debug modthis.
+func (this *App) SetDebug(on bool) {
+	this.debug = on
+	if this.memoryCache != nil {
+		this.memoryCache.SetEnable(!on)
 	}
 	if on {
-		e.logger.SetLevel(logs.DEBUG)
-		e.logger.EnableFuncCallDepth(true)
+		Log.SetLevel(logs.DEBUG)
+		Log.EnableFuncCallDepth(true)
 	} else {
-		e.logger.EnableFuncCallDepth(false)
+		Log.EnableFuncCallDepth(false)
 	}
 }
 
 // Debug returns debug mode (enabled or disabled).
-func (e *Echo) Debug() bool {
-	return e.debug
+func (this *App) Debug() bool {
+	return this.debug
 }
 
-func (e *Echo) MemoryCacheEnable() bool {
-	return e.memoryCache != nil && e.memoryCache.Enable()
+// 获取文件缓存对象
+func (this *App) MemoryCache() *MemoryCache {
+	return this.memoryCache
 }
 
-func (e *Echo) SetMemoryCache(m *MemoryCache) {
-	m.SetEnable(!e.debug)
-	e.memoryCache = m
+// 判断文件缓存是否开启
+func (this *App) CanMemoryCache() bool {
+	return this.memoryCache != nil && this.memoryCache.Enable()
 }
 
-// PreUse adds middlewares to the beginning of chain.
-func (e *Echo) PreUse(middleware ...MiddlewareFunc) {
-	e.routerIndex += len(middleware)
-	e.middleware = append(middleware, e.middleware...)
-	e.chainMiddleware()
+// 返回当前真实注册的路由列表
+func (this *App) RealRoutes() []Route {
+	count := len(this.routes)
+	keys := make([]string, count)
+	routes := make([]Route, count)
+	m := this.routes
+	i := 0
+	for k := range m {
+		keys[i] = k
+		i++
+	}
+	sort.Strings(keys)
+	for i, k := range keys {
+		routes[i] = m[k]
+	}
+	return routes
 }
 
-// SufUse adds middlewares to the end of chain.
-func (e *Echo) SufUse(middleware ...MiddlewareFunc) {
-	e.middleware = append(e.middleware, middleware...)
-	e.chainMiddleware()
+// ServeHTTP implements `http.Handler` interface, which serves HTTP requests.
+func (this *App) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	this.lock.RLock()
+	var err error
+	var c = this.ctxPool.Get().(*Context)
+	defer func() {
+		rcv := recover()
+		if rcv != nil || err != nil {
+			this.router.ErrorPanicHandler(c, err, rcv)
+		}
+		c.free()
+		this.ctxPool.Put(c)
+		this.lock.RUnlock()
+	}()
+	if err = c.init(rw, req); err != nil {
+		return
+	}
+	// Execute chain
+	err = this.chainHandler(c)
 }
 
-// BeforeUse adds middlewares to the chain which is run before router.
-func (e *Echo) BeforeUse(middleware ...MiddlewareFunc) {
-	chain := make([]MiddlewareFunc, e.routerIndex)
-	copy(chain, e.middleware[:e.routerIndex])
-	chain = append(chain, middleware...)
-	e.middleware = append(chain, e.middleware[e.routerIndex:]...)
-	e.routerIndex += len(middleware)
-	e.chainMiddleware()
-}
+// Run starts the HTTP server.
+func (this *App) run(address, tlsCertfile, tlsKeyfile string, readTimeout, writeTimeout time.Duration, graceful bool) {
+	server := &http.Server{
+		Addr:         address,
+		Handler:      this,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+	}
 
-// AfterUse adds middlewares to the chain which is run after router.
-func (e *Echo) AfterUse(middleware ...MiddlewareFunc) {
-	chain := make([]MiddlewareFunc, e.routerIndex+1)
-	copy(chain, e.middleware[:e.routerIndex+1])
-	chain = append(chain, middleware...)
-	e.middleware = append(chain, e.middleware[e.routerIndex+1:]...)
-	e.chainMiddleware()
-}
+	canHttps := tlsCertfile != "" && tlsKeyfile != ""
 
-func (e *Echo) chainMiddleware() {
-	e.head = e.pristineHead
-	for i := len(e.middleware) - 1; i >= 0; i-- {
-		e.head = e.middleware[i](e.head)
+	var err error
+	if !graceful {
+		if canHttps {
+			err = server.ListenAndServeTLS(tlsCertfile, tlsKeyfile)
+		} else {
+			err = server.ListenAndServe()
+		}
+
+	} else {
+
+		endRunning := make(chan bool, 1)
+		graceServer := grace.NewServer(address, server, Log)
+		if canHttps {
+			go func() {
+				time.Sleep(20 * time.Microsecond)
+				if err = graceServer.ListenAndServeTLS(tlsCertfile, tlsKeyfile); err != nil {
+					err = fmt.Errorf("Grace-ListenAndServeTLS: %v, %d", err, os.Getpid())
+					time.Sleep(100 * time.Microsecond)
+					endRunning <- true
+				}
+			}()
+		} else {
+			go func() {
+				// graceServer.Network = "tcp4"
+				if err = graceServer.ListenAndServe(); err != nil {
+					err = fmt.Errorf("Grace-ListenAndServe: %v, %d", err, os.Getpid())
+					time.Sleep(100 * time.Microsecond)
+					endRunning <- true
+				}
+			}()
+		}
+		<-endRunning
+	}
+
+	if err != nil {
+		Log.Fatal("%v", err)
+		select {}
 	}
 }
 
-// Connect registers a new CONNECT route for a path with matching handler in the
-// router with optional route-level middleware.
-func (e *Echo) Connect(path string, h HandlerFunc, m ...MiddlewareFunc) {
-	e.add(CONNECT, path, h, m...)
+// 设置文件缓存
+func (this *App) setMemoryCache(m *MemoryCache) {
+	m.SetEnable(!this.debug)
+	this.memoryCache = m
 }
 
-// Delete registers a new DELETE route for a path with matching handler in the router
-// with optional route-level middleware.
-func (e *Echo) Delete(path string, h HandlerFunc, m ...MiddlewareFunc) {
-	e.add(DELETE, path, h, m...)
+func (this *App) setSessions(sessions *session.Manager) {
+	this.sessions = sessions
 }
 
-// Get registers a new GET route for a path with matching handler in the router
-// with optional route-level middleware.
-func (e *Echo) Get(path string, h HandlerFunc, m ...MiddlewareFunc) {
-	e.add(GET, path, h, m...)
+// prefixUse adds middlewares to the beginning of chain.
+func (this *App) prefixUse(middleware ...MiddlewareFunc) {
+	this.routerIndex += len(middleware)
+	this.chainNodes = append(middleware, this.chainNodes...)
+	this.resetChain()
 }
 
-// Head registers a new HEAD route for a path with matching handler in the
-// router with optional route-level middleware.
-func (e *Echo) Head(path string, h HandlerFunc, m ...MiddlewareFunc) {
-	e.add(HEAD, path, h, m...)
+// suffixUse adds middlewares to the end of chain.
+func (this *App) suffixUse(middleware ...MiddlewareFunc) {
+	this.chainNodes = append(this.chainNodes, middleware...)
+	this.resetChain()
 }
 
-// Options registers a new OPTIONS route for a path with matching handler in the
-// router with optional route-level middleware.
-func (e *Echo) Options(path string, h HandlerFunc, m ...MiddlewareFunc) {
-	e.add(OPTIONS, path, h, m...)
+// beforeUse adds middlewares to the chain which is run before router.
+func (this *App) beforeUse(middleware ...MiddlewareFunc) {
+	chain := make([]MiddlewareFunc, this.routerIndex)
+	copy(chain, this.chainNodes[:this.routerIndex])
+	chain = append(chain, middleware...)
+	this.chainNodes = append(chain, this.chainNodes[this.routerIndex:]...)
+	this.routerIndex += len(middleware)
+	this.resetChain()
 }
 
-// Patch registers a new PATCH route for a path with matching handler in the
-// router with optional route-level middleware.
-func (e *Echo) Patch(path string, h HandlerFunc, m ...MiddlewareFunc) {
-	e.add(PATCH, path, h, m...)
+// afterUse adds middlewares to the chain which is run after router.
+func (this *App) afterUse(middleware ...MiddlewareFunc) {
+	chain := make([]MiddlewareFunc, this.routerIndex+1)
+	copy(chain, this.chainNodes[:this.routerIndex+1])
+	chain = append(chain, middleware...)
+	this.chainNodes = append(chain, this.chainNodes[this.routerIndex+1:]...)
+	this.resetChain()
 }
 
-// Post registers a new POST route for a path with matching handler in the
-// router with optional route-level middleware.
-func (e *Echo) Post(path string, h HandlerFunc, m ...MiddlewareFunc) {
-	e.add(POST, path, h, m...)
+func (this *App) cleanRouter() {
+	this.router.trees = make(map[string]*node)
+	this.routes = make(map[string]Route)
+	this.chainNodes = []MiddlewareFunc{this.router.process}
+	this.routerIndex = 0
+	this.chainHandler = chainEndHandler
 }
-
-// Put registers a new PUT route for a path with matching handler in the
-// router with optional route-level middleware.
-func (e *Echo) Put(path string, h HandlerFunc, m ...MiddlewareFunc) {
-	e.add(PUT, path, h, m...)
-}
-
-// Trace registers a new TRACE route for a path with matching handler in the
-// router with optional route-level middleware.
-func (e *Echo) Trace(path string, h HandlerFunc, m ...MiddlewareFunc) {
-	e.add(TRACE, path, h, m...)
-}
-
-// Any registers a new route for all HTTP methods and path with matching handler
-// in the router with optional route-level middleware.
-func (e *Echo) Any(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
-	for _, m := range methods {
-		e.add(m, path, handler, middleware...)
+func (this *App) resetChain() {
+	this.chainHandler = chainEndHandler
+	for i := len(this.chainNodes) - 1; i >= 0; i-- {
+		this.chainHandler = this.chainNodes[i](this.chainHandler)
 	}
 }
 
-// Match registers a new route for multiple HTTP methods and path with matching
+// group creates a new router group with prefix and optional group-level middleware.
+func (this *App) group(prefix string, middleware ...MiddlewareFunc) (g *Group) {
+	g = &Group{prefix: prefix, app: this}
+	g.use(middleware...)
+	return
+}
+
+// static registers a new route with path prefix to serve static files from the
+// provided root directory.
+func (this *App) static(prefix, root string, middleware ...MiddlewareFunc) {
+	this.addwithlog(false, GET, prefix+"/*filepath", func(c *Context) error {
+		return c.File(path.Join(root, c.PathParamByIndex(0)))
+	}, middleware...)
+	Log.Sys("| %-7s | %-30s | %v", GET, prefix+"/*filepath", root)
+}
+
+// file registers a new route with path to serve a static filthis.
+func (this *App) file(path, file string, middleware ...MiddlewareFunc) {
+	this.addwithlog(false, GET, path, HandlerFunc(func(c *Context) error {
+		return c.File(file)
+	}), middleware...)
+	Log.Sys("| %-7s | %-30s | %v", GET, path, file)
+}
+
+// match registers a new route for multiple HTTP methods and path with matching
 // handler in the router with optional route-level middleware.
-func (e *Echo) Match(methods []string, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+func (this *App) match(methods []string, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
 	for _, method := range methods {
 		switch method {
 		case WS:
-			e.WebSocket(path, handler, middleware...)
+			this.webSocket(path, handler, middleware...)
 		default:
-			e.add(method, path, handler, middleware...)
+			this.add(method, path, handler, middleware...)
 		}
 	}
 }
 
-// Static registers a new route with path prefix to serve static files from the
-// provided root directory.
-func (e *Echo) Static(prefix, root string, middleware ...MiddlewareFunc) {
-	e.addwithlog(false, GET, prefix+"*", func(c Context) error {
-		return c.File(path.Join(root, c.P(0))) // Param `_`
-	}, middleware...)
-	e.logger.Sys("| %-7s | %-30s | %v", GET, prefix+"*", root)
-}
-
-// File registers a new route with path to serve a static file.
-func (e *Echo) File(path, file string, middleware ...MiddlewareFunc) {
-	e.addwithlog(false, GET, path, HandlerFunc(func(c Context) error {
-		return c.File(file)
-	}), middleware...)
-	e.logger.Sys("| %-7s | %-30s | %v", GET, path, file)
-}
-
-// WebSocket adds a WebSocket route > handler to the router.
-func (e *Echo) WebSocket(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
-	e.addwithlog(false, GET, path, HandlerFunc(func(c Context) error {
+// webSocket adds a webSocket route > handler to the router.
+func (this *App) webSocket(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	this.addwithlog(false, GET, path, HandlerFunc(func(c *Context) error {
 		websocket.Handler(func(ws *websocket.Conn) {
-			c.SetSocket(ws)
+			c.SetWs(ws)
 			err := handler(c)
 			if err != nil {
-				c.Logger().Warn("WebSocket: [%v]%v", c.Request().RealRemoteAddr(), err)
+				Log.Warn("WebSocket: [%v]%v", c.RealRemoteAddr(), err)
 			}
-		}).ServeHTTP(c.Response().Writer(), c.Request().Request)
+		}).ServeHTTP(c.response, c.request)
 		return nil
 	}), middleware...)
-	e.logger.Sys("| %-7s | %-30s | %v", WS, path, handlerName(handler))
+	Log.Sys("| %-7s | %-30s | %v", WS, path, handlerName(handler))
 }
 
-func (e *Echo) add(method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
-	e.addwithlog(true, method, path, handler, middleware...)
+func (this *App) add(method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+	this.addwithlog(true, method, path, handler, middleware...)
 }
 
-func (e *Echo) addwithlog(logprint bool, method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
+func (this *App) addwithlog(logprint bool, method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
 	path = joinpath(path, "")
-	// not case sensitive
-	if !e.caseSensitive {
-		path = strings.ToLower(path)
-	}
 	name := handlerName(handler)
-	e.router.Add(method, path, func(c Context) error {
-		h := handler
-		// Chain middleware
-		for i := len(middleware) - 1; i >= 0; i-- {
-			h = middleware[i](h)
-		}
+	// Chain middleware
+	h := handler
+	for i := len(middleware) - 1; i >= 0; i-- {
+		h = middleware[i](h)
+	}
+	this.router.Handle(method, path, func(c *Context) error {
 		return h(c)
-	}, e)
+	})
 
-	r := Route{
+	this.routes[method+path] = Route{
 		Method:  method,
 		Path:    path,
 		Handler: name,
 	}
-	e.router.routes = append(e.router.routes, r)
+
 	if logprint {
-		e.logger.Sys("| %-7s | %-30s | %v", method, path, name)
+		Log.Sys("| %-7s | %-30s | %v", method, path, name)
 	}
 }
 
-// Group creates a new router group with prefix and optional group-level middleware.
-func (e *Echo) Group(prefix string, m ...MiddlewareFunc) (g *Group) {
-	g = &Group{prefix: prefix, echo: e}
-	g.Use(m...)
-	// Allow all requests to reach the group as they might get dropped if router
-	// doesn't find a match, making none of the group middleware process.
-	for _, method := range methods {
-		e.addwithlog(false, method, prefix+"*", func(c Context) error {
-			return c.NoContent(http.StatusNotFound)
-		}, g.middleware...)
-	}
-	return
-}
-
-// URI generates a URI from handler.
-func (e *Echo) URI(handler HandlerFunc, params ...interface{}) string {
+// uri generates a uri from handler.
+func (this *App) uri(handler HandlerFunc, params ...interface{}) string {
 	uri := new(bytes.Buffer)
 	ln := len(params)
 	n := 0
 	name := handlerName(handler)
-	for _, r := range e.router.routes {
+	for _, r := range this.routes {
 		if r.Handler == name {
 			for i, l := 0, len(r.Path); i < l; i++ {
 				if r.Path[i] == ':' && n < ln {
@@ -550,96 +545,41 @@ func (e *Echo) URI(handler HandlerFunc, params ...interface{}) string {
 	return uri.String()
 }
 
-// URL is an alias for `URI` function.
-func (e *Echo) URL(h HandlerFunc, params ...interface{}) string {
-	return e.URI(h, params...)
+// url is an alias for `uri` function.
+func (this *App) url(h HandlerFunc, params ...interface{}) string {
+	return this.uri(h, params...)
 }
 
-// Routes returns the registered routes.
-func (e *Echo) Routes() []Route {
-	return e.router.routes
-}
-
-// GetContext returns `Context` from the sync.Pool. You must return the context by
-// calling `PutContext()`.
-func (e *Echo) GetContext() Context {
-	return e.pool.Get().(Context)
-}
-
-// PutContext returns `Context` instance back to the sync.Pool. You must call it after
-// `GetContext()`.
-func (e *Echo) PutContext(c Context) {
-	e.pool.Put(c)
-}
-
-// ServeHTTP implements `http.Handler` interface, which serves HTTP requests.
-func (e *Echo) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	e.lock.RLock()
-	defer e.lock.RUnlock()
-	if !e.caseSensitive {
-		req.URL.Path = strings.ToLower(req.URL.Path)
-	}
-
-	c := e.pool.Get().(*context)
-	c.reset(rw, req)
-
-	// Execute chain
-	if err := e.head(c); err != nil {
-		e.httpErrorHandler(err, c)
-	}
-	e.pool.Put(c)
-}
-
-// Run starts the HTTP server.
-func (e *Echo) Run(address, tlsCertfile, tlsKeyfile string, readTimeout, writeTimeout time.Duration, graceful bool) {
-	e.server.Addr = address
-	e.server.Handler = e
-	e.server.ReadTimeout = readTimeout
-	e.server.WriteTimeout = writeTimeout
-
-	canHttps := tlsCertfile != "" && tlsKeyfile != ""
-
-	var err error
-	if !graceful {
-		if canHttps {
-			err = e.server.ListenAndServeTLS(tlsCertfile, tlsKeyfile)
-		} else {
-			err = e.server.ListenAndServe()
-		}
-
-	} else {
-
-		endRunning := make(chan bool, 1)
-		server := grace.NewServer(address, e.server, e.logger)
-		if canHttps {
-			go func() {
-				time.Sleep(20 * time.Microsecond)
-				if err = server.ListenAndServeTLS(tlsCertfile, tlsKeyfile); err != nil {
-					err = fmt.Errorf("Grace-ListenAndServeTLS: %v, %d", err, os.Getpid())
-					time.Sleep(100 * time.Microsecond)
-					endRunning <- true
-				}
-			}()
-		} else {
-			go func() {
-				// server.Network = "tcp4"
-				if err = server.ListenAndServe(); err != nil {
-					err = fmt.Errorf("Grace-ListenAndServe: %v, %d", err, os.Getpid())
-					time.Sleep(100 * time.Microsecond)
-					endRunning <- true
-				}
-			}()
-		}
-		<-endRunning
-	}
-
-	if err != nil {
-		e.logger.Fatal("%v", err)
-		select {}
+// newContext returns a Context instancthis.
+func (this *App) newContext(resp *Response, req *http.Request) *Context {
+	return &Context{
+		request:  req,
+		response: resp,
+		pvalues:  nil,
+		pkeys:    nil,
+		store:    make(store),
 	}
 }
 
-// NewHTTPError creates a new HTTPError instance.
+// getContext returns `Context` from the sync.Pool. You must return the context by
+// calling `putContext()`.
+func (this *App) getContext() *Context {
+	return this.ctxPool.Get().(*Context)
+}
+
+// putContext returns `Context` instance back to the sync.Pool. You must call it after
+// `getContext()`.
+func (this *App) putContext(c *Context) {
+	this.ctxPool.Put(c)
+}
+
+// HTTPError represents an error that occured while handling a request.
+type HTTPError struct {
+	Code    int
+	Message string
+}
+
+// NewHTTPError creates a new HTTPError instancthis.
 func NewHTTPError(code int, msg ...string) *HTTPError {
 	he := &HTTPError{Code: code, Message: http.StatusText(code)}
 	if len(msg) > 0 {
@@ -649,34 +589,9 @@ func NewHTTPError(code int, msg ...string) *HTTPError {
 	return he
 }
 
-// Error makes it compatible with `error` interface.
-func (e *HTTPError) Error() string {
-	return e.Message
-}
-
-// WrapMiddleware wrap `echo.HandlerFunc` into `echo.MiddlewareFunc`.
-func WrapMiddleware(h interface{}) MiddlewareFunc {
-	var x HandlerFunc
-	switch t := h.(type) {
-	case MiddlewareFunc:
-		return t
-	case func(HandlerFunc) HandlerFunc:
-		return MiddlewareFunc(t)
-	case HandlerFunc:
-		x = t
-	case func(Context) error:
-		x = HandlerFunc(t)
-	default:
-		panic("WrapMiddleware's parameter type is incorrect.")
-	}
-	return func(next HandlerFunc) HandlerFunc {
-		return func(c Context) error {
-			if err := x(c); err != nil {
-				return err
-			}
-			return next(c)
-		}
-	}
+// Error makes it compatible with `error` interfacthis.
+func (this *HTTPError) Error() string {
+	return this.Message
 }
 
 func wrapMiddlewares(middleware []interface{}) []MiddlewareFunc {

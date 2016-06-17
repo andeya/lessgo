@@ -2,29 +2,38 @@ package lessgo
 
 import (
 	"encoding/json"
-	"io"
-
+	"errors"
 	"github.com/lessgo/lessgo/pongo2"
+	"io"
+	"sync"
+	"time"
 )
 
 type (
+	Tpl struct {
+		template *pongo2.Template
+		modTime  time.Time
+	}
 	// Pongo2Render is a custom lessgo template renderer using Pongo2.
 	Pongo2Render struct {
-		set   *pongo2.TemplateSet
-		debug bool
+		set      *pongo2.TemplateSet
+		caching  bool // false=disable caching, true=enable caching
+		tplCache map[string]*Tpl
+		sync.RWMutex
 	}
 )
 
 // New creates a new Pongo2Render instance with custom Options.
-func NewPongo2Render(debug bool) *Pongo2Render {
+func NewPongo2Render(caching bool) *Pongo2Render {
 	return &Pongo2Render{
-		set:   pongo2.NewSet("lessgo", pongo2.DefaultLoader),
-		debug: debug,
+		set:      pongo2.NewSet("lessgo", pongo2.DefaultLoader),
+		caching:  caching,
+		tplCache: make(map[string]*Tpl),
 	}
 }
 
 // Render should render the template to the io.Writer.
-func (p *Pongo2Render) Render(w io.Writer, filename string, data interface{}, c Context) error {
+func (p *Pongo2Render) Render(w io.Writer, filename string, data interface{}, c *Context) error {
 	var (
 		template *pongo2.Template
 		data2    = pongo2.Context{}
@@ -40,11 +49,51 @@ func (p *Pongo2Render) Render(w io.Writer, filename string, data interface{}, c 
 		json.Unmarshal(b, &data2)
 	}
 
-	if p.debug {
-		template = pongo2.Must(p.set.FromFile(filename))
+	if p.caching {
+		template = pongo2.Must(p.FromCache(filename))
 	} else {
-		template = pongo2.Must(p.set.FromCache(filename))
+		template = pongo2.Must(p.set.FromFile(filename))
+	}
+	return template.ExecuteWriter(data2, w)
+}
+
+func (p *Pongo2Render) FromCache(fname string) (*pongo2.Template, error) {
+	//从文件系统缓存中获取文件信息
+	fbytes, finfo, exist := lessgo.App.MemoryCache().GetCacheFile(fname)
+
+	// 文件已不存在
+	if !exist {
+		// 移除模板中缓存
+		p.Lock()
+		_, has := p.tplCache[fname]
+		if has {
+			delete(p.tplCache, fname)
+		}
+		p.Unlock()
+		// 返回错误
+		return nil, errors.New(fname + "is not found.")
 	}
 
-	return template.ExecuteWriter(data2, w)
+	// 查看模板缓存
+	p.RLock()
+	tpl, has := p.tplCache[fname]
+	p.RUnlock()
+
+	// 存在模板缓存且文件未更新时，直接读模板缓存
+	if has && p.tplCache[fname].modTime.Equal(finfo.ModTime()) {
+		return tpl.template, nil
+	}
+
+	// 缓存模板不存在或文件已更新时，均新建缓存模板
+	p.Lock()
+	defer p.Unlock()
+
+	// 创建新模板并缓存
+	newtpl, err := p.set.FromBytes(fname, fbytes)
+	if err != nil {
+		return nil, err
+	}
+
+	p.tplCache[fname] = &Tpl{template: newtpl, modTime: finfo.ModTime()}
+	return newtpl, nil
 }

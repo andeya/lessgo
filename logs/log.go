@@ -41,10 +41,6 @@ const (
 	OFF
 )
 
-var (
-	Global = NewLogger(1000)
-)
-
 func NewLogger(channelLen int64) Logger {
 	tl := &TgLogger{logs.NewLogger(channelLen)}
 	tl.BeeLogger.SetLogFuncCallDepth(3)
@@ -53,28 +49,6 @@ func NewLogger(channelLen int64) Logger {
 
 func (t *TgLogger) SetLevel(l int) {
 	t.BeeLogger.SetLevel(level(l))
-}
-
-func Write(p []byte) (n int, err error) {
-	return Global.Write(p)
-}
-func Sys(format string, v ...interface{}) {
-	Global.Sys(format, v...)
-}
-func Fatal(format string, v ...interface{}) {
-	Global.Fatal(format, v...)
-}
-func Error(format string, v ...interface{}) {
-	Global.Error(format, v...)
-}
-func Warn(format string, v ...interface{}) {
-	Global.Warn(format, v...)
-}
-func Info(format string, v ...interface{}) {
-	Global.Info(format, v...)
-}
-func Debug(format string, v ...interface{}) {
-	Global.Debug(format, v...)
 }
 
 func level(l int) int {

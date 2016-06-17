@@ -24,7 +24,7 @@ import (
 //xml parse should incluce in <config></config> tags
 var xmlcontext = `<?xml version="1.0" encoding="UTF-8"?>
 <config>
-<appname>beeapi</appname>
+<appname>lessgoapi</appname>
 <httpport>8080</httpport>
 <mysqlport>3600</mysqlport>
 <PI>3.1415976</PI>
@@ -50,8 +50,8 @@ func TestXML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if xmlconf.String("appname") != "beeapi" {
-		t.Fatal("appname not equal to beeapi")
+	if xmlconf.String("appname") != "lessgoapi" {
+		t.Fatal("appname not equal to lessgoapi")
 	}
 	if port, err := xmlconf.Int("httpport"); err != nil || port != 8080 {
 		t.Error(port)

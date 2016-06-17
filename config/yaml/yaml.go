@@ -42,7 +42,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/beego/goyaml2"
+	"github.com/lessgo/lessgo/config/yaml/goyaml2"
 
 	"github.com/lessgo/lessgo/config"
 )

@@ -4,72 +4,68 @@ import (
 	"encoding/json"
 	"fmt"
 	"mime"
-	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/go-xorm/core"
-	"github.com/go-xorm/xorm"
-
-	"github.com/lessgo/lessgo/config"
-	"github.com/lessgo/lessgo/dbservice"
-	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/session"
-	"github.com/lessgo/lessgo/utils"
 )
 
-func newLessgo() *lessgo {
+func newLessgo() *Lessgo {
 	printInfo()
-	registerAppConfig()
-	registerDBConfig()
+
+	err := Config.LoadMainConfig()
+	if err != nil {
+		fmt.Println(err)
+	}
+
 	registerMime()
 
-	l := &lessgo{
-		app:            New(),
-		AppConfig:      AppConfig,
+	l := &Lessgo{
+		App:            app,
+		config:         Config,
 		home:           "/",
 		serverEnable:   true,
 		apiHandlers:    []*ApiHandler{},
 		apiMiddlewares: []*ApiMiddleware{},
-		before:         []MiddlewareConfig{},
-		after:          []MiddlewareConfig{},
-		prefix:         []MiddlewareConfig{},
-		suffix:         []MiddlewareConfig{},
+		virtBefore:     []*MiddlewareConfig{},
+		virtAfter:      []*MiddlewareConfig{},
+		virtStatics:    []*VirtStatic{},
+		virtFiles:      []*VirtFile{},
 		virtRouter:     newRootVirtRouter(),
 	}
 
-	// 初始化日志
-	l.app.Logger().SetMsgChan(AppConfig.Log.AsyncChan)
-	l.app.SetLogLevel(AppConfig.Log.Level)
+	// 初始化全局日志
+	Log.SetMsgChan(Config.Log.AsyncChan)
+	Log.SetLevel(Config.Log.Level)
 
 	// 设置运行模式
-	l.app.SetDebug(AppConfig.Debug)
+	l.App.SetDebug(Config.Debug)
 
 	// 设置静态资源缓存
-	l.app.SetMemoryCache(NewMemoryCache(
-		AppConfig.FileCache.SingleFileAllowMB*MB,
-		AppConfig.FileCache.MaxCapMB*MB,
-		time.Duration(AppConfig.FileCache.CacheSecond)*time.Second),
+	l.App.setMemoryCache(NewMemoryCache(
+		Config.FileCache.SingleFileAllowMB*MB,
+		Config.FileCache.MaxCapMB*MB,
+		time.Duration(Config.FileCache.CacheSecond)*time.Second),
 	)
 
 	// 设置渲染接口
-	l.app.SetRenderer(NewPongo2Render(AppConfig.Debug))
-
-	// 设置大小写敏感
-	l.app.SetCaseSensitive(AppConfig.RouterCaseSensitive)
+	l.App.SetRenderer(NewPongo2Render(!Config.Debug))
 
 	// 设置上传文件允许的最大尺寸
-	MaxMemory = AppConfig.MaxMemoryMB * MB
+	MaxMemory = Config.MaxMemoryMB * MB
 
-	// 配置数据库
-	l.dbService = registerDBService()
-
-	// 初始化全局session
-	err := registerSession()
+	// 初始化sessions管理实例
+	sessions, err := newSessions()
 	if err != nil {
-		l.app.Logger().Error("Failed to create GlobalSessions: %v.", err)
+		Log.Error("Failed to create sessions: %v.", err)
 	}
-	l.app.SetSessions(GlobalSessions)
+	if sessions == nil {
+		Log.Sys("Session is disable.")
+	} else {
+		go sessions.GC()
+		l.App.setSessions(sessions)
+		Log.Sys("Session is enable.")
+	}
 
 	return l
 }
@@ -84,144 +80,66 @@ func registerMime() {
 	}
 }
 
-func registerAppConfig() (err error) {
-	fname := APPCONFIG_FILE
-	appconf, err := config.NewConfig("ini", fname)
-	if err == nil {
-		trySetAppConfig(appconf.(*config.IniConfigContainer))
-		return appconf.SaveConfigFile(fname)
-	}
-
-	os.MkdirAll(filepath.Dir(fname), 0777)
-	f, err := os.Create(fname)
-	if err != nil {
-		panic(err)
-	}
-	f.Close()
-	appconf, err = config.NewConfig("ini", fname)
-	defaultAppConfig(appconf.(*config.IniConfigContainer))
-	return appconf.SaveConfigFile(fname)
-}
-
-func registerDBConfig() (err error) {
-	fname := DBCONFIG_FILE
-	appconf, err := config.NewConfig("ini", fname)
-	if err == nil {
-		trySetDBConfig(appconf.(*config.IniConfigContainer))
-		return appconf.SaveConfigFile(fname)
-	}
-
-	os.MkdirAll(filepath.Dir(fname), 0777)
-	f, err := os.Create(fname)
-	if err != nil {
-		panic(err)
-	}
-	f.Close()
-	appconf, err = config.NewConfig("ini", fname)
-	defaultDBConfig(appconf.(*config.IniConfigContainer))
-	return appconf.SaveConfigFile(fname)
-}
-
-func registerSession() (err error) {
-	if !AppConfig.Session.Enable {
+func newSessions() (sessions *session.Manager, err error) {
+	if !Config.Session.SessionOn {
 		return
 	}
 	conf := map[string]interface{}{
-		"cookieName":      AppConfig.Session.CookieName,
-		"gclifetime":      AppConfig.Session.GcMaxlifetime,
-		"providerConfig":  filepath.ToSlash(AppConfig.Session.ProviderConfig),
-		"secure":          AppConfig.Listen.EnableHTTPS,
-		"enableSetCookie": AppConfig.Session.EnableSetCookie,
-		"domain":          AppConfig.Session.Domain,
-		"cookieLifeTime":  AppConfig.Session.CookieLifeTime,
+		"cookieName":              Config.Session.SessionName,
+		"gclifetime":              Config.Session.SessionGCMaxLifetime,
+		"providerConfig":          filepath.ToSlash(Config.Session.SessionProviderConfig),
+		"secure":                  Config.Listen.EnableHTTPS,
+		"enableSetCookie":         Config.Session.SessionAutoSetCookie,
+		"domain":                  Config.Session.SessionDomain,
+		"cookieLifeTime":          Config.Session.SessionCookieLifeTime,
+		"enableSidInHttpHeader":   Config.Session.EnableSidInHttpHeader,
+		"sessionNameInHttpHeader": Config.Session.SessionNameInHttpHeader,
+		"enableSidInUrlQuery":     Config.Session.EnableSidInUrlQuery,
 	}
 	confBytes, _ := json.Marshal(conf)
-	GlobalSessions, err = session.NewManager(AppConfig.Session.Provider, string(confBytes))
-	if err != nil {
-		return
-	}
-	go GlobalSessions.GC()
-	return
+	return session.NewManager(Config.Session.SessionProvider, string(confBytes))
 }
 
-// 注册固定的静态文件与目录
-func registerStaticRouter() {
-	DefLessgo.app.Static("/uploads", UPLOADS_DIR, autoHTMLSuffix())
-	DefLessgo.app.Static("/static", STATIC_DIR, filterTemplate(), autoHTMLSuffix())
-	DefLessgo.app.Static("/bus", BUSINESS_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
-	DefLessgo.app.Static("/sys", SYSTEM_VIEW_DIR, filterTemplate(), autoHTMLSuffix())
-
-	DefLessgo.app.File("/favicon.ico", IMG_DIR+"/favicon.ico")
+// 尝试设置系统默认通用操作
+func tryRegisterDefaultHandler() {
+	if lessgo.App.router.NotFound == nil {
+		SetNotFound(defaultNotFoundHandler)
+	}
+	if lessgo.App.router.MethodNotAllowed == nil {
+		SetMethodNotAllowed(defaultMethodNotAllowedHandler)
+	}
+	if lessgo.App.router.ErrorPanicHandler == nil {
+		SetInternalServerError(defaultInternalServerErrorHandler)
+	}
 }
 
-// 注册数据库服务
-func registerDBService() *dbservice.DBService {
-	dbService := &dbservice.DBService{
-		List: map[string]*xorm.Engine{},
+// 添加系统预设的路由操作前的中间件
+func registerBefore() {
+	PreUse(
+		&MiddlewareConfig{Name: "检查服务器是否启用"},
+		&MiddlewareConfig{Name: "检查是否为访问主页"},
+		&MiddlewareConfig{Name: "系统运行日志打印"},
+		&MiddlewareConfig{Name: "捕获运行时恐慌"},
+	)
+	if Config.CrossDomain {
+		BeforeUse(&MiddlewareConfig{Name: "设置允许跨域"})
 	}
-	for _, conf := range AppConfig.DBList {
-		engine, err := xorm.NewEngine(conf.Driver, conf.ConnString)
-		if err != nil {
-			logs.Error("%v\n", err)
-			continue
-		}
-		logger := dbservice.NewILogger(AppConfig.Log.AsyncChan, AppConfig.Log.Level, conf.Name)
-		logger.BeeLogger.EnableFuncCallDepth(AppConfig.Debug)
-
-		engine.SetLogger(logger)
-		engine.SetMaxOpenConns(conf.MaxOpenConns)
-		engine.SetMaxIdleConns(conf.MaxIdleConns)
-		engine.SetDisableGlobalCache(conf.DisableCache)
-		engine.ShowSQL(conf.ShowSql)
-		engine.ShowExecTime(conf.ShowExecTime)
-		if (conf.TableFix == "prefix" || conf.TableFix == "suffix") && len(conf.TableSpace) > 0 {
-			var impr core.IMapper
-			if conf.TableSnake {
-				impr = core.SnakeMapper{}
-			} else {
-				impr = core.SameMapper{}
-			}
-			if conf.TableFix == "prefix" {
-				engine.SetTableMapper(core.NewPrefixMapper(impr, conf.TableSpace))
-			} else {
-				engine.SetTableMapper(core.NewSuffixMapper(impr, conf.TableSpace))
-			}
-		}
-		if (conf.ColumnFix == "prefix" || conf.ColumnFix == "suffix") && len(conf.ColumnSpace) > 0 {
-			var impr core.IMapper
-			if conf.ColumnSnake {
-				impr = core.SnakeMapper{}
-			} else {
-				impr = core.SameMapper{}
-			}
-			if conf.ColumnFix == "prefix" {
-				engine.SetTableMapper(core.NewPrefixMapper(impr, conf.ColumnSpace))
-			} else {
-				engine.SetTableMapper(core.NewSuffixMapper(impr, conf.ColumnSpace))
-			}
-		}
-
-		if conf.Driver == "sqlite3" && !utils.FileExists(conf.ConnString) {
-			os.MkdirAll(filepath.Dir(conf.ConnString), 0777)
-			f, err := os.Create(conf.ConnString)
-			if err != nil {
-				logs.Global.Error("%v", err)
-			} else {
-				f.Close()
-			}
-		}
-
-		dbService.List[conf.Name] = engine
-		if AppConfig.DefaultDB == conf.Name {
-			dbService.Default = engine
-		}
-	}
-	return dbService
 }
 
-func checkHooks(err error) {
-	if err == nil {
-		return
-	}
-	DefLessgo.app.Logger().Fatal("%v", err)
+// 添加系统预设的路由操作后的中间件
+func registerAfter() {
+
+}
+
+// 添加系统预设的静态目录虚拟路由
+func registerStatics() {
+	Static("/uploads", UPLOADS_DIR, AutoHTMLSuffix)
+	Static("/static", STATIC_DIR, FilterTemplate, AutoHTMLSuffix)
+	Static("/biz", BIZ_VIEW_DIR, FilterTemplate, AutoHTMLSuffix)
+	Static("/sys", SYS_VIEW_DIR, FilterTemplate, AutoHTMLSuffix)
+}
+
+// 添加系统预设的静态文件虚拟路由
+func registerFiles() {
+	File("/favicon.ico", IMG_DIR+"/favicon.ico")
 }

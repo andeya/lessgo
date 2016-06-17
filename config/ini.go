@@ -1,4 +1,4 @@
-// Copyright 2014 beego Author. All Rights Reserved.
+// Copyright 2014 lessgo Author. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,22 +23,23 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
+const DefaultSection = "default" // default section means if some ini items not in a section, make them in default section,
 var (
-	defaultSection = "default"   // default section means if some ini items not in a section, make them in default section,
-	bNumComment    = []byte{'#'} // number signal
-	bSemComment    = []byte{';'} // semicolon signal
-	bEmpty         = []byte{}
-	bEqual         = []byte{'='} // equal signal
-	bDQuote        = []byte{'"'} // quote signal
-	sectionStart   = []byte{'['} // section start signal
-	sectionEnd     = []byte{']'} // section end signal
-	lineBreak      = "\n"
+	bNumComment  = []byte{'#'} // number signal
+	bSemComment  = []byte{';'} // semicolon signal
+	bEmpty       = []byte{}
+	bEqual       = []byte{'='} // equal signal
+	bDQuote      = []byte{'"'} // quote signal
+	sectionStart = []byte{'['} // section start signal
+	sectionEnd   = []byte{']'} // section end signal
+	lineBreak    = "\n"
 )
 
 // IniConfig implements Config to parse ini file.
@@ -76,7 +77,7 @@ func (ini *IniConfig) parseFile(name string) (*IniConfigContainer, error) {
 			buf.ReadByte()
 		}
 	}
-	section := defaultSection
+	section := DefaultSection
 	for {
 		line, _, err := buf.ReadLine()
 		if err == io.EOF {
@@ -175,7 +176,7 @@ func (ini *IniConfig) parseFile(name string) (*IniConfigContainer, error) {
 // ParseData parse ini the data
 func (ini *IniConfig) ParseData(data []byte) (Configer, error) {
 	// Save memory data to temporary file
-	tmpName := path.Join(os.TempDir(), "beego", fmt.Sprintf("%d", time.Now().Nanosecond()))
+	tmpName := path.Join(os.TempDir(), "lessgo", fmt.Sprintf("%d", time.Now().Nanosecond()))
 	os.MkdirAll(path.Dir(tmpName), os.ModePerm)
 	if err := ioutil.WriteFile(tmpName, data, 0655); err != nil {
 		return nil, err
@@ -194,13 +195,14 @@ type IniConfigContainer struct {
 }
 
 func (c *IniConfigContainer) MainKeys() []string {
-	l := len(c.data[defaultSection])
+	l := len(c.data[DefaultSection])
 	a := make([]string, l)
 	i := 0
-	for k := range c.data[defaultSection] {
+	for k := range c.data[DefaultSection] {
 		a[i] = k
 		i++
 	}
+	sort.Strings(a)
 	return a
 }
 
@@ -209,12 +211,13 @@ func (c *IniConfigContainer) Sections() []string {
 	a := make([]string, l)
 	i := 0
 	for k := range c.data {
-		if k == defaultSection {
+		if k == DefaultSection {
 			continue
 		}
 		a[i] = k
 		i++
 	}
+	sort.Strings(a)
 	return a
 }
 
@@ -226,6 +229,7 @@ func (c *IniConfigContainer) SectionKeys(section string) []string {
 		a[i] = k
 		i++
 	}
+	sort.Strings(a)
 	return a
 }
 
@@ -368,11 +372,17 @@ func (c *IniConfigContainer) SaveConfigFile(filename string) (err error) {
 
 	buf := bytes.NewBuffer(nil)
 	// Save default section at first place
-	if dt, ok := c.data[defaultSection]; ok {
-		for key, val := range dt {
+	if dt, ok := c.data[DefaultSection]; ok {
+		keys := []string{}
+		for key := range dt {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			val := dt[key]
 			if key != " " {
 				// Write key comments.
-				if v := getCommentStr(defaultSection, key); len(v) > 0 {
+				if v := getCommentStr(DefaultSection, key); len(v) > 0 {
 					if _, err = buf.WriteString(v + lineBreak); err != nil {
 						return err
 					}
@@ -391,8 +401,14 @@ func (c *IniConfigContainer) SaveConfigFile(filename string) (err error) {
 		}
 	}
 	// Save named sections
-	for section, dt := range c.data {
-		if section != defaultSection {
+	sections := []string{}
+	for section := range c.data {
+		sections = append(sections, section)
+	}
+	sort.Strings(sections)
+	for _, section := range sections {
+		dt := c.data[section]
+		if section != DefaultSection {
 			// Write section comments.
 			if v := getCommentStr(section, ""); len(v) > 0 {
 				if _, err = buf.WriteString(v + lineBreak); err != nil {
@@ -404,8 +420,13 @@ func (c *IniConfigContainer) SaveConfigFile(filename string) (err error) {
 			if _, err = buf.WriteString(string(sectionStart) + section + string(sectionEnd) + lineBreak); err != nil {
 				return err
 			}
-
-			for key, val := range dt {
+			keys := []string{}
+			for key := range dt {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				val := dt[key]
 				if key != " " {
 					// Write key comments.
 					if v := getCommentStr(section, key); len(v) > 0 {
@@ -453,7 +474,7 @@ func (c *IniConfigContainer) Set(key, value string) error {
 		section = sectionKey[0]
 		k = sectionKey[1]
 	} else {
-		section = defaultSection
+		section = DefaultSection
 		k = sectionKey[0]
 	}
 
@@ -488,7 +509,7 @@ func (c *IniConfigContainer) getdata(key string) string {
 		section = sectionKey[0]
 		k = sectionKey[1]
 	} else {
-		section = defaultSection
+		section = DefaultSection
 		k = sectionKey[0]
 	}
 	if v, ok := c.data[section]; ok {
