@@ -361,9 +361,9 @@ var RequestLogger = ApiMiddleware{
 			}
 			stop := time.Now()
 			method := c.request.Method
-			path := c.request.URL.Path
-			if path == "" {
-				path = "/"
+			u := c.request.URL.String()
+			if u == "" {
+				u = "/"
 			}
 
 			n := c.response.Status()
@@ -377,7 +377,7 @@ var RequestLogger = ApiMiddleware{
 				code = color.Cyan(n)
 			}
 
-			Log.Debug("%s | %s | %s | %s | %s | %d", c.RealRemoteAddr(), method, path, code, stop.Sub(start), c.response.Size())
+			Log.Debug("%s | %s | %s | %s | %s | %d", c.RealRemoteAddr(), method, u, code, stop.Sub(start), c.response.Size())
 			return nil
 		}
 	},
