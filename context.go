@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lessgo/lessgo/logs"
@@ -42,6 +43,11 @@ type (
 
 	// Common message format of JSON and JSONP.
 	CommJSON Result
+
+	ReverseProxys struct {
+		list map[string]*httputil.ReverseProxy
+		sync.RWMutex
+	}
 )
 
 var (
@@ -52,6 +58,10 @@ var (
 
 	// 文件上传默认内存缓存大小，默认值是64MB。
 	MaxMemory int64 = 64 * MB
+
+	reverseProxys = &ReverseProxys{
+		list: map[string]*httputil.ReverseProxy{},
+	}
 )
 
 func (c *Context) Request() *http.Request {
@@ -751,12 +761,25 @@ func (c *Context) Redirect(code int, url string) error {
 // If the targetUrlBase's path is "/base" and the incoming request was for "/dir",
 // the target request will be for /base/dir.
 func (c *Context) ReverseProxy(targetUrlBase string) error {
-	target, err := url.Parse(targetUrlBase)
-	if err != nil {
-		return err
+	var reverseProxy *httputil.ReverseProxy
+	reverseProxys.RLock()
+	reverseProxy = reverseProxys.list[targetUrlBase]
+	reverseProxys.RUnlock()
+	if reverseProxy == nil {
+		reverseProxys.Lock()
+		reverseProxy = reverseProxys.list[targetUrlBase]
+		if reverseProxy == nil {
+			target, err := url.Parse(targetUrlBase)
+			if err != nil {
+				reverseProxys.Unlock()
+				return err
+			}
+			reverseProxy = httputil.NewSingleHostReverseProxy(target)
+			reverseProxys.list[targetUrlBase] = reverseProxy
+		}
+		reverseProxys.Unlock()
 	}
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	proxy.ServeHTTP(c, c.request)
+	reverseProxy.ServeHTTP(c, c.request)
 	return nil
 }
 
