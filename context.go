@@ -13,6 +13,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -758,28 +759,44 @@ func (c *Context) Redirect(code int, url string) error {
 }
 
 // ReverseProxy routes URLs to the scheme, host, and base path provided in targetUrlBase.
-// If the targetUrlBase's path is "/base" and the incoming request was for "/dir",
+// If pathAppend is "true" and the targetUrlBase's path is "/base" and the incoming request was for "/dir",
 // the target request will be for /base/dir.
-func (c *Context) ReverseProxy(targetUrlBase string) error {
-	var reverseProxy *httputil.ReverseProxy
+func (c *Context) ReverseProxy(targetUrlBase string, pathAppend bool) error {
+	var rp *httputil.ReverseProxy
 	reverseProxys.RLock()
-	reverseProxy = reverseProxys.list[targetUrlBase]
+	rp = reverseProxys.list[targetUrlBase]
 	reverseProxys.RUnlock()
-	if reverseProxy == nil {
+	if rp == nil {
 		reverseProxys.Lock()
-		reverseProxy = reverseProxys.list[targetUrlBase]
-		if reverseProxy == nil {
+		rp = reverseProxys.list[targetUrlBase]
+		if rp == nil {
 			target, err := url.Parse(targetUrlBase)
 			if err != nil {
 				reverseProxys.Unlock()
 				return err
 			}
-			reverseProxy = httputil.NewSingleHostReverseProxy(target)
-			reverseProxys.list[targetUrlBase] = reverseProxy
+			targetQuery := target.RawQuery
+			rp = &httputil.ReverseProxy{
+				Director: func(req *http.Request) {
+					req.Host = target.Host
+					req.URL.Scheme = target.Scheme
+					req.URL.Host = target.Host
+					req.URL.Path = path.Join(target.Path, req.URL.Path)
+					if targetQuery == "" || req.URL.RawQuery == "" {
+						req.URL.RawQuery = targetQuery + req.URL.RawQuery
+					} else {
+						req.URL.RawQuery = targetQuery + "&" + req.URL.RawQuery
+					}
+				},
+			}
+			reverseProxys.list[targetUrlBase] = rp
 		}
 		reverseProxys.Unlock()
 	}
-	reverseProxy.ServeHTTP(c, c.request)
+	if !pathAppend {
+		c.request.URL.Path = ""
+	}
+	rp.ServeHTTP(c, c.request)
 	return nil
 }
 

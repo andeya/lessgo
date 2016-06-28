@@ -355,13 +355,15 @@ var RequestLogger = ApiMiddleware{
 				return nil
 			}
 
+			u := c.request.URL.String()
+
 			start := time.Now()
 			if err := next(c); err != nil {
 				c.Error(err)
 			}
 			stop := time.Now()
+
 			method := c.request.Method
-			u := c.request.URL.String()
 			if u == "" {
 				u = "/"
 			}
