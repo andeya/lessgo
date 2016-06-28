@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -743,6 +744,19 @@ func (c *Context) Redirect(code int, url string) error {
 	}
 	c.response.Header().Set(HeaderLocation, url)
 	c.WriteHeader(code)
+	return nil
+}
+
+// ReverseProxy routes URLs to the scheme, host, and base path provided in targetUrlBase.
+// If the targetUrlBase's path is "/base" and the incoming request was for "/dir",
+// the target request will be for /base/dir.
+func (c *Context) ReverseProxy(targetUrlBase string) error {
+	target, err := url.Parse(targetUrlBase)
+	if err != nil {
+		return err
+	}
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.ServeHTTP(c, c.request)
 	return nil
 }
 
