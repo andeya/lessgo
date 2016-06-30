@@ -354,12 +354,10 @@ func (c *Context) SaveFile(key string, cover bool, newfname ...string) (fullname
 		return
 	}
 	size, err = io.Copy(f2, f)
-	defer func() {
-		err3 := f2.Close()
-		if err3 != nil && err == nil {
-			err = err3
-		}
-	}()
+	err3 := f2.Close()
+	if err3 != nil && err == nil {
+		err = err3
+	}
 	return
 }
 
