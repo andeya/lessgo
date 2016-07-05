@@ -62,8 +62,10 @@ func (b *binder) bindForm(typ reflect.Type, val reflect.Value, form url.Values) 
 			continue
 		}
 		structFieldKind := structField.Kind()
-		inputFieldName := typeField.Tag.Get("form")
-
+		inputFieldName := strings.TrimSpace(typeField.Tag.Get("form"))
+		if inputFieldName == "-" {
+			continue
+		}
 		if inputFieldName == "" {
 			inputFieldName = typeField.Name
 			// If "form" tag is nil, we inspect if the field is a struct or *struct.
