@@ -324,7 +324,7 @@ func (c *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, e
 // SaveFile saves the file *Context.FormFile to UPLOADS_DIR,
 // character "?" indicates that the original file name.
 // for example newfname="a/?" -> UPLOADS_DIR/a/fname.
-func (c *Context) SaveFile(key string, cover bool, newfname ...string) (fullname string, size int64, err error) {
+func (c *Context) SaveFile(key string, cover bool, newfname ...string) (fileUrl string, size int64, err error) {
 	f, fh, err := c.FormFile(key)
 	if err != nil {
 		return
@@ -335,6 +335,7 @@ func (c *Context) SaveFile(key string, cover bool, newfname ...string) (fullname
 			err = err2
 		}
 	}()
+	var fullname string
 	if len(newfname) > 0 {
 		fullname = filepath.Join(UPLOADS_DIR, strings.Replace(newfname[0], "?", fh.Filename, -1))
 		p, _ := filepath.Split(fullname)
@@ -349,6 +350,9 @@ func (c *Context) SaveFile(key string, cover bool, newfname ...string) (fullname
 		idx := strings.LastIndex(fullname, filepath.Ext(fullname))
 		fullname = fullname[:idx] + "(2)" + fullname[idx:]
 	}
+
+	fileUrl = "/" + strings.Replace(fullname, `\`, `/`, -1)
+
 	f2, err := os.OpenFile(fullname, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
