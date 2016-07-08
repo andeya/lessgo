@@ -141,6 +141,9 @@ func (a *ApiMiddleware) regetFunc(configJSONBytes []byte) (MiddlewareFunc, error
 	if a.dynamic && len(configJSONBytes) > 0 {
 		config := utils.NewObjectPtr(a.Config)
 		if json.Unmarshal(configJSONBytes, config) == nil {
+			if reflect.TypeOf(a.Config).Kind() != reflect.Ptr {
+				config = reflect.ValueOf(config).Elem().Interface()
+			}
 			return a.Middleware.(Middleware).getMiddlewareFunc(config), nil
 		}
 		err = fmt.Errorf("Middleware \"%s\" uses initial config, because the type of param is error:\ngot format -> %s,\nwant format -> %s.",
