@@ -11,13 +11,6 @@ import (
 )
 
 func newLessgo() *Lessgo {
-	printInfo()
-
-	err := Config.LoadMainConfig()
-	if err != nil {
-		fmt.Println(err)
-	}
-
 	registerMime()
 
 	l := &Lessgo{

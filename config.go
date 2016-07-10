@@ -156,7 +156,7 @@ func (this *config) LoadMainConfig() (err error) {
 	iniconf, err := confpkg.NewConfig("ini", fname)
 	if err == nil {
 		os.Remove(fname)
-		ReadSingleConfig("system", Config, iniconf)
+		ReadSingleConfig("system", this, iniconf)
 		ReadSingleConfig("filecache", &this.FileCache, iniconf)
 		ReadSingleConfig("info", &this.Info, iniconf)
 		ReadSingleConfig("listen", &this.Listen, iniconf)
@@ -173,7 +173,7 @@ func (this *config) LoadMainConfig() (err error) {
 	if err != nil {
 		return err
 	}
-	WriteSingleConfig("system", Config, iniconf)
+	WriteSingleConfig("system", this, iniconf)
 	WriteSingleConfig("filecache", &this.FileCache, iniconf)
 	WriteSingleConfig("info", &this.Info, iniconf)
 	WriteSingleConfig("listen", &this.Listen, iniconf)

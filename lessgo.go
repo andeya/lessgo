@@ -8,6 +8,7 @@ package lessgo
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path"
@@ -58,14 +59,22 @@ const (
 )
 
 var (
+	// 全局配置实例
+	Config = func() *config {
+		printInfo()
+		c := newConfig()
+		err := c.LoadMainConfig()
+		if err != nil {
+			fmt.Println(err)
+		}
+		return c
+	}()
+
 	// 初始化全局Lessgo实例
 	lessgo = newLessgo()
 
 	// 初始化全局App实例
 	app = newApp()
-
-	// 全局配置实例
-	Config = newConfig()
 
 	// 全局运行日志实例(来自数据库的日志除外)
 	Log = func() logs.Logger {
