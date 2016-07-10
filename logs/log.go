@@ -48,10 +48,10 @@ func NewLogger(channelLen int64) Logger {
 }
 
 func (t *TgLogger) SetLevel(l int) {
-	t.BeeLogger.SetLevel(level(l))
+	t.BeeLogger.SetLevel(ExchangeLevel(l))
 }
 
-func level(l int) int {
+func ExchangeLevel(l int) int {
 	switch l {
 	case DEBUG:
 		return logs.LevelDebug
