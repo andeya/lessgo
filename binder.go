@@ -20,6 +20,11 @@ type (
 	binder struct{}
 )
 
+const (
+	bindStructTag  = "bind"
+	bindStructTag2 = "json"
+)
+
 func (b *binder) Bind(i interface{}, c *Context) error {
 	req := c.request
 	ctype := req.Header.Get(HeaderContentType)
@@ -37,14 +42,14 @@ func (b *binder) Bind(i interface{}, c *Context) error {
 		}
 	case strings.HasPrefix(ctype, MIMEApplicationForm), strings.HasPrefix(ctype, MIMEMultipartForm):
 		typ := reflect.TypeOf(i)
-		val := reflect.ValueOf(i)
-		if typ.Kind() == reflect.Ptr {
-			typ = typ.Elem()
-			if typ.Kind() != reflect.Struct {
-				return NewHTTPError(http.StatusBadRequest, "When \"Content-Type: "+ctype+"\", \"Bind()\"'s param must be \"struct\".")
-			}
-			val = val.Elem()
+		if typ.Kind() != reflect.Ptr {
+			return NewHTTPError(http.StatusBadRequest, "When \"Content-Type: "+ctype+"\", \"Bind()\"'s param must be \"*struct\".")
 		}
+		typ = typ.Elem()
+		if typ.Kind() != reflect.Struct {
+			return NewHTTPError(http.StatusBadRequest, "When \"Content-Type: "+ctype+"\", \"Bind()\"'s param must be \"*struct\".")
+		}
+		val := reflect.ValueOf(i).Elem()
 		if err := b.bindForm(typ, val, c.FormValues()); err != nil {
 			return NewHTTPError(http.StatusBadRequest, err.Error())
 		}
@@ -62,13 +67,17 @@ func (b *binder) bindForm(typ reflect.Type, val reflect.Value, form url.Values) 
 			continue
 		}
 		structFieldKind := structField.Kind()
-		inputFieldName := strings.TrimSpace(typeField.Tag.Get("form"))
+		var inputFieldName string
+		inputFieldName = strings.TrimSpace(typeField.Tag.Get(bindStructTag))
+		if inputFieldName == "" {
+			inputFieldName = strings.TrimSpace(typeField.Tag.Get(bindStructTag2))
+		}
 		if inputFieldName == "-" {
 			continue
 		}
 		if inputFieldName == "" {
 			inputFieldName = typeField.Name
-			// If "form" tag is nil, we inspect if the field is a struct or *struct.
+			// If bindStructTag or bindStructTag2 tag is null, we inspect if the field is a struct or *struct.
 			if structFieldKind == reflect.Ptr {
 				structField = structField.Elem()
 			}
@@ -80,6 +89,7 @@ func (b *binder) bindForm(typ reflect.Type, val reflect.Value, form url.Values) 
 				continue
 			}
 		}
+		inputFieldName = strings.TrimSpace(strings.Split(inputFieldName, ",")[0])
 		inputValue, exists := form[inputFieldName]
 		if !exists {
 			continue

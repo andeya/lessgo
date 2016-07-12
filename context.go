@@ -33,6 +33,7 @@ type (
 		path           string
 		realRemoteAddr string
 		query          url.Values
+		form           url.Values
 		pkeys          []string
 		pvalues        []string
 		store          store
@@ -251,73 +252,50 @@ func (c *Context) AddHeaderParam(key string, value string) {
 
 // FormValues returns the form params as url.Values.
 func (c *Context) FormValues() url.Values {
-	if c.request.PostForm == nil {
-		if err := c.request.ParseForm(); err != nil {
-			Log.Error("%v", err)
-		}
-	}
-	return c.request.PostForm
+	c.parseForm()
+	return c.form
 }
 
 // FormParams returns the form field value with "[]string" for the provided key.
 func (c *Context) FormParams(key string) []string {
-	if c.request.PostForm == nil {
-		if err := c.request.ParseForm(); err != nil {
-			Log.Error("%v", err)
-		}
+	c.parseForm()
+	if vs := c.form[key]; len(vs) > 0 {
+		return vs
 	}
-	return c.request.PostForm[key]
+	return []string{}
 }
 
 // FormParam returns the form field value for the provided key.
 func (c *Context) FormParam(key string) string {
-	if c.request.PostForm == nil {
-		if err := c.request.ParseForm(); err != nil {
-			Log.Error("%v", err)
-		}
+	c.parseForm()
+	if vs := c.form[key]; len(vs) > 0 {
+		return vs[0]
 	}
-	return c.request.PostFormValue(key)
+	return ""
 }
 
 // SetFormParam sets the form param. It replaces any existing values.
 func (c *Context) SetFormParam(key string, value string) {
-	if c.request.PostForm == nil {
-		if err := c.request.ParseForm(); err != nil {
-			Log.Error("%v", err)
-		}
-	}
-	c.request.PostForm.Set(key, value)
+	c.parseForm()
+	c.form.Set(key, value)
 }
 
 // AddFormParam adds the form param. It appends to any existing
 // values associated with key.
 func (c *Context) AddFormParam(key string, value string) {
-	if c.request.PostForm == nil {
-		if err := c.request.ParseForm(); err != nil {
-			Log.Error("%v", err)
-		}
-	}
-	c.request.PostForm.Add(key, value)
+	c.parseForm()
+	c.form.Add(key, value)
 }
 
 // DelFormParam deletes the values associated with key.
 // func (c *Context) DelFormParam(key string) {
-// 	if c.request.PostForm == nil {
-// 		if err := c.request.ParseForm(); err != nil {
-// 			Log.Error("%v", err)
-// 		}
-// 	}
-// 	c.request.PostForm.Del(key)
+// 	c.parseForm()
+// 	c.form.Del(key)
 // }
 
 // FormFile returns the multipart form file for the provided key.
 func (c *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
-	if c.request.MultipartForm == nil {
-		err := c.request.ParseMultipartForm(MaxMemory)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
+	c.parseForm()
 	return c.request.FormFile(key)
 }
 
@@ -920,6 +898,23 @@ func (c *Context) Log() logs.Logger {
 	return Log
 }
 
+func (c *Context) parseForm() {
+	if c.form != nil {
+		return
+	}
+	c.request.ParseMultipartForm(MaxMemory)
+	c.form = c.request.PostForm
+	if c.request.MultipartForm != nil {
+		for k, v := range c.request.MultipartForm.Value {
+			if _, ok := c.form[k]; ok {
+				c.form[k] = append(c.form[k], v...)
+			} else {
+				c.form[k] = v
+			}
+		}
+	}
+}
+
 func (c *Context) freeSession() {
 	if c.cruSession != nil {
 		c.cruSession.SessionRelease(c.response)
@@ -950,6 +945,7 @@ func (c *Context) free() {
 	c.store = nil
 	c.realRemoteAddr = ""
 	c.query = nil
+	c.form = nil
 	c.response.free()
 }
 
