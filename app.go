@@ -505,9 +505,7 @@ func (this *App) addwithlog(logprint bool, method, path string, handler HandlerF
 	for i := len(middleware) - 1; i >= 0; i-- {
 		h = middleware[i](h)
 	}
-	this.router.Handle(method, path, func(c *Context) error {
-		return h(c)
-	})
+	this.router.Handle(method, path, h)
 
 	this.routes[method+path] = Route{
 		Method:  method,
