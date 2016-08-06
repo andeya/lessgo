@@ -45,17 +45,11 @@ func (a ApiMiddleware) Reg() *ApiMiddleware {
 	return a.init()
 }
 
-// 克隆中间件
-func (a *ApiMiddleware) Clone() *ApiMiddleware {
+// 获取JSON字符串格式的中间件配置
+func (a *ApiMiddleware) ConfigJSON() string {
 	a.lock.RLock()
 	defer a.lock.RUnlock()
-	return (&ApiMiddleware{
-		Name:       a.Name,
-		Desc:       a.Desc,
-		Params:     a.Params,
-		Config:     a.Config,
-		Middleware: a.Middleware,
-	}).init()
+	return a.configJSON
 }
 
 // 设置默认配置，重置中间件
@@ -68,13 +62,6 @@ func (a *ApiMiddleware) SetConfig(confObject interface{}) *ApiMiddleware {
 	delete(apiMiddlewareMap, a.Name)
 	apiMiddlewareLock.Unlock()
 	return a.init()
-}
-
-// 获取JSON字符串格式的中间件配置
-func (a *ApiMiddleware) ConfigJSON() string {
-	a.lock.RLock()
-	defer a.lock.RUnlock()
-	return a.configJSON
 }
 
 // 返回中间件配置结构体
@@ -366,7 +353,7 @@ var RequestLogger = ApiMiddleware{
 		return func(c *Context) error {
 			if !Debug() {
 				if err := next(c); err != nil {
-					c.Failure(500, err)
+					c.Error(err)
 				}
 				return nil
 			}
@@ -375,7 +362,7 @@ var RequestLogger = ApiMiddleware{
 
 			start := time.Now()
 			if err := next(c); err != nil {
-				c.Failure(500, err)
+				c.Error(err)
 			}
 			stop := time.Now()
 
@@ -397,6 +384,64 @@ var RequestLogger = ApiMiddleware{
 
 			Log.Debug("%s | %s | %s | %s | %s | %d", c.RealRemoteAddr(), method, u, code, stop.Sub(start), c.response.Size())
 			return nil
+		}
+	},
+}.Reg()
+
+type (
+	// RecoverConfig defines the config for recover middleware.
+	RecoverConfig struct {
+		// StackSize is the stack size to be printed.
+		// Optional with default value as 4k.
+		StackSize int
+
+		// DisableStackAll disables formatting stack traces of all other goroutines
+		// into buffer after the trace for the current goroutine.
+		// Optional with default value as false.
+		DisableStackAll bool
+
+		// DisablePrintStack disables printing stack trace.
+		// Optional with default value as false.
+		DisablePrintStack bool
+	}
+)
+
+var Recover = ApiMiddleware{
+	Name: "捕获运行时恐慌",
+	Desc: "Recover returns a middleware which recovers from panics anywhere in the chain and handles the control to the centralized HTTPErrorHandler.",
+	Config: RecoverConfig{
+		StackSize:         4 << 10, // 4 KB
+		DisableStackAll:   false,
+		DisablePrintStack: false,
+	},
+	Middleware: func(confObject interface{}) MiddlewareFunc {
+		config := confObject.(RecoverConfig)
+		// Defaults
+		if config.StackSize == 0 {
+			config.StackSize = 4 << 10
+		}
+
+		return func(next HandlerFunc) HandlerFunc {
+			return func(c *Context) error {
+				defer func() {
+					if r := recover(); r != nil {
+						var err error
+						switch r := r.(type) {
+						case error:
+							err = r
+						default:
+							err = fmt.Errorf("%v", r)
+						}
+						stack := make([]byte, config.StackSize)
+						length := runtime.Stack(stack, !config.DisableStackAll)
+						if !config.DisablePrintStack {
+							Log.Error("[%s] %s %s", color.Red("PANIC RECOVER"), err, stack[:length])
+						}
+						c.Error(err)
+					}
+				}()
+				return next(c)
+			}
 		}
 	},
 }.Reg()

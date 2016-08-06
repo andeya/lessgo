@@ -93,12 +93,26 @@ func newSessions() (sessions *session.Manager, err error) {
 	return session.NewManager(Config.Session.SessionProvider, string(confBytes))
 }
 
+// 尝试设置系统默认通用操作
+func tryRegisterDefaultHandler() {
+	if lessgo.App.router.NotFound == nil {
+		SetNotFound(defaultNotFoundHandler)
+	}
+	if lessgo.App.router.MethodNotAllowed == nil {
+		SetMethodNotAllowed(defaultMethodNotAllowedHandler)
+	}
+	if lessgo.App.router.ErrorPanicHandler == nil {
+		SetInternalServerError(defaultInternalServerErrorHandler)
+	}
+}
+
 // 添加系统预设的路由操作前的中间件
 func registerBefore() {
 	PreUse(
 		&MiddlewareConfig{Name: "检查服务器是否启用"},
 		&MiddlewareConfig{Name: "检查是否为访问主页"},
 		&MiddlewareConfig{Name: "系统运行日志打印"},
+		&MiddlewareConfig{Name: "捕获运行时恐慌"},
 	)
 	if Config.CrossDomain {
 		BeforeUse(&MiddlewareConfig{Name: "设置允许跨域"})

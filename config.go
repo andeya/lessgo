@@ -71,12 +71,12 @@ type (
 
 // 项目固定目录文件名称
 const (
-	BIZ_HANDLER_DIR = "biz_handler"
-	BIZ_MODEL_DIR   = "biz_model"
-	BIZ_VIEW_DIR    = "biz_view"
-	SYS_HANDLER_DIR = "sys_handler"
-	SYS_MODEL_DIR   = "sys_model"
-	SYS_VIEW_DIR    = "sys_view"
+	BIZ_HANDLER_DIR = "bizhandler"
+	BIZ_MODEL_DIR   = "bizmodel"
+	BIZ_VIEW_DIR    = "bizview"
+	SYS_HANDLER_DIR = "syshandler"
+	SYS_MODEL_DIR   = "sysmodel"
+	SYS_VIEW_DIR    = "sysview"
 	STATIC_DIR      = "static"
 	IMG_DIR         = STATIC_DIR + "/img"
 	JS_DIR          = STATIC_DIR + "/js"
