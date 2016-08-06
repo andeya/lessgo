@@ -19,24 +19,27 @@ import (
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/logs/color"
 	"github.com/lessgo/lessgo/session"
+	"github.com/lessgo/lessgo/utils"
 	"github.com/lessgo/lessgo/websocket"
 )
 
 type (
 	// App is the top-level framework instancthis.
 	App struct {
-		debug        bool
-		router       *Router
-		routes       map[string]Route
-		routerIndex  int
-		chainNodes   []MiddlewareFunc
-		chainHandler HandlerFunc
-		sessions     *session.Manager
-		binder       Binder
-		renderer     Renderer
-		memoryCache  *MemoryCache
-		ctxPool      sync.Pool
-		lock         sync.RWMutex
+		debug          bool
+		router         *Router
+		routes         map[string]Route
+		routerIndex    int
+		chainNodes     []MiddlewareFunc
+		chainHandler   HandlerFunc
+		failureHandler FailureHandlerFunc
+		panicStackFunc PanicStackFunc
+		sessions       *session.Manager
+		binder         Binder
+		renderer       Renderer
+		memoryCache    *MemoryCache
+		ctxPool        sync.Pool
+		lock           sync.RWMutex
 	}
 
 	// Route contains a handler and information for matching against requests.
@@ -48,6 +51,10 @@ type (
 
 	// HandlerFunc defines a function to server HTTP requests.
 	HandlerFunc func(*Context) error
+
+	FailureHandlerFunc func(c *Context, code int, errString string) error
+
+	PanicStackFunc func(rcv interface{}) string
 
 	// MiddlewareFunc defines a function to process middleware.
 	MiddlewareFunc func(HandlerFunc) HandlerFunc
@@ -175,52 +182,49 @@ var (
 		return nil
 	})
 
-	// 请求的url不存在时的默认操作
-	// 404 Not Found
-	defaultNotFoundHandler = func(c *Context) error {
-		return ErrNotFound
+	// 失败状态默认的响应内容
+	defaultFailureHandler = func(c *Context, code int, errString string) error {
+		statusText := http.StatusText(code)
+		if len(errString) > 0 {
+			errString = `<br><p><b style="color:red;">[ERROR]</b> <pre>` + errString + `</pre></p>`
+		}
+
+		return c.HTML(code, fmt.Sprintf(
+			`<html>
+<head><title>%d %s</title></head>
+<body bgcolor="white">
+<center><h1>%d %s</h1></center>
+<hr><center>lessgo/%s</center>
+%s
+</body>
+</html>
+`,
+			code,
+			statusText,
+			code,
+			statusText,
+			VERSION,
+			errString,
+		))
 	}
 
-	// 请求的url存在但方法不被允许时的默认操作
-	// 405 Method Not Allowed
-	defaultMethodNotAllowedHandler = func(c *Context) error {
-		return ErrMethodNotAllowed
-	}
-
-	// 请求的操作发生错误后的默认处理
-	// 500 Internal Server Error
-	defaultInternalServerErrorHandler = func(c *Context, err error, rcv interface{}) {
-		code := http.StatusInternalServerError
-		msg := http.StatusText(code)
-		if rcv != nil {
-			msg = fmt.Sprint(rcv)
-			stack := make([]byte, 4<<10) //4KB
-			length := runtime.Stack(stack, true)
-			Log.Error("[%s] %s %s", color.Red("PANIC RECOVER"), msg, stack[:length])
-
-		} else if err != nil {
-			switch e := err.(type) {
-			case *HTTPError:
-				code = e.Code
-				msg = e.Message
-			case error:
-				if Debug() {
-					msg = e.Error()
-				}
-			}
-			Log.Error("%v", err)
-		}
-		if !c.response.Committed() {
-			c.String(code, msg)
-		}
+	// 从请求过程中的恐慌获取显示的日志内容
+	defaultPanicStackFunc = func(rcv interface{}) string {
+		msg := fmt.Sprint(rcv)
+		stack := make([]byte, 4<<10) //4KB
+		length := runtime.Stack(stack, true)
+		errString := msg + "\n\n[STACK]\n" + utils.Bytes2String(stack[:length])
+		return errString
 	}
 )
 
 // New creates an instance of App.
-func newApp() (this *App) {
-	this = &App{
-		chainHandler: chainEndHandler,
-		binder:       &binder{},
+func newApp() *App {
+	this := &App{
+		chainHandler:   chainEndHandler,
+		binder:         &binder{},
+		failureHandler: defaultFailureHandler,
+		panicStackFunc: defaultPanicStackFunc,
 	}
 
 	this.ctxPool.New = func() interface{} {
@@ -233,7 +237,7 @@ func newApp() (this *App) {
 	this.resetChain()
 
 	this.SetDebug(true)
-	return
+	return this
 }
 
 func (this *App) Log() logs.Logger {
@@ -244,16 +248,14 @@ func (this *App) Sessions() *session.Manager {
 	return this.sessions
 }
 
-func (this *App) SetNotFound(fn func(*Context) error) {
-	this.router.NotFound = HandlerFunc(fn)
+// 设置获取请求过程中恐慌Stack信息的函数
+func (this *App) SetPanicStackFunc(fn func(rcv interface{}) string) {
+	this.panicStackFunc = PanicStackFunc(fn)
 }
 
-func (this *App) SetMethodNotAllowed(fn func(*Context) error) {
-	this.router.MethodNotAllowed = HandlerFunc(fn)
-}
-
-func (this *App) SetInternalServerError(fn func(*Context, error, interface{})) {
-	this.router.ErrorPanicHandler = fn
+// 设置失败状态默认的响应操作
+func (this *App) SetFailureHandler(fn func(c *Context, code int, errString string) error) {
+	this.failureHandler = FailureHandlerFunc(fn)
 }
 
 // SetBinder registers a custom binder. It's invoked by `Context#Bind()`.
@@ -316,22 +318,42 @@ func (this *App) RealRoutes() []Route {
 // ServeHTTP implements `http.Handler` interface, which serves HTTP requests.
 func (this *App) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	this.lock.RLock()
-	var err error
-	var c = this.ctxPool.Get().(*Context)
+	var (
+		err error
+		c   = this.ctxPool.Get().(*Context)
+	)
+
 	defer func() {
-		rcv := recover()
-		if rcv != nil || err != nil {
-			this.router.ErrorPanicHandler(c, err, rcv)
+		if rcv := recover(); rcv != nil {
+			errString := this.panicStackFunc(rcv)
+			if !c.response.Committed() {
+				err = this.failureHandler(c, 500, errString)
+			}
+			Log.Error("[%s] %s", color.Red("PANIC RECOVER"), errString)
 		}
+
+		if err != nil {
+			Log.Error("%s", err.Error())
+		}
+
 		c.free()
 		this.ctxPool.Put(c)
 		this.lock.RUnlock()
 	}()
+
 	if err = c.init(rw, req); err != nil {
+		Log.Error("%s", err.Error())
 		return
 	}
+
 	// Execute chain
-	err = this.chainHandler(c)
+	if err = this.chainHandler(c); err != nil {
+		errString := err.Error()
+		if !c.response.Committed() {
+			err = this.failureHandler(c, 500, errString)
+		}
+		Log.Error("%s", errString)
+	}
 }
 
 // Run starts the HTTP server.
@@ -551,11 +573,12 @@ func (this *App) url(h HandlerFunc, params ...interface{}) string {
 // newContext returns a Context instancthis.
 func (this *App) newContext(resp *Response, req *http.Request) *Context {
 	return &Context{
-		request:  req,
-		response: resp,
-		pvalues:  nil,
-		pkeys:    nil,
-		store:    make(store),
+		request:        req,
+		response:       resp,
+		pvalues:        nil,
+		pkeys:          nil,
+		store:          make(store),
+		failureHandler: this.failureHandler,
 	}
 }
 

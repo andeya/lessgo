@@ -38,24 +38,6 @@ type Router struct {
 	// If enabled, the router automatically replies to OPTIONS requests.
 	// Custom OPTIONS handlers take priority over automatic replies.
 	HandleOPTIONS bool
-
-	// Configurable http.Handler which is called when no matching route is
-	// found. If it is not set, http.NotFound is used.
-	NotFound HandlerFunc
-
-	// Configurable http.Handler which is called when a request
-	// cannot be routed and HandleMethodNotAllowed is true.
-	// If it is not set, http.Error with http.StatusMethodNotAllowed is used.
-	// The "Allow" header with allowed request methods is set before the handler
-	// is called.
-	MethodNotAllowed HandlerFunc
-
-	// Function to handle panics recovered from http handlers.
-	// It should be used to generate a error page and return the http error code
-	// 500 (Internal Server Error).
-	// The handler can be used to keep your server from crashing because of
-	// unrecovered panics.
-	ErrorPanicHandler func(*Context, error, interface{})
 }
 
 // NewRouter returns a new initialized Router.
@@ -162,8 +144,7 @@ func (r *Router) process(next HandlerFunc) HandlerFunc {
 					} else {
 						req.URL.Path = path + "/"
 					}
-					c.Redirect(code, req.URL.String())
-					return next(c)
+					return c.Redirect(code, req.URL.String())
 				}
 
 				// Try to fix the request path
@@ -174,8 +155,7 @@ func (r *Router) process(next HandlerFunc) HandlerFunc {
 					)
 					if found {
 						req.URL.Path = utils.Bytes2String(fixedPath)
-						c.Redirect(code, req.URL.String())
-						return next(c)
+						return c.Redirect(code, req.URL.String())
 					}
 				}
 			}
@@ -186,8 +166,7 @@ func (r *Router) process(next HandlerFunc) HandlerFunc {
 			if r.HandleOPTIONS {
 				if allow := r.allowed(path, req.Method, c.pkeys, c.pvalues); len(allow) > 0 {
 					c.response.Header().Set("Allow", allow)
-					c.NoContent(200)
-					return next(c)
+					return c.NoContent(200)
 				}
 			}
 		} else {
@@ -195,18 +174,12 @@ func (r *Router) process(next HandlerFunc) HandlerFunc {
 			if r.HandleMethodNotAllowed {
 				if allow := r.allowed(path, req.Method, c.pkeys, c.pvalues); len(allow) > 0 {
 					c.response.Header().Set("Allow", allow)
-					if err := r.MethodNotAllowed(c); err != nil {
-						return err
-					}
-					return next(c)
+					return c.Failure(405, nil)
 				}
 			}
 		}
 
 		// Handle 404
-		if err := r.NotFound(c); err != nil {
-			return err
-		}
-		return next(c)
+		return c.Failure(404, nil)
 	}
 }
