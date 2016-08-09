@@ -15,7 +15,11 @@ func (c graceConn) Close() (err error) {
 		if r := recover(); r != nil {
 			switch x := r.(type) {
 			case string:
-				err = errors.New(x)
+				if x == "sync: negative WaitGroup counter" {
+					c.server.wg.Add(1)
+				} else {
+					err = errors.New(x)
+				}
 			case error:
 				err = x
 			default:
