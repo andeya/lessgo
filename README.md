@@ -39,11 +39,13 @@ Lessgo是一款Go语言开发的简单、稳定、高效、灵活的 web开发�
 
 ```sh
 go get -u github.com/lessgo/lessgo
+go get -u github.com/lessgo/less
 go get -u github.com/lessgo/lessgoext/...
 ```
 
 ## 框架构成
 - 核心框架：[lessgo](https://github.com/lessgo/lessgo)
+- 框架部署工具：[less](https://github.com/lessgo/less)
 - 框架扩展：[lessgoext](https://github.com/lessgo/lessgoext)
 - 项目Demo：[demo](https://github.com/lessgo/demo)
 - 框架文档  [document](https://github.com/lessgo/doc)
@@ -65,9 +67,7 @@ import (
 )
 
 func main() {
-    // 开启自动api文档
-    // 参数为true表示自定义允许访问的ip前缀
-    // 参数为false表示只允许局域网访问
+    // 开启自动api文档，false表示仅允许内网访问
     swagger.Reg(false)
     // 指定根目录URL
     lessgo.SetHome("/home")
@@ -81,7 +81,7 @@ func main() {
 ```
 import (
     . "github.com/lessgo/lessgo"
-    "github.com/lessgo/demo/sys_model/admin"
+    "github.com/lessgo/demo/sysmodel/admin"
 )
 
 var Index = ApiHandler{
@@ -115,7 +115,7 @@ var Index = ApiHandler{
         c.Log().Info("formData密码: %#v", c.FormParam("password"))
 
         return c.Render(200,
-            "sys_view/admin/login/index.tpl",
+            "sysview/admin/login/index.tpl",
             map[string]interface{}{
                 "name":       c.FormParam("user"),
                 "password":   c.FormParam("password"),
@@ -162,7 +162,7 @@ package router
 import (
     "github.com/lessgo/lessgo"
 
-    "github.com/lessgo/demo/biz_handler/home"
+    "github.com/lessgo/demo/bizhandler/home"
     "github.com/lessgo/demo/middleware"
 )
 
