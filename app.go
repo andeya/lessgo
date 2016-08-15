@@ -503,16 +503,15 @@ func (this *App) match(methods []string, path string, handler HandlerFunc, middl
 // webSocket adds a webSocket route > handler to the router.
 func (this *App) webSocket(path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
 	this.addwithlog(false, GET, path, HandlerFunc(func(c *Context) error {
-		var err error
 		websocket.Handler(func(ws *websocket.Conn) {
 			c.SetWs(ws)
-			err = handler(c)
+			err := handler(c)
 			ws.Close()
-			if err == io.EOF {
-				err = nil
+			if err != nil {
+				Log.Debug("[ws] %s", err.Error())
 			}
 		}).ServeHTTP(c.response, c.request)
-		return err
+		return nil
 	}), middleware...)
 	Log.Sys("| %-7s | %-30s | %v", WS, path, handlerName(handler))
 }
