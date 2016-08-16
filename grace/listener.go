@@ -42,6 +42,12 @@ func (gl *graceListener) Accept() (c net.Conn, err error) {
 		server: gl.server,
 	}
 
+	defer func() {
+		if r := recover(); r != nil {
+			err = gl.server.fixPanic(r)
+		}
+	}()
+
 	gl.server.wg.Add(1)
 	return
 }

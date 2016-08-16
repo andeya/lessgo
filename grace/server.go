@@ -2,6 +2,7 @@ package grace
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -229,11 +230,7 @@ func (srv *Server) shutdown() {
 func (srv *Server) serverTimeout(d time.Duration) {
 	defer func() {
 		if r := recover(); r != nil {
-			if s, _ := r.(string); s == "sync: negative WaitGroup counter" {
-				srv.wg.Add(1)
-			} else {
-				srv.logger.Sys("[graceful] WaitGroup at 0 %v", r)
-			}
+			srv.logger.Sys("[graceful] WaitGroup at 0 %v", r)
 		}
 	}()
 	if srv.state != StateShuttingDown {
@@ -295,4 +292,26 @@ func (srv *Server) fork() (err error) {
 	}
 
 	return
+}
+
+func (srv *Server) fixPanic(r interface{}) error {
+	var err error
+	defer func() {
+		if r := recover(); r != nil {
+			err = srv.fixPanic(r)
+		}
+	}()
+	switch x := r.(type) {
+	case string:
+		if x == "sync: negative WaitGroup counter" {
+			srv.wg.Add(1)
+		} else {
+			err = errors.New(x)
+		}
+	case error:
+		err = x
+	default:
+		err = errors.New("Unknown panic")
+	}
+	return err
 }
