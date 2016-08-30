@@ -1,6 +1,8 @@
 package lessgo
 
 import (
+	"sync"
+
 	"github.com/lessgo/lessgo/utils"
 )
 
@@ -38,6 +40,8 @@ type Router struct {
 	// If enabled, the router automatically replies to OPTIONS requests.
 	// Custom OPTIONS handlers take priority over automatic replies.
 	HandleOPTIONS bool
+
+	sync.RWMutex
 }
 
 // NewRouter returns a new initialized Router.
@@ -119,9 +123,15 @@ func (r *Router) allowed(path, reqMethod string, pkeys, pvalues []string) string
 // ServeHTTP makes the router implement the MiddlewareFunc.
 func (r *Router) process(next HandlerFunc) HandlerFunc {
 	return func(c *Context) error {
-		req := c.request
-		path := req.URL.Path
-		if root := r.trees[req.Method]; root != nil {
+		var req = c.request
+
+		r.RLock()
+		var root = r.trees[req.Method]
+		r.RUnlock()
+
+		var path = req.URL.Path
+
+		if root != nil {
 			var handle HandlerFunc
 			var tsr bool
 			handle, c.pkeys, c.pvalues, tsr = root.getValue(path, c.pkeys, c.pvalues)

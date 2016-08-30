@@ -395,7 +395,7 @@ var RequestLogger = ApiMiddleware{
 				code = color.Cyan(n)
 			}
 
-			Log.Debug("%s | %s | %s | %s | %s | %d", c.RealRemoteAddr(), method, u, code, stop.Sub(start), c.response.Size())
+			Log.Debug("%s | %s | %s | %s | %s | %d", c.RealRemoteAddr(), method, code, u, stop.Sub(start), c.response.Size())
 			return nil
 		}
 	},
