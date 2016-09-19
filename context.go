@@ -88,17 +88,17 @@ func (c *Context) Scheme() string {
 
 // 获取客户端真实IP
 func (c *Context) RealRemoteAddr() string {
-	if len(c.realRemoteAddr) == 0 {
-		c.realRemoteAddr = c.request.RemoteAddr
-		if ip := c.request.Header.Get(HeaderXRealIP); ip != "" {
-			c.realRemoteAddr = ip
-		} else if ip = c.request.Header.Get(HeaderXForwardedFor); ip != "" {
-			c.realRemoteAddr = ip
-		} else {
-			c.realRemoteAddr, _, _ = net.SplitHostPort(c.realRemoteAddr)
+	if len(c.realRemoteAddr) > 0 {
+		return c.realRemoteAddr
+	}
+	var ip string
+	if ip = c.request.Header.Get(HeaderXRealIP); len(ip) == 0 {
+		if ip = c.request.Header.Get(HeaderXForwardedFor); len(ip) == 0 {
+			ip, _, _ = net.SplitHostPort(c.request.RemoteAddr)
 		}
 	}
-	return c.realRemoteAddr
+	c.realRemoteAddr = ip
+	return ip
 }
 
 // Path returns the registered path for the handler.
