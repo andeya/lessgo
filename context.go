@@ -370,10 +370,6 @@ func (c *Context) Response() *Response {
 	return c.response
 }
 
-func (c *Context) ResponseWriter() http.ResponseWriter {
-	return c.response
-}
-
 func (c *Context) SetResponse(resp *Response) {
 	c.response = resp
 }
