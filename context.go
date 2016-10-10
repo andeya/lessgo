@@ -75,6 +75,18 @@ func (c *Context) SetRequestBody(reader io.Reader) {
 	c.request.Body = ioutil.NopCloser(reader)
 }
 
+func (c *Context) ResponseWriter() http.ResponseWriter {
+	return c
+}
+
+func (c *Context) Response() *Response {
+	return c.response
+}
+
+func (c *Context) SetResponse(resp *Response) {
+	c.response = resp
+}
+
 func (c *Context) IsTLS() bool {
 	return c.request.TLS != nil
 }
@@ -364,14 +376,6 @@ func (c *Context) AddCookieParam(cookie *http.Cookie) {
 // does it based on Content-Type header.
 func (c *Context) Bind(container interface{}) error {
 	return app.binder.Bind(container, c)
-}
-
-func (c *Context) Response() *Response {
-	return c.response
-}
-
-func (c *Context) SetResponse(resp *Response) {
-	c.response = resp
 }
 
 // Header returns the response header.
