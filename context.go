@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -341,10 +342,13 @@ func (c *Context) SaveFile(key string, cover bool, newfname ...string) (fileUrl 
 	} else {
 		fullname = filepath.Join(UPLOADS_DIR, fh.Filename)
 	}
-	if utils.FileExists(fullname) && !cover {
-		idx := strings.LastIndex(fullname, filepath.Ext(fullname))
-		fullname = fullname[:idx] + "(2)" + fullname[idx:]
+
+	idx := strings.LastIndex(fullname, filepath.Ext(fullname))
+	_fullname := fullname
+	for i := 2; utils.FileExists(_fullname) && !cover; i++ {
+		_fullname = fmt.Sprintf("%s(%d)%s", fullname[:idx], i, fullname[idx:])
 	}
+	fullname = _fullname
 
 	fileUrl = "/" + strings.Replace(fullname, `\`, `/`, -1)
 
