@@ -316,7 +316,11 @@ func (c *Context) SaveFile(key string, cover bool, newfname ...string) (fileUrl 
 	}()
 	var fullname string
 	if len(newfname) > 0 {
-		fullname = filepath.Join(UPLOADS_DIR, strings.Replace(newfname[0], "?", fh.Filename, -1))
+		if strings.Contains(newfname[0], "?") {
+			fullname = filepath.Join(UPLOADS_DIR, strings.Replace(newfname[0], "?", fh.Filename, -1))
+		} else {
+			fullname = filepath.Join(UPLOADS_DIR, newfname[0]+filepath.Ext(fh.Filename))
+		}
 		p, _ := filepath.Split(fullname)
 		err = os.MkdirAll(p, 0777)
 		if err != nil {
