@@ -68,7 +68,7 @@ type (
 	// Renderer is the interface that wraps the Render function.
 	Renderer interface {
 		Render(io.Writer, string, interface{}, *Context) error
-		RegisterFilter(name string, fn interface{})
+		TemplateFunc(name string, fn interface{})
 	}
 )
 
@@ -271,11 +271,11 @@ func (this *App) SetRenderer(r Renderer) {
 }
 
 // SetRenderer registers an HTML template renderer. It's invoked by `Context#Render()`.
-func (this *App) RegisterFilter(name string, fn interface{}) {
+func (this *App) TemplateFunc(name string, fn interface{}) {
 	if this.renderer != nil {
-		this.renderer.RegisterFilter(name, fn)
+		this.renderer.TemplateFunc(name, fn)
 	} else {
-		Log.Error("[%s] %s", color.Red("RegisterFilter Error"), "接口renderer为nil")
+		Log.Error("[%s] %s", color.Red("TemplateFunc Error"), "接口renderer为nil")
 	}
 }
 

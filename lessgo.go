@@ -148,8 +148,8 @@ func SetRenderer(r Renderer) {
 	app.SetRenderer(r)
 }
 
-func RegisterFilter(name string, fn interface{}) {
-	app.RegisterFilter(name, fn)
+func TemplateFunc(name string, fn interface{}) {
+	app.TemplateFunc(name, fn)
 }
 
 // 判断当前是否为调试模式
