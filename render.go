@@ -3,10 +3,11 @@ package lessgo
 import (
 	"encoding/json"
 	"errors"
-	"github.com/lessgo/lessgo/pongo2"
 	"io"
 	"sync"
 	"time"
+
+	"github.com/lessgo/lessgo/pongo2"
 )
 
 type (
@@ -32,13 +33,21 @@ func NewPongo2Render(caching bool) *Pongo2Render {
 	}
 }
 
+func (p *Pongo2Render) RegisterFilter(name string, fn interface{}) {
+	switch filerFunc := fn.(type) {
+	case func(in *pongo2.Value, param *pongo2.Value) (out *pongo2.Value, err *pongo2.Error):
+		pongo2.RegisterFilter(name, filerFunc)
+	default:
+		pongo2.RegisterFilter(name, filerFunc.(pongo2.FilterFunction))
+	}
+}
+
 // Render should render the template to the io.Writer.
 func (p *Pongo2Render) Render(w io.Writer, filename string, data interface{}, c *Context) error {
 	var (
 		template *pongo2.Template
 		data2    = pongo2.Context{}
 	)
-
 	switch d := data.(type) {
 	case pongo2.Context:
 		data2 = d

@@ -148,6 +148,10 @@ func SetRenderer(r Renderer) {
 	app.SetRenderer(r)
 }
 
+func RegisterFilter(name string, fn interface{}) {
+	app.RegisterFilter(name, fn)
+}
+
 // 判断当前是否为调试模式
 func Debug() bool {
 	return app.Debug()
