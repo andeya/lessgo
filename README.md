@@ -67,8 +67,8 @@ import (
 )
 
 func main() {
-    // 开启自动api文档，false表示仅允许内网访问
-    swagger.Reg(false)
+    // 开启自动api文档，通过config/apidoc_allow.myconfig进行配置
+    swagger.Reg()
     // 指定根目录URL
     lessgo.SetHome("/home")
     // 开启网络服务
