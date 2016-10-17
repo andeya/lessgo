@@ -33,12 +33,12 @@ func NewPongo2Render(caching bool) *Pongo2Render {
 	}
 }
 
-func (p *Pongo2Render) TemplateFunc(name string, fn interface{}) {
-	switch filerFunc := fn.(type) {
+func (*Pongo2Render) TemplateFunc(name string, fn interface{}) {
+	switch filterFunc := fn.(type) {
 	case func(in *pongo2.Value, param *pongo2.Value) (out *pongo2.Value, err *pongo2.Error):
-		pongo2.RegisterFilter(name, filerFunc)
+		pongo2.RegisterFilter(name, filterFunc)
 	default:
-		pongo2.RegisterFilter(name, filerFunc.(pongo2.FilterFunction))
+		pongo2.RegisterFilter(name, filterFunc.(pongo2.FilterFunction))
 	}
 }
 
