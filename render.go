@@ -48,25 +48,30 @@ func (p *Pongo2Render) TemplateVariable(name string, v interface{}) {
 
 // Render should render the template to the io.Writer.
 func (p *Pongo2Render) Render(w io.Writer, filename string, data interface{}, c *Context) error {
-	var (
-		template *pongo2.Template
-		data2    = pongo2.Context{}
-	)
-	switch d := data.(type) {
-	case pongo2.Context:
-		data2 = d
-	case map[string]interface{}:
-		data2 = pongo2.Context(d)
-	default:
-		b, _ := json.Marshal(data)
-		json.Unmarshal(b, &data2)
-	}
+	var data2 = pongo2.Context{}
 
-	for k, v := range p.tplContext {
-		if _, ok := data2[k]; !ok {
-			data2[k] = v
+	if data == nil {
+		data2 = p.tplContext
+
+	} else {
+		switch d := data.(type) {
+		case pongo2.Context:
+			data2 = d
+		case map[string]interface{}:
+			data2 = pongo2.Context(d)
+		default:
+			b, _ := json.Marshal(data)
+			json.Unmarshal(b, &data2)
+		}
+
+		for k, v := range p.tplContext {
+			if _, ok := data2[k]; !ok {
+				data2[k] = v
+			}
 		}
 	}
+
+	var template *pongo2.Template
 
 	if p.caching {
 		template = pongo2.Must(p.FromCache(filename))
