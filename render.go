@@ -17,9 +17,10 @@ type (
 	}
 	// Pongo2Render is a custom lessgo template renderer using Pongo2.
 	Pongo2Render struct {
-		set      *pongo2.TemplateSet
-		caching  bool // false=disable caching, true=enable caching
-		tplCache map[string]*Tpl
+		set        *pongo2.TemplateSet
+		caching    bool // false=disable caching, true=enable caching
+		tplCache   map[string]*Tpl
+		tplContext pongo2.Context // Context hold globle func for tpl
 		sync.RWMutex
 	}
 )
@@ -27,18 +28,21 @@ type (
 // New creates a new Pongo2Render instance with custom Options.
 func NewPongo2Render(caching bool) *Pongo2Render {
 	return &Pongo2Render{
-		set:      pongo2.NewSet("lessgo", pongo2.DefaultLoader),
-		caching:  caching,
-		tplCache: make(map[string]*Tpl),
+		set:        pongo2.NewSet("lessgo", pongo2.DefaultLoader),
+		caching:    caching,
+		tplCache:   make(map[string]*Tpl),
+		tplContext: make(pongo2.Context),
 	}
 }
 
-func (*Pongo2Render) TemplateFunc(name string, fn interface{}) {
-	switch filterFunc := fn.(type) {
+func (p *Pongo2Render) TemplateVariable(name string, v interface{}) {
+	switch d := v.(type) {
 	case func(in *pongo2.Value, param *pongo2.Value) (out *pongo2.Value, err *pongo2.Error):
-		pongo2.RegisterFilter(name, filterFunc)
+		pongo2.RegisterFilter(name, d)
+	case pongo2.FilterFunction:
+		pongo2.RegisterFilter(name, d)
 	default:
-		pongo2.RegisterFilter(name, filterFunc.(pongo2.FilterFunction))
+		p.tplContext[name] = d
 	}
 }
 
@@ -56,6 +60,12 @@ func (p *Pongo2Render) Render(w io.Writer, filename string, data interface{}, c 
 	default:
 		b, _ := json.Marshal(data)
 		json.Unmarshal(b, &data2)
+	}
+
+	for k, v := range p.tplContext {
+		if _, ok := data2[k]; !ok {
+			data2[k] = v
+		}
 	}
 
 	if p.caching {
