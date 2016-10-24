@@ -430,9 +430,7 @@ func (c *Context) DelCookie() {
 // Content-Type line, Write adds a Content-Type set to the result of passing
 // the initial 512 bytes of written data to DetectContentType.
 func (c *Context) Write(b []byte) (int, error) {
-	n, err := c.response.writer.Write(b)
-	c.response.size += int64(n)
-	return n, err
+	return c.response.writer.Write(b)
 }
 
 // WriteHeader sends an HTTP response header with status code.
@@ -620,7 +618,7 @@ func (c *Context) File(file string) error {
 		if !exist {
 			return c.Failure(404, nil)
 		}
-		return c.ServeContent2(b, fi.Name(), fi.ModTime())
+		return c.ServeContent(bytes.NewReader(b), fi.Name(), fi.ModTime())
 	}
 	f, err := os.Open(file)
 	if err != nil {
@@ -694,28 +692,12 @@ func (c *Context) Attachment(r io.ReadSeeker, name string) error {
 	return err
 }
 
-// ServeContent sends static content from `io.Reader` and handles caching
+// ServeContent sends static content from `io.ReadSeeker` and handles caching
 // via `If-Modified-Since` request header. It automatically sets `Content-Type`
 // and `Last-Modified` response headers.
 func (c *Context) ServeContent(content io.ReadSeeker, name string, modtime time.Time) error {
-	if c.isModified(name, modtime) {
-		c.WriteHeader(http.StatusOK)
-		_, err := io.Copy(c.response, content)
-		return err
-	}
-	return c.NoContent(http.StatusNotModified)
-}
-
-// ServeContent2 sends static content from `[]byte` and handles caching
-// via `If-Modified-Since` request header. It automatically sets `Content-Type`
-// and `Last-Modified` response headers.
-func (c *Context) ServeContent2(content []byte, name string, modtime time.Time) error {
-	if c.isModified(name, modtime) {
-		c.WriteHeader(http.StatusOK)
-		_, err := c.response.Write(content)
-		return err
-	}
-	return c.NoContent(http.StatusNotModified)
+	http.ServeContent(c.response, c.request, name, modtime, content)
+	return nil
 }
 
 func (c *Context) isModified(name string, modtime time.Time) bool {
