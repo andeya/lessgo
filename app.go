@@ -68,6 +68,7 @@ type (
 	// Renderer is the interface that wraps the Render function.
 	Renderer interface {
 		Render(io.Writer, string, interface{}, *Context) error
+		TemplateVariable(name string, v interface{})
 	}
 )
 
@@ -267,6 +268,15 @@ func (this *App) SetBinder(b Binder) {
 // SetRenderer registers an HTML template renderer. It's invoked by `Context#Render()`.
 func (this *App) SetRenderer(r Renderer) {
 	this.renderer = r
+}
+
+// SetRenderer registers an HTML template renderer. It's invoked by `Context#Render()`.
+func (this *App) TemplateVariable(name string, fn interface{}) {
+	if this.renderer != nil {
+		this.renderer.TemplateVariable(name, fn)
+	} else {
+		Log.Error("[%s] %s", color.Red("TemplateVariable Error"), "接口renderer为nil")
+	}
 }
 
 // SetDebug enable/disable debug modthis.

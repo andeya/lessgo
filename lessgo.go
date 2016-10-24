@@ -148,6 +148,10 @@ func SetRenderer(r Renderer) {
 	app.SetRenderer(r)
 }
 
+func TemplateVariable(name string, fn interface{}) {
+	app.TemplateVariable(name, fn)
+}
+
 // 判断当前是否为调试模式
 func Debug() bool {
 	return app.Debug()
