@@ -2,6 +2,7 @@ package lessgo
 
 import (
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -15,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lessgo/lessgo/grace"
+	"github.com/facebookgo/grace/gracehttp"
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/logs/color"
 	"github.com/lessgo/lessgo/session"
@@ -402,28 +403,35 @@ func (this *App) run(address, tlsCertfile, tlsKeyfile string, readTimeout, write
 		}
 
 	} else {
-
 		endRunning := make(chan bool, 1)
-		graceServer := grace.NewServer(address, server, Log)
-		if canHttps {
-			go func() {
-				time.Sleep(20 * time.Microsecond)
-				if err = graceServer.ListenAndServeTLS(tlsCertfile, tlsKeyfile); err != nil {
+		go func() {
+			defer func() {
+				time.Sleep(100 * time.Microsecond)
+				endRunning <- true
+			}()
+
+			if canHttps {
+				var cert tls.Certificate
+				cert, err = tls.LoadX509KeyPair(tlsCertfile, tlsKeyfile)
+				if err != nil {
+					err = fmt.Errorf("Grace-ListenAndServeTLS: %s %s %v", tlsCertfile, tlsKeyfile, err)
+					return
+				}
+				server.TLSConfig = &tls.Config{
+					Certificates:             []tls.Certificate{cert},
+					PreferServerCipherSuites: true,
+				}
+				// graceServer.ListenAndServeTLS(tlsCertfile, tlsKeyfile)
+				if err = gracehttp.Serve(server); err != nil {
 					err = fmt.Errorf("Grace-ListenAndServeTLS: %v, %d", err, os.Getpid())
-					time.Sleep(100 * time.Microsecond)
-					endRunning <- true
 				}
-			}()
-		} else {
-			go func() {
-				// graceServer.Network = "tcp4"
-				if err = graceServer.ListenAndServe(); err != nil {
-					err = fmt.Errorf("Grace-ListenAndServe: %v, %d", err, os.Getpid())
-					time.Sleep(100 * time.Microsecond)
-					endRunning <- true
-				}
-			}()
-		}
+				return
+			}
+
+			if err = gracehttp.Serve(server); err != nil {
+				err = fmt.Errorf("Grace-ListenAndServe: %v, %d", err, os.Getpid())
+			}
+		}()
 		<-endRunning
 	}
 
