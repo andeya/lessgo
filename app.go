@@ -352,7 +352,20 @@ func (this *App) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			if !c.response.Committed() {
 				err = this.failureHandler(c, 500, errString)
 			}
-			Log.Error("[%s] %s", color.Red("PANIC RECOVER"), errString)
+			var code string
+			if runtime.GOOS == "linux" {
+				code = "500"
+			} else {
+				code = color.Red(500)
+			}
+			Log.Error("%s | %7s | %s | %s | [%s]\n%s",
+				c.RealRemoteAddr(),
+				c.request.Method,
+				code,
+				c.request.URL.String(),
+				color.Red("PANIC"),
+				errString,
+			)
 		}
 
 		if err != nil {

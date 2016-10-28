@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -125,13 +126,17 @@ func (w *fileLogWriter) needRotate(size int, day int) bool {
 
 }
 
+var colorRegexp = regexp.MustCompile("\x1b\\[[0-9]{1,2}m")
+
 // WriteMsg write logger message into file.
 func (w *fileLogWriter) WriteMsg(lm logMsg) error {
 	if lm.level > w.Level {
 		return nil
 	}
 	h, d := formatTimeHeader(lm.when)
-	msg := Bytes2String(h) + lm.line + lm.prefix + " " + lm.msg + "\n"
+	msg := append(h, String2Bytes(lm.line+lm.prefix+" "+lm.msg+"\n")...)
+	msg = colorRegexp.ReplaceAll(msg, []byte{})
+
 	if w.Rotate {
 		if w.needRotate(len(msg), d) {
 			w.Lock()
@@ -145,7 +150,7 @@ func (w *fileLogWriter) WriteMsg(lm logMsg) error {
 	}
 
 	w.Lock()
-	_, err := w.fileWriter.Write(String2Bytes(msg))
+	_, err := w.fileWriter.Write(msg)
 	if err == nil {
 		w.maxLinesCurLines++
 		w.maxSizeCurSize += len(msg)

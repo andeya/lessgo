@@ -365,15 +365,7 @@ var RequestLogger = ApiMiddleware{
 	Desc: "RequestLogger returns a middleware that logs HTTP requests.",
 	Middleware: func(next HandlerFunc) HandlerFunc {
 		return func(c *Context) error {
-			if !Debug() {
-				if err := next(c); err != nil {
-					c.Failure(500, err)
-				}
-				return nil
-			}
-
-			u := c.request.URL.String()
-
+			var u = c.request.URL.String()
 			start := time.Now()
 			if err := next(c); err != nil {
 				c.Failure(500, err)
@@ -395,7 +387,7 @@ var RequestLogger = ApiMiddleware{
 				case n >= 500:
 					code = color.Red(n)
 				case n >= 400:
-					code = color.Yellow(n)
+					code = color.Magenta(n)
 				case n >= 300:
 					code = color.Cyan(n)
 				}
