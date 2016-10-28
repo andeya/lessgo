@@ -358,7 +358,7 @@ func (this *App) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			} else {
 				code = color.Red(500)
 			}
-			Log.Error("%s | %7s | %s | %s | [%s]\n%s",
+			Log.Error("%15s | %7s | %s | %s | [%s]\n%s",
 				c.RealRemoteAddr(),
 				c.request.Method,
 				code,

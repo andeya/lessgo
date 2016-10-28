@@ -393,7 +393,7 @@ var RequestLogger = ApiMiddleware{
 				}
 			}
 
-			Log.Debug("%s | %7s | %s | %8d | %10s | %s", c.RealRemoteAddr(), method, code, c.response.Size(), stop.Sub(start), u)
+			Log.Debug("%15s | %7s | %s | %8d | %10s | %s", c.RealRemoteAddr(), method, code, c.response.Size(), stop.Sub(start), u)
 			return nil
 		}
 	},
