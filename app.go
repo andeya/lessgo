@@ -503,7 +503,7 @@ func (this *App) static(prefix, root string, middleware ...MiddlewareFunc) {
 	this.addwithlog(false, GET, prefix+"/*filepath", func(c *Context) error {
 		return c.File(path.Join(root, c.PathParamByIndex(0)))
 	}, middleware...)
-	Log.Sys("| %-7s | %-30s | %v", GET, prefix+"/*filepath", root)
+	Log.Sys("| %7s | %-30s | %v", GET, prefix+"/*filepath", root)
 }
 
 // file registers a new route with path to serve a static filthis.
@@ -511,7 +511,7 @@ func (this *App) file(path, file string, middleware ...MiddlewareFunc) {
 	this.addwithlog(false, GET, path, HandlerFunc(func(c *Context) error {
 		return c.File(file)
 	}), middleware...)
-	Log.Sys("| %-7s | %-30s | %v", GET, path, file)
+	Log.Sys("| %7s | %-30s | %v", GET, path, file)
 }
 
 // match registers a new route for multiple HTTP methods and path with matching
@@ -540,7 +540,7 @@ func (this *App) webSocket(path string, handler HandlerFunc, middleware ...Middl
 		}).ServeHTTP(c.response, c.request)
 		return nil
 	}), middleware...)
-	Log.Sys("| %-7s | %-30s | %v", WS, path, handlerName(handler))
+	Log.Sys("| %7s | %-30s | %v", WS, path, handlerName(handler))
 }
 
 func (this *App) add(method, path string, handler HandlerFunc, middleware ...MiddlewareFunc) {
@@ -564,7 +564,7 @@ func (this *App) addwithlog(logprint bool, method, path string, handler HandlerF
 	}
 
 	if logprint {
-		Log.Sys("| %-7s | %-30s | %v", method, path, name)
+		Log.Sys("| %7s | %-30s | %v", method, path, name)
 	}
 }
 

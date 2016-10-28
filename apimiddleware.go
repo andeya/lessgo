@@ -7,6 +7,7 @@ import (
 	"path"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -385,17 +386,22 @@ var RequestLogger = ApiMiddleware{
 			}
 
 			n := c.response.Status()
-			code := color.Green(n)
-			switch {
-			case n >= 500:
-				code = color.Red(n)
-			case n >= 400:
-				code = color.Yellow(n)
-			case n >= 300:
-				code = color.Cyan(n)
+			var code string
+			if runtime.GOOS == "linux" {
+				code = strconv.Itoa(n)
+			} else {
+				code = color.Green(n)
+				switch {
+				case n >= 500:
+					code = color.Red(n)
+				case n >= 400:
+					code = color.Yellow(n)
+				case n >= 300:
+					code = color.Cyan(n)
+				}
 			}
 
-			Log.Debug("%s | %s | %s | %s | %s | %d", c.RealRemoteAddr(), method, code, u, stop.Sub(start), c.response.Size())
+			Log.Debug("%s | %7s | %s | %8d | %10s | %s", c.RealRemoteAddr(), method, code, c.response.Size(), stop.Sub(start), u)
 			return nil
 		}
 	},
