@@ -16,6 +16,7 @@ package logs
 
 import (
 	"encoding/json"
+	"runtime"
 
 	"github.com/lessgo/lessgo/logs/color"
 )
@@ -53,6 +54,9 @@ func NewConsole() Logger {
 		lg:       out,
 		Level:    LevelDebug,
 		Colorful: true,
+	}
+	if runtime.GOOS == "linux" {
+		cw.Colorful = false
 	}
 	return cw
 }

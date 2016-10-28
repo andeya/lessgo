@@ -81,7 +81,7 @@ func newFileWriter() Logger {
 //	"daily":true,
 //	"maxDays":15,
 //	"rotate":true,
-//  	"perm":0600
+//  	"perm":0660
 //	}
 func (w *fileLogWriter) Init(jsonConfig string) error {
 	err := json.Unmarshal([]byte(jsonConfig), w)
