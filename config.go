@@ -34,11 +34,10 @@ type (
 	}
 	// Listen holds for http and https related config
 	Listen struct {
-		Graceful      bool // Graceful means use graceful module to start the server
 		Address       string
 		ReadTimeout   int64
 		WriteTimeout  int64
-		EnableHTTPS   bool
+		EnableTLS     bool
 		HTTPSKeyFile  string
 		HTTPSCertFile string
 	}
@@ -117,11 +116,10 @@ func newConfig() *config {
 		CrossDomain: false,
 		MaxMemoryMB: 64, // 64MB
 		Listen: Listen{
-			Graceful:      false,
 			Address:       "0.0.0.0:8080",
 			ReadTimeout:   0,
 			WriteTimeout:  0,
-			EnableHTTPS:   false,
+			EnableTLS:     false,
 			HTTPSCertFile: "",
 			HTTPSKeyFile:  "",
 		},

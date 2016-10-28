@@ -81,7 +81,7 @@ func newSessions() (sessions *session.Manager, err error) {
 		"cookieName":              Config.Session.SessionName,
 		"gclifetime":              Config.Session.SessionGCMaxLifetime,
 		"providerConfig":          filepath.ToSlash(Config.Session.SessionProviderConfig),
-		"secure":                  Config.Listen.EnableHTTPS,
+		"secure":                  Config.Listen.EnableTLS,
 		"enableSetCookie":         Config.Session.SessionAutoSetCookie,
 		"domain":                  Config.Session.SessionDomain,
 		"cookieLifeTime":          Config.Session.SessionCookieLifeTime,
