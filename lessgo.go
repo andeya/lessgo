@@ -498,7 +498,8 @@ func ReregisterRouter(reasons ...string) {
 }
 
 // 运行服务
-func Run() {
+// @param graceExitCallback设置优雅关闭或重启时的收尾函数
+func Run(graceExitCallback ...func() error) {
 	// 添加系统预设的路由操作前的中间件
 	registerBefore()
 
@@ -539,6 +540,10 @@ func Run() {
 	}
 
 	Log.Sys("> %s listen and serve gracefully %s/HTTP2 on %v (%s-mode)", Config.AppName, protocol, Config.Listen.Address, mode)
+
+	if len(graceExitCallback) > 0 {
+		lessgo.App.SetGraceExitFunc(graceExitCallback[0])
+	}
 
 	// 启动服务
 	lessgo.App.run(

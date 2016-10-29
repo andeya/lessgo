@@ -1,16 +1,12 @@
 // Package gracehttp provides easy to use graceful restart
 // functionality for HTTP server.
-// modified by henrylee 2016.10.27
+// modified by henrylee 2016.10.29
 
 package gracehttp
 
 import (
-	"bytes"
-	"crypto/tls"
-	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,87 +14,7 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
-
-	"github.com/facebookgo/grace/gracenet"
-	"github.com/facebookgo/httpdown"
 )
-
-var (
-	verbose    = flag.Bool("gracehttp.log", true, "Enable logging.")
-	didInherit = os.Getenv("LISTEN_FDS") != ""
-	ppid       = os.Getppid()
-)
-
-// An app contains one or more servers and associated configuration.
-type app struct {
-	servers   []*http.Server
-	http      *httpdown.HTTP
-	net       *gracenet.Net
-	listeners []net.Listener
-	sds       []httpdown.Server
-	errors    chan error
-}
-
-func newApp(servers []*http.Server) *app {
-	return &app{
-		servers:   servers,
-		http:      &httpdown.HTTP{},
-		net:       &gracenet.Net{},
-		listeners: make([]net.Listener, 0, len(servers)),
-		sds:       make([]httpdown.Server, 0, len(servers)),
-
-		// 2x num servers for possible Close or Stop errors + 1 for possible
-		// StartProcess error.
-		errors: make(chan error, 1+(len(servers)*2)),
-	}
-}
-
-func (a *app) listen() error {
-	for _, s := range a.servers {
-		// TODO: default addresses
-		l, err := a.net.Listen("tcp", s.Addr)
-		if err != nil {
-			return err
-		}
-		if s.TLSConfig != nil {
-			l = tls.NewListener(l, s.TLSConfig)
-		}
-		a.listeners = append(a.listeners, l)
-	}
-	return nil
-}
-
-func (a *app) serve() {
-	for i, s := range a.servers {
-		a.sds = append(a.sds, a.http.Serve(s, a.listeners[i]))
-	}
-}
-
-func (a *app) wait() {
-	var wg sync.WaitGroup
-	wg.Add(len(a.sds) * 2) // Wait & Stop
-	go a.signalHandler(&wg)
-	for _, s := range a.sds {
-		go func(s httpdown.Server) {
-			defer wg.Done()
-			if err := s.Wait(); err != nil {
-				a.errors <- err
-			}
-		}(s)
-	}
-	wg.Wait()
-}
-
-func (a *app) term(wg *sync.WaitGroup) {
-	for _, s := range a.sds {
-		go func(s httpdown.Server) {
-			defer wg.Done()
-			if err := s.Stop(); err != nil {
-				a.errors <- err
-			}
-		}(s)
-	}
-}
 
 func (a *app) signalHandler(wg *sync.WaitGroup) {
 	ch := make(chan os.Signal, 10)
@@ -110,16 +26,26 @@ func (a *app) signalHandler(wg *sync.WaitGroup) {
 			// this ensures a subsequent INT/TERM will trigger standard go behaviour of
 			// terminating.
 			signal.Stop(ch)
+			if err := a.terminateFunc(); err != nil {
+				a.errors <- err
+			}
 			a.term(wg)
 			return
 		}
 	}
 }
 
-// Serve will serve the given http.Servers and will monitor for signals
-// allowing for graceful termination (SIGTERM).
-func Serve(servers ...*http.Server) error {
+// ServeWithTerminateFunc will serve the given http.Servers and will monitor for signals
+// allowing for graceful termination (SIGINT).
+func ServeWithTerminateFunc(terminateFunc func() error, servers ...*http.Server) error {
 	a := newApp(servers)
+	if terminateFunc == nil {
+		a.terminateFunc = func() error {
+			return nil
+		}
+	} else {
+		a.terminateFunc = terminateFunc
+	}
 
 	// Acquire Listeners
 	if err := a.listen(); err != nil {
@@ -171,16 +97,4 @@ func Serve(servers ...*http.Server) error {
 		}
 		return nil
 	}
-}
-
-// Used for pretty printing addresses.
-func pprintAddr(listeners []net.Listener) []byte {
-	var out bytes.Buffer
-	for i, l := range listeners {
-		if i != 0 {
-			fmt.Fprint(&out, ", ")
-		}
-		fmt.Fprint(&out, l.Addr())
-	}
-	return out.Bytes()
 }

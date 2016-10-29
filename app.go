@@ -42,6 +42,8 @@ type (
 		ctxPool        sync.Pool
 		serving        bool
 		lock           sync.RWMutex
+		// the graceful exit or restart callback function
+		graceExitCallback func() error
 	}
 
 	// Route contains a handler and information for matching against requests.
@@ -396,6 +398,11 @@ func (this *App) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
+// Set the graceful exit or restart callback function.
+func (this *App) SetGraceExitFunc(fn func() error) {
+	this.graceExitCallback = fn
+}
+
 // Run starts the HTTP server.
 func (this *App) run(address, tlsCertfile, tlsKeyfile string, readTimeout, writeTimeout int64) {
 	var err error
@@ -421,21 +428,24 @@ func (this *App) run(address, tlsCertfile, tlsKeyfile string, readTimeout, write
 				Certificates:             []tls.Certificate{cert},
 				PreferServerCipherSuites: true,
 			}
-			if err = gracehttp.Serve(server); err != nil {
+			if err = gracehttp.ServeWithTerminateFunc(this.graceExitCallback, server); err != nil {
 				err = fmt.Errorf("Grace-ListenAndServeTLS: %v, %d", err, os.Getpid())
 			}
 			return
 		}
 
-		if err = gracehttp.Serve(server); err != nil {
+		if err = gracehttp.ServeWithTerminateFunc(this.graceExitCallback, server); err != nil {
 			err = fmt.Errorf("Grace-ListenAndServe: %v, %d", err, os.Getpid())
 		}
 	}()
 	<-endRunning
 
 	if err != nil {
-		Log.Fatal("%v", err)
-		select {}
+		if strings.Contains(err.Error(), "use of closed network connection") {
+			Log.Warn("%v", "stopped listening and serveing: %s", address)
+		} else {
+			Log.Fatal("%v", err)
+		}
 	}
 }
 
