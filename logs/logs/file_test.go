@@ -25,11 +25,11 @@ import (
 
 func TestFile1(t *testing.T) {
 	log := NewLogger(10000)
-	log.SetLogger("file", `{"filename":"test.log"}`)
+	log.AddAdapter("file", `{"filename":"test.log"}`)
 	log.Debug("debug")
-	log.Informational("info")
+	log.Info("info")
 	log.Notice("notice")
-	log.Warning("warning")
+	log.Warn("warning")
 	log.Error("error")
 	log.Alert("alert")
 	log.Critical("critical")
@@ -58,11 +58,11 @@ func TestFile1(t *testing.T) {
 
 func TestFile2(t *testing.T) {
 	log := NewLogger(10000)
-	log.SetLogger("file", fmt.Sprintf(`{"filename":"test2.log","level":%d}`, LevelError))
+	log.AddAdapter("file", fmt.Sprintf(`{"filename":"test2.log","level":%d}`, LevelError))
 	log.Debug("debug")
 	log.Info("info")
 	log.Notice("notice")
-	log.Warning("warning")
+	log.Warn("warning")
 	log.Error("error")
 	log.Alert("alert")
 	log.Critical("critical")
@@ -91,11 +91,11 @@ func TestFile2(t *testing.T) {
 
 func TestFileRotate(t *testing.T) {
 	log := NewLogger(10000)
-	log.SetLogger("file", `{"filename":"test3.log","maxlines":4}`)
+	log.AddAdapter("file", `{"filename":"test3.log","maxlines":4}`)
 	log.Debug("debug")
 	log.Info("info")
 	log.Notice("notice")
-	log.Warning("warning")
+	log.Warn("warning")
 	log.Error("error")
 	log.Alert("alert")
 	log.Critical("critical")
@@ -123,7 +123,7 @@ func exists(path string) (bool, error) {
 
 func BenchmarkFile(b *testing.B) {
 	log := NewLogger(100000)
-	log.SetLogger("file", `{"filename":"test4.log"}`)
+	log.AddAdapter("file", `{"filename":"test4.log"}`)
 	for i := 0; i < b.N; i++ {
 		log.Debug("debug")
 	}
@@ -132,8 +132,8 @@ func BenchmarkFile(b *testing.B) {
 
 func BenchmarkFileAsynchronous(b *testing.B) {
 	log := NewLogger(100000)
-	log.SetLogger("file", `{"filename":"test4.log"}`)
-	log.Async()
+	log.AddAdapter("file", `{"filename":"test4.log"}`)
+	// log.Async()
 	for i := 0; i < b.N; i++ {
 		log.Debug("debug")
 	}
@@ -142,7 +142,7 @@ func BenchmarkFileAsynchronous(b *testing.B) {
 
 func BenchmarkFileCallDepth(b *testing.B) {
 	log := NewLogger(100000)
-	log.SetLogger("file", `{"filename":"test4.log"}`)
+	log.AddAdapter("file", `{"filename":"test4.log"}`)
 	log.EnableFuncCallDepth(true)
 	log.SetLogFuncCallDepth(2)
 	for i := 0; i < b.N; i++ {
@@ -153,10 +153,10 @@ func BenchmarkFileCallDepth(b *testing.B) {
 
 func BenchmarkFileAsynchronousCallDepth(b *testing.B) {
 	log := NewLogger(100000)
-	log.SetLogger("file", `{"filename":"test4.log"}`)
+	log.AddAdapter("file", `{"filename":"test4.log"}`)
 	log.EnableFuncCallDepth(true)
 	log.SetLogFuncCallDepth(2)
-	log.Async()
+	// log.Async()
 	for i := 0; i < b.N; i++ {
 		log.Debug("debug")
 	}
@@ -165,7 +165,7 @@ func BenchmarkFileAsynchronousCallDepth(b *testing.B) {
 
 func BenchmarkFileOnGoroutine(b *testing.B) {
 	log := NewLogger(100000)
-	log.SetLogger("file", `{"filename":"test4.log"}`)
+	log.AddAdapter("file", `{"filename":"test4.log"}`)
 	for i := 0; i < b.N; i++ {
 		go log.Debug("debug")
 	}

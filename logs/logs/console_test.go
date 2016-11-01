@@ -24,9 +24,9 @@ func testConsoleCalls(bl *BeeLogger) {
 	bl.Alert("alert")
 	bl.Critical("critical")
 	bl.Error("error")
-	bl.Warning("warning")
+	bl.Warn("warning")
 	bl.Notice("notice")
-	bl.Informational("informational")
+	bl.Info("informational")
 	bl.Debug("debug")
 }
 
@@ -35,17 +35,17 @@ func testConsoleCalls(bl *BeeLogger) {
 func TestConsole(t *testing.T) {
 	log1 := NewLogger(10000)
 	log1.EnableFuncCallDepth(true)
-	log1.SetLogger("console", "")
+	log1.AddAdapter("console", "")
 	testConsoleCalls(log1)
 
 	log2 := NewLogger(100)
-	log2.SetLogger("console", `{"level":3}`)
+	log2.AddAdapter("console", `{"level":3}`)
 	testConsoleCalls(log2)
 }
 
 // Test console without color
 func TestConsoleNoColor(t *testing.T) {
-	log := NewLogger(100)
-	log.SetLogger("console", `{"color":false}`)
+	log := NewLogger(0)
+	log.AddAdapter("console", `{"color":false}`)
 	testConsoleCalls(log)
 }
