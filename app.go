@@ -20,7 +20,6 @@ import (
 	"github.com/lessgo/lessgo/logs"
 	"github.com/lessgo/lessgo/logs/color"
 	"github.com/lessgo/lessgo/session"
-	"github.com/lessgo/lessgo/utils"
 	"github.com/lessgo/lessgo/websocket"
 )
 
@@ -188,38 +187,31 @@ var (
 	})
 
 	// 失败状态默认的响应内容
-	defaultFailureHandler = func(c *Context, code int, errString string) error {
+	defaultFailureHandler = func(c *Context, code int, errStr string) error {
 		statusText := http.StatusText(code)
-		if len(errString) > 0 {
-			errString = `<br><p><b style="color:red;">[ERROR]</b> <pre>` + errString + `</pre></p>`
+		if len(errStr) > 0 {
+			errStr = `<br><p><b style="color:red;">[ERROR]</b> <pre>` + errStr + `</pre></p>`
 		}
-
-		return c.HTML(code, fmt.Sprintf(
-			`<html>
-<head><title>%d %s</title></head>
-<body bgcolor="white">
-<center><h1>%d %s</h1></center>
-<hr><center>lessgo/%s</center>
-%s
-</body>
-</html>
-`,
-			code,
-			statusText,
-			code,
-			statusText,
-			VERSION,
-			errString,
-		))
+		c.response.Header().Set(HeaderXContentTypeOptions, "nosniff")
+		return c.HTML(code, fmt.Sprintf("<html>\n"+
+			"<head><title>%d %s</title></head>\n"+
+			"<body bgcolor=\"white\">\n"+
+			"<center><h1>%d %s</h1></center>\n"+
+			"<hr>\n<center>lessgo/%s</center>\n%s\n</body>\n</html>\n",
+			code, statusText, code, statusText, VERSION, errStr),
+		)
 	}
 
 	// 从请求过程中的恐慌获取显示的日志内容
 	defaultPanicStackFunc = func(rcv interface{}) string {
-		msg := fmt.Sprint(rcv)
+		s := []byte("/src/runtime/panic.go")
+		line := []byte("\n")
 		stack := make([]byte, 4<<10) //4KB
 		length := runtime.Stack(stack, true)
-		errString := msg + "\n\n[STACK]\n" + utils.Bytes2String(stack[:length])
-		return errString
+		start := bytes.Index(stack, s)
+		stack = stack[start:length]
+		start = bytes.Index(stack, line) + 1
+		return fmt.Sprintf("%v\n\n[STACK]\n%s", rcv, stack[start:])
 	}
 )
 

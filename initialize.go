@@ -2,7 +2,6 @@ package lessgo
 
 import (
 	"encoding/json"
-	"fmt"
 	"mime"
 	"path/filepath"
 	"time"
@@ -61,10 +60,6 @@ func newLessgo() *Lessgo {
 	}
 
 	return l
-}
-
-func printInfo() {
-	fmt.Printf(">%s %s (%s)\n", NAME, VERSION, ADDRESS)
 }
 
 func registerMime() {

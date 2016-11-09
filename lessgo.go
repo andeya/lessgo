@@ -53,14 +53,21 @@ type Lessgo struct {
 
 const (
 	NAME    = "Lessgo"
-	VERSION = "0.7.0"
+	VERSION = "0.8"
 	ADDRESS = "https://github.com/lessgo/lessgo"
+	banner  = `
+     /-            less is more 
+    /-   __   __  __  __   __ 
+   /-   /__/ /_  /_  /  / /  /
+  /___ /__  __/ __/ /__/ /__/
+                      /  ` + VERSION + `
+                   __/          ` + "\n"
 )
 
 var (
 	// 全局配置实例
 	Config = func() *config {
-		printInfo()
+		fmt.Printf("%s\n(%s)\n\n", banner[1:], ADDRESS)
 		c := newConfig()
 		err := c.LoadMainConfig()
 		if err != nil {
