@@ -327,22 +327,32 @@ func (c *Context) SaveFile(key string, cover bool, newfname ...string) (fileUrl 
 			err = err2
 		}
 	}()
+
+	// Sets the full file name
 	var fullname string
-	if len(newfname) > 0 {
+	if len(newfname) == 0 {
+		fullname = filepath.Join(UPLOADS_DIR, fh.Filename)
+	} else {
 		if strings.Contains(newfname[0], "?") {
 			fullname = filepath.Join(UPLOADS_DIR, strings.Replace(newfname[0], "?", fh.Filename, -1))
 		} else {
-			fullname = filepath.Join(UPLOADS_DIR, newfname[0]+filepath.Ext(fh.Filename))
+			fname := strings.TrimRight(newfname[0], ".")
+			if filepath.Ext(fname) == "" {
+				fullname = filepath.Join(UPLOADS_DIR, fname+filepath.Ext(fh.Filename))
+			} else {
+				fullname = filepath.Join(UPLOADS_DIR, fname)
+			}
 		}
-		p, _ := filepath.Split(fullname)
-		err = os.MkdirAll(p, 0777)
-		if err != nil {
-			return
-		}
-	} else {
-		fullname = filepath.Join(UPLOADS_DIR, fh.Filename)
 	}
 
+	// Create the completion file path
+	p, _ := filepath.Split(fullname)
+	err = os.MkdirAll(p, 0777)
+	if err != nil {
+		return
+	}
+
+	// If the file with the same name exists, add the suffix of the serial number
 	idx := strings.LastIndex(fullname, filepath.Ext(fullname))
 	_fullname := fullname
 	for i := 2; utils.FileExists(_fullname) && !cover; i++ {
@@ -350,8 +360,10 @@ func (c *Context) SaveFile(key string, cover bool, newfname ...string) (fileUrl 
 	}
 	fullname = _fullname
 
+	// Create the URL of the file
 	fileUrl = "/" + strings.Replace(fullname, `\`, `/`, -1)
 
+	// Save the file to local
 	f2, err := os.OpenFile(fullname, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
