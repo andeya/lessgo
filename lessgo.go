@@ -67,7 +67,7 @@ const (
 var (
 	// 全局配置实例
 	Config = func() *config {
-		fmt.Printf("%s\n(%s)\n\n", banner[1:], ADDRESS)
+		fmt.Printf("%s\n(%s)\n\n", banner, ADDRESS)
 		c := newConfig()
 		err := c.LoadMainConfig()
 		if err != nil {
