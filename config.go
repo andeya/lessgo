@@ -38,6 +38,7 @@ type (
 		ReadTimeout   int64
 		WriteTimeout  int64
 		EnableTLS     bool
+		TLSAddress    string
 		HTTPSKeyFile  string
 		HTTPSCertFile string
 	}
@@ -120,6 +121,7 @@ func newConfig() *config {
 			ReadTimeout:   0,
 			WriteTimeout:  0,
 			EnableTLS:     false,
+			TLSAddress:    "0.0.0.0:10443",
 			HTTPSCertFile: "",
 			HTTPSKeyFile:  "",
 		},
