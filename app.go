@@ -409,41 +409,36 @@ func (this *App) run(address, tlsAddress, tlsCertfile, tlsKeyfile string, readTi
 		defer func() {
 			endRunning <- true
 		}()
-
+		var servers []*http.Server
 		if canTLS := tlsCertfile != "" && tlsKeyfile != ""; canTLS {
-			go func() {
-				server := &http.Server{
-					Addr:         tlsAddress,
-					Handler:      this,
-					ReadTimeout:  time.Duration(readTimeout),
-					WriteTimeout: time.Duration(writeTimeout),
-				}
-				var cert tls.Certificate
-				cert, err = tls.LoadX509KeyPair(tlsCertfile, tlsKeyfile)
-				if err != nil {
-					err = fmt.Errorf("Grace-ListenAndServeTLS: %s %s %v", tlsCertfile, tlsKeyfile, err)
-					return
-				}
-				server.TLSConfig = &tls.Config{
-					Certificates:             []tls.Certificate{cert},
-					PreferServerCipherSuites: true,
-				}
-				Log.Sys("> %s listen and serve gracefully HTTPS/HTTP2 on %v (%s-mode)", Config.AppName, tlsAddress, mode)
-
-				if err = gracehttp.ServeWithTerminateFunc(this.graceExitCallback, server); err != nil {
-					err = fmt.Errorf("Grace-ListenAndServeTLS: %v, %d", err, os.Getpid())
-				}
-			}()
+			server := &http.Server{
+				Addr:         tlsAddress,
+				Handler:      this,
+				ReadTimeout:  time.Duration(readTimeout),
+				WriteTimeout: time.Duration(writeTimeout),
+			}
+			var cert tls.Certificate
+			cert, err = tls.LoadX509KeyPair(tlsCertfile, tlsKeyfile)
+			if err != nil {
+				err = fmt.Errorf("Grace-ListenAndServeTLS: %s %s %v", tlsCertfile, tlsKeyfile, err)
+				return
+			}
+			server.TLSConfig = &tls.Config{
+				Certificates:             []tls.Certificate{cert},
+				PreferServerCipherSuites: true,
+			}
+			servers = append(servers, server)
+			Log.Sys("> %s listen and serve gracefully HTTPS/HTTP2 on %v (%s-mode)", Config.AppName, tlsAddress, mode)
 		}
-
 		server := &http.Server{
 			Addr:         address,
 			Handler:      this,
 			ReadTimeout:  time.Duration(readTimeout),
 			WriteTimeout: time.Duration(writeTimeout),
 		}
+		servers = append(servers, server)
 		Log.Sys("> %s listen and serve gracefully HTTP/HTTP2 on %v (%s-mode)", Config.AppName, address, mode)
-		if err = gracehttp.ServeWithTerminateFunc(this.graceExitCallback, server); err != nil {
+		if err = gracehttp.ServeWithTerminateFunc(this.graceExitCallback, servers...); err != nil {
 			err = fmt.Errorf("Grace-ListenAndServe: %v, %d", err, os.Getpid())
 		}
 	}()
