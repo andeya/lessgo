@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"strings"
 
-	confpkg "github.com/lessgo/lessgo/config"
-	"github.com/lessgo/lessgo/logs"
+	confpkg "github.com/henrylee2cn/lessgo/config"
+	"github.com/henrylee2cn/lessgo/logs"
 )
 
 type (
@@ -109,9 +109,9 @@ func newConfig() *config {
 			Description: "A simple, stable, efficient and flexible web framework.",
 			// Host:              "127.0.0.1:8080",
 			Email:             "henrylee_cn@foxmail.com",
-			TermsOfServiceUrl: "https://github.com/lessgo/lessgo",
+			TermsOfServiceUrl: "https://github.com/henrylee2cn/lessgo",
 			License:           "MIT",
-			LicenseUrl:        "https://github.com/lessgo/lessgo/raw/master/doc/LICENSE",
+			LicenseUrl:        "https://github.com/henrylee2cn/lessgo/raw/master/doc/LICENSE",
 		},
 		Debug:       true,
 		CrossDomain: false,

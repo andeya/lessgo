@@ -3,7 +3,7 @@ package lessgo
 import (
 	"sync"
 
-	"github.com/lessgo/lessgo/utils"
+	"github.com/henrylee2cn/lessgo/utils"
 )
 
 // Router is a http.Handler which can be used to dispatch requests to different

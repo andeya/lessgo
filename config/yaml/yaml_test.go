@@ -18,7 +18,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/lessgo/lessgo/config"
+	"github.com/henrylee2cn/lessgo/config"
 )
 
 var yamlcontext = `

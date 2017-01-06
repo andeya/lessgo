@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lessgo/lessgo/pongo2"
+	"github.com/henrylee2cn/lessgo/pongo2"
 )
 
 type (

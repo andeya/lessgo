@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/lessgo/lessgo/session"
+	"github.com/henrylee2cn/lessgo/session"
 )
 
 func newLessgo() *Lessgo {

@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"github.com/facebookgo/grace/gracehttp"
-	"github.com/lessgo/lessgo/logs"
-	"github.com/lessgo/lessgo/logs/color"
-	"github.com/lessgo/lessgo/session"
-	"github.com/lessgo/lessgo/websocket"
+	"github.com/henrylee2cn/lessgo/logs"
+	"github.com/henrylee2cn/lessgo/logs/color"
+	"github.com/henrylee2cn/lessgo/session"
+	"github.com/henrylee2cn/lessgo/websocket"
 )
 
 type (

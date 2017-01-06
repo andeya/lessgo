@@ -20,8 +20,8 @@
 //
 // Usage:
 // import(
-//   _ "github.com/lessgo/lessgo/config/xml"
-//   "github.com/lessgo/lessgo/config"
+//   _ "github.com/henrylee2cn/lessgo/config/xml"
+//   "github.com/henrylee2cn/lessgo/config"
 // )
 //
 //  cnf, err := config.NewConfig("xml", "config.xml")
@@ -41,9 +41,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lessgo/lessgo/config/xml/x2j"
+	"github.com/henrylee2cn/lessgo/config/xml/x2j"
 
-	"github.com/lessgo/lessgo/config"
+	"github.com/henrylee2cn/lessgo/config"
 )
 
 // Config is a xml config parser and implements Config interface.

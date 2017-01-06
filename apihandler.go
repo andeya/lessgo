@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lessgo/lessgo/utils"
+	"github.com/henrylee2cn/lessgo/utils"
 )
 
 type (

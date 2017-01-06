@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lessgo/lessgo/logs/color"
-	"github.com/lessgo/lessgo/utils"
+	"github.com/henrylee2cn/lessgo/logs/color"
+	"github.com/henrylee2cn/lessgo/utils"
 )
 
 /*

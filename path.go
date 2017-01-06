@@ -1,7 +1,7 @@
 package lessgo
 
 import (
-	"github.com/lessgo/lessgo/utils"
+	"github.com/henrylee2cn/lessgo/utils"
 )
 
 // CleanPath is the URL version of path.Clean, it returns a canonical URL path

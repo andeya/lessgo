@@ -15,11 +15,11 @@ import (
 	"runtime"
 	"sync"
 
-	_ "github.com/lessgo/lessgo/_fixture"
-	"github.com/lessgo/lessgo/logs"
-	"github.com/lessgo/lessgo/session"
-	"github.com/lessgo/lessgo/utils"
-	"github.com/lessgo/lessgoext/uuid"
+	_ "github.com/henrylee2cn/lessgo/_fixture"
+	"github.com/henrylee2cn/lessgo/logs"
+	"github.com/henrylee2cn/lessgo/session"
+	"github.com/henrylee2cn/lessgo/utils"
+	"github.com/henrylee2cn/lessgoext/uuid"
 )
 
 type Lessgo struct {
@@ -54,7 +54,7 @@ type Lessgo struct {
 const (
 	NAME    = "Lessgo"
 	VERSION = "0.8"
-	ADDRESS = "https://github.com/lessgo/lessgo"
+	ADDRESS = "https://github.com/henrylee2cn/lessgo"
 	banner  = `
      /-            less is more 
     /-   __   __  __  __   __ 

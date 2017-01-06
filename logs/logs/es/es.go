@@ -10,7 +10,7 @@ import (
 
 	"github.com/belogik/goes"
 
-	"github.com/lessgo/lessgo/logs/logs"
+	"github.com/henrylee2cn/lessgo/logs/logs"
 )
 
 // NewES return a LoggerInterface

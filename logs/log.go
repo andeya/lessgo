@@ -1,7 +1,7 @@
 package logs
 
 import (
-	"github.com/lessgo/lessgo/logs/logs"
+	"github.com/henrylee2cn/lessgo/logs/logs"
 )
 
 type (

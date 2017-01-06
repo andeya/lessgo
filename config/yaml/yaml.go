@@ -20,8 +20,8 @@
 //
 // Usage:
 // import(
-//   _ "github.com/lessgo/lessgo/config/yaml"
-//   "github.com/lessgo/lessgo/config"
+//   _ "github.com/henrylee2cn/lessgo/config/yaml"
+//   "github.com/henrylee2cn/lessgo/config"
 // )
 //
 //  cnf, err := config.NewConfig("yaml", "config.yaml")
@@ -42,9 +42,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lessgo/lessgo/config/yaml/goyaml2"
+	"github.com/henrylee2cn/lessgo/config/yaml/goyaml2"
 
-	"github.com/lessgo/lessgo/config"
+	"github.com/henrylee2cn/lessgo/config"
 )
 
 // Config is a yaml config parser and implements Config interface.

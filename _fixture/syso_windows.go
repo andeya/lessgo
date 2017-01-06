@@ -1,5 +1,5 @@
 package _fixture
 
 import (
-	_ "github.com/lessgo/lessgo/_fixture/syso"
+	_ "github.com/henrylee2cn/lessgo/_fixture/syso"
 )

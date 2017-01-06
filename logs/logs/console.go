@@ -18,7 +18,7 @@ import (
 	"encoding/json"
 	"runtime"
 
-	"github.com/lessgo/lessgo/logs/color"
+	"github.com/henrylee2cn/lessgo/logs/color"
 )
 
 type (

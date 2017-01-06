@@ -5,7 +5,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/lessgo/lessgo/utils"
+	"github.com/henrylee2cn/lessgo/utils"
 )
 
 func min(a, b int) int {

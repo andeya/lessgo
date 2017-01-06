@@ -11,8 +11,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lessgo/lessgo/utils"
-	"github.com/lessgo/lessgoext/uuid"
+	"github.com/henrylee2cn/lessgo/utils"
+	"github.com/henrylee2cn/lessgoext/uuid"
 )
 
 // 单独注册的静态文件虚拟路由(无法在Root()下使用，暂不支持运行时修改)

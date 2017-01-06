@@ -38,8 +38,8 @@
 //
 // Usage:
 // import(
-//   _ "github.com/lessgo/lessgo/session/postgresql"
-//   "github.com/lessgo/lessgo/session"
+//   _ "github.com/henrylee2cn/lessgo/session/postgresql"
+//   "github.com/henrylee2cn/lessgo/session"
 // )
 //
 //	func init() {
@@ -56,7 +56,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lessgo/lessgo/session"
+	"github.com/henrylee2cn/lessgo/session"
 	// import postgresql Driver
 	_ "github.com/lib/pq"
 )

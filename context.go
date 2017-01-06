@@ -20,11 +20,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lessgo/lessgo/logs"
-	"github.com/lessgo/lessgo/markdown"
-	"github.com/lessgo/lessgo/session"
-	"github.com/lessgo/lessgo/utils"
-	"github.com/lessgo/lessgo/websocket"
+	"github.com/henrylee2cn/lessgo/logs"
+	"github.com/henrylee2cn/lessgo/markdown"
+	"github.com/henrylee2cn/lessgo/session"
+	"github.com/henrylee2cn/lessgo/utils"
+	"github.com/henrylee2cn/lessgo/websocket"
 )
 
 type (
