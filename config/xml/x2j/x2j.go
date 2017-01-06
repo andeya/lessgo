@@ -7,18 +7,18 @@
 
    One useful function is:
 
-       - Unmarshal(doc []byte, v interface{}) error  
+       - Unmarshal(doc []byte, v interface{}) error
          where v is a pointer to a variable of type 'map[string]interface{}', 'string', or
          any other type supported by xml.Unmarshal().
 
-   To retrieve a value for specific tag use: 
+   To retrieve a value for specific tag use:
 
-       - DocValue(doc, path string, attrs ...string) (interface{},error) 
+       - DocValue(doc, path string, attrs ...string) (interface{},error)
        - MapValue(m map[string]interface{}, path string, attr map[string]interface{}, recast ...bool) (interface{}, error)
 
    The 'path' argument is a period-separated tag hierarchy - also known as dot-notation.
-   It is the program's responsibility to cast the returned value to the proper type; possible 
-   types are the normal JSON unmarshaling types: string, float64, bool, []interface, map[string]interface{}.  
+   It is the program's responsibility to cast the returned value to the proper type; possible
+   types are the normal JSON unmarshaling types: string, float64, bool, []interface, map[string]interface{}.
 
    To retrieve all values associated with a tag occurring anywhere in the XML document use:
 
@@ -31,7 +31,7 @@
 
    Returned values should be one of map[string]interface, []interface{}, or string.
 
-   All the values assocated with a tag-path that may include one or more wildcard characters - 
+   All the values assocated with a tag-path that may include one or more wildcard characters -
    '*' - can also be retrieved using:
 
        - ValuesFromTagPath(doc, path string, getAttrs ...bool) ([]interface{}, error)
@@ -42,7 +42,7 @@
 
    NOTE: care should be taken when using "*" at the end of a path - i.e., "books.book.*".  See
    the x2jpath_test.go case on how the wildcard returns all key values and collapses list values;
-   the same message structure can load a []interface{} or a map[string]interface{} (or an interface{}) 
+   the same message structure can load a []interface{} or a map[string]interface{} (or an interface{})
    value for a tag.
 
    See the test cases in "x2jpath_test.go" and programs in "example" subdirectory for more.
@@ -83,7 +83,7 @@ import (
 //   ...
 //   x2j.X2jCharsetReader = charset.NewReader
 //   s, err := x2j.DocToJson(doc)
-var X2jCharsetReader func(charset string, input io.Reader)(io.Reader, error)
+var X2jCharsetReader func(charset string, input io.Reader) (io.Reader, error)
 
 type Node struct {
 	dup   bool   // is member of a list
@@ -653,4 +653,3 @@ func ByteDocToTree(doc []byte) (*Node, error) {
 
 	return n, nil
 }
-
